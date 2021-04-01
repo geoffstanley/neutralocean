@@ -212,8 +212,6 @@ def guess_to_bounds(f, x, lb, ub):
 
     # Geometrically expand from the guess x; until a sign change is found
 
-    nan = float("nan")
-
     x = min(max(x, lb), ub)
 
     # bounds are given
@@ -243,12 +241,12 @@ def guess_to_bounds(f, x, lb, ub):
             a = max(x - dxm, lb)
             fapos = f(a) > 0.
             if fapos ^ fbpos: # fa & fb have different signs
-                return (a,b)
+                return (a, b)
         elif b == ub: # also a .== lb; so cannot expand anymore
             if fapos ^ fbpos: # one last test for sign change
-                return (a,b)
+                return (a, b)
             else: # no sign change found
-                return (nan,nan)
+                return (np.nan, np.nan)
 
         if b < ub:
             # Move b right; & test for a sign change
@@ -256,12 +254,12 @@ def guess_to_bounds(f, x, lb, ub):
             b = min(x + dxp, ub)
             fbpos = f(b) > 0.
             if fapos ^ fbpos: # fa & fb have different signs
-                return (a,b)
+                return (a, b)
         elif a == lb: # also b .== ub; so cannot expand anymore
             if fapos ^ fbpos: # one last test for sign change
-                return (a,b)
+                return (a, b)
             else: # no sign change found
-                return (nan,nan)
+                return (np.nan, np.nan)
 
 
 ## Tests:
