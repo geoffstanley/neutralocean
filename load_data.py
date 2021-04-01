@@ -15,21 +15,29 @@ class gridC(object):
         self.YGvec = YGvec
         self.RC = RC
 
+        deg2rad = np.pi / 180
+
         self.nx = XCvec.size
         self.ny = YCvec.size
         self.nz = RC.size
         self.RACvec = rSphere**2 / resx * deg2rad * abs(np.sin((YGvec + 1/resy)*deg2rad) - np.sin(YGvec*deg2rad))    # Vertical area of the tracer cells [m^2]
-        self.RAWvec = RACvec                                                                                         # Vertical area of the U cells [m^2]
+        self.RAWvec = self.RACvec                                                                                         # Vertical area of the U cells [m^2]
         self.RASvec = rSphere**2 / resx * deg2rad * abs(np.sin(YCvec * deg2rad) - np.sin((YCvec - 1/resy)*deg2rad))  # Vertical area of the V cells [m^2]
         self.RAZvec = rSphere**2 / resx * deg2rad * abs(np.sin(YCvec*deg2rad) - np.sin((YCvec - 1/resy)*deg2rad))    # Vertical area of the vorticity cells [m^2]
         self.DXGvec = rSphere * np.cos(YGvec * deg2rad) / resx * deg2rad
         self.DYGsc = rSphere * deg2rad / resy
         self.DXCvec = rSphere * np.cos(YCvec * deg2rad) / resx * deg2rad
-        self.DYCsc = DYGsc
+        self.DYCsc = self.DYGsc
         self.DRC = np.diff(-RC)
 
+    def XCvecpad(self):
+        return np.hstack((self.XCvec, self.XCvec[-1] + (self.XCvec[1] - self.XCvec[0])))
 
-def load_OCCA(PATH_OCCA, ts=0):
+    def YCvecpad(self):
+        return np.hstack((self.YCvec, self.YCvec[-1] + (self.YCvec[1] - self.YCvec[0])))
+
+
+def OCCA(PATH_OCCA, ts=0):
 
     # Read grid info from the theta nc file
     varname = 'theta'
@@ -62,14 +70,14 @@ def load_OCCA(PATH_OCCA, ts=0):
     varname = 'theta'
     ds = nc.Dataset('%sDD%s.0406annclim.nc' % (PATH_OCCA, varname), 'r')
     ds.set_auto_mask(False)
-    T = np.float64(ds[varname][ts])
+    T = np.float64(ds[varname][ts]).transpose()
     T[T == ds[varname].missing_value] = np.NaN
     ds.close()
 
     varname = 'salt'
     ds = nc.Dataset('%sDD%s.0406annclim.nc' % (PATH_OCCA, varname), 'r')
     ds.set_auto_mask(False)
-    S = np.float64(ds[varname][ts])
+    S = np.float64(ds[varname][ts]).transpose()
     S[S == ds[varname].missing_value] = np.NaN
     ds.close()
 
@@ -77,15 +85,15 @@ def load_OCCA(PATH_OCCA, ts=0):
     varname = 'phihyd'
     ds = nc.Dataset('%sDD%s.0406annclim.nc' % (PATH_OCCA, varname), 'r')
     ds.set_auto_mask(False)
-    P = np.float64(ds[varname][ts])
+    P = np.float64(ds[varname][ts]).transpose()
     P[P == ds[varname].missing_value] = np.NaN
     ds.close()
-    P = (P - g.grav * g.RC.reshape(-1,1,1)) * (g.ρ_c * Pa2db)  # convert to full in-situ pressure, in [dbar]
+    P = (P - g.grav * g.RC.reshape(1,1,-1)) * (g.ρ_c * Pa2db)  # convert to full in-situ pressure, in [dbar]
 
     varname = 'etan'
     ds = nc.Dataset('%sDD%s.0406annclim.nc' % (PATH_OCCA, varname), 'r')
     ds.set_auto_mask(False)
-    ETAN = np.float64(ds[varname][ts])
+    ETAN = np.float64(ds[varname][ts]).transpose()
     ETAN[ETAN == ds[varname].missing_value] = np.NaN
     ds.close()
 
