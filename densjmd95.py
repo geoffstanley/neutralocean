@@ -5,16 +5,16 @@ Density of Sea Water using Jackett and McDougall 1995 (JAOT 12) polynomial
 
 Functions:
 
-densjmd95 :: computes in-situ density from salinity, potential temperature and
+rho :: computes in-situ density from salinity, potential temperature and
              pressure
 
-densjmd95_s_t :: compute the partial derivatives of in-situ density with respect
+rho_s_t :: compute the partial derivatives of in-situ density with respect
                  to salinity and potential temperature
 """
 
 
 
-def densjmd95(s, t, p):
+def rho(s, t, p):
     '''
     Fast JMD95 in-situ density.
 
@@ -86,7 +86,7 @@ def densjmd95(s, t, p):
 
 
 
-def densjmd95_s_t(s,t,p):
+def rho_s_t(s,t,p):
     '''
     Fast salinity and potential temperature derivatives of JMD95 in-situ density.
 
