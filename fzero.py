@@ -1,3 +1,5 @@
+import numpy as np
+
 def brent(f, a, b, t):
     #FZERO_BRENT  Find a root of a univariate function within a given interval
     #             using Brent's method
