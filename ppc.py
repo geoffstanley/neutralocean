@@ -138,8 +138,8 @@ def val(X, C, x):
                 y[i] = np.nan
             else:
                 # Evaluate this piece of the polynomial
-                t = x[i] - X[k-1] # Switch to local coordinates
-                y = C[(*i, k[i]-1, 0)]
+                t = x[i] - X[k[i]-1] # Switch to local coordinates
+                y[i] = C[(*i, k[i]-1, 0)]
                 for o in range(1, O):
                     y[i] = t * y[i] + C[(*i, k[i]-1, o)]
 
