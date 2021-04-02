@@ -3,7 +3,7 @@ import os
 import matplotlib.pyplot as plt
 
 import densjmd95
-import fzero
+# import fzero
 import ppc
 import load_data
 import neutral_surfaces
@@ -36,6 +36,5 @@ z_σ = ppc.linterp(σ3, Z, σ_0) # depth of σ isosurface
 # pc = ax.pcolormesh(g.XCvecpad(), g.YCvecpad(), z_σ.T, shading='flat')
 # fig.colorbar(pc, ax=ax, label='z[σ]')
 
-
 # Potential Density -- careful calculation by interpolating S and T
-(z_σ, s_σ, t_σ) = neutral_surfaces.pot_dens_surf(S, T, Z, 1500., 1500.)  # Warning:  This is very slow!
+(z_σ, s_σ, t_σ) = neutral_surfaces.pot_dens_surf(S, T, Z, 1500., (i0, j0, 1500.)) # 6.4 seconds

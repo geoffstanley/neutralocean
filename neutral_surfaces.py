@@ -4,23 +4,24 @@ import fzero
 import densjmd95
 import ppc
 
-def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
+
+def pot_dens_surf(S, T, P, p_ref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
     """
     POT_DENS_SURF  Potential density surface by nonlinear solution in each water column.
 
 
-    [p,s,t] = pot_dens_surf(S, T, P, pref, d0)
+    [p,s,t] = pot_dens_surf(S, T, P, p_ref, d0)
     finds the pressure or depth p -- and its salinity s and temperature t --
-    of the isosurface d0 of potential density referenced to pref, in the
+    of the isosurface d0 of potential density referenced to p_ref, in the
     ocean with practical / Absolute salinity S and potential / Conservative
     temperature T at data sites where the and pressure or depth is P.  The
     equation of state is given by eos.m in MATLAB's path, which accepts S, T,
-    pref as its 3 inputs. For a non-Boussinesq ocean, p, P, and pref should
-    be pressure [dbar].  For a Boussinesq ocean, p, P, and pref should be
+    p_ref as its 3 inputs. For a non-Boussinesq ocean, p, P, and p_ref should
+    be pressure [dbar].  For a Boussinesq ocean, p, P, and p_ref should be
     depth [m], positive and increasing down.  Algorithmic parameters are
     provided in OPTS (see "Options" below for further details).
 
-    [p,s,t,d0] = pot_dens_surf(S, T, P, pref, [i0, j0, p0])
+    [p,s,t,d0] = pot_dens_surf(S, T, P, p_ref, [i0, j0, p0])
     as above but finds the surface intersecting a reference cast given by
     grid indices (i0,j0) at pressure or depth p0.
 
@@ -32,7 +33,7 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
     S [nk, ni, nj]: practical / Absolute salinity
     T [nk, ni, nj]: potential / Conservative temperature
     P [nk, ni, nj] or [nk, 1]: pressure [dbar] or depth [m, positive]
-    pref [1, 1]: reference pressure [dbar] or depth [m]
+    p_ref [1, 1]: reference pressure [dbar] or depth [m]
     var [1, 1] or [1, 3]: isovalue of potential density, or target location
     OPTS [struct]: options (see below)
 
@@ -40,7 +41,7 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
           ni is the number of data points in longitude,
           nj is the number of data points in latitude.
 
-    Note: physical units for S, T, P, pref, p, d0 are determined by eos.m.
+    Note: physical units for S, T, P, p_ref, p, d0 are determined by eos.m.
 
     Note: P must increase monotonically along its first dimension.
 
@@ -84,12 +85,12 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
     Email     : geoffstanley@gmail.com
     """
 
-    def vertsolve(p, s, t, P, Sppc, Tppc, BotK, pref, d0, TOL):
+    def vertsolve(p, P, Sppc, Tppc, BotK, p_ref, d0, TOL):
         """
         VERTSOLVE  Helper function for pot_dens_surf, solving
                    non-linear root finding problem in each water column
 
-        Mutates p, s, t.
+        Mutates p.
 
         Assumes P is 1D.
 
@@ -102,10 +103,12 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
         Email     : geoffstanley@gmail.com
         """
 
+        s = np.empty(p.shape)
+        t = np.empty(p.shape)
 
-        def fn(p, P, Sppc, Tppc, pref, d0):
+        def fn(p, P, Sppc, Tppc, p_ref, d0):
             (s, t) = ppc.val2(P, Sppc, Tppc, p)
-            return densjmd95.rho(s, t, pref) - d0
+            return densjmd95.rho(s, t, p_ref) - d0
 
         # Loop over each cast
         for n in np.ndindex(p.shape):
@@ -116,7 +119,13 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
                 Sppcn = Sppc[(*n, ...)]
                 Tppcn = Tppc[(*n, ...)]
 
-                f = lambda p: fn(p, P, Sppcn, Tppcn, pref, d0)
+                def f(p):
+                    return fn(p, P, Sppcn, Tppcn, p_ref, d0)
+
+                # Initial guess could be nan, which would enter fzero.guess_to_bounds
+                # into an infinite loop.  In this case, try initial guess at mid-depth.
+                if np.isnan(p[n]):
+                    p[n] = (P[0] + P[k-1]) * 0.5
 
                 # Search for a sign-change, expanding outward from an initial guess
                 (lb, ub) = fzero.guess_to_bounds(f, p[n], P[0], P[k-1])
@@ -139,7 +148,7 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
                 s[n] = np.nan
                 t[n] = np.nan
 
-        return None
+        return (s, t)
 
     # Interpolate S and T as piecewise polynomials of P, or use pre-computed interpolants in OPTS.
     Sppc = INTERPFN(P, S)
@@ -159,18 +168,17 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
         p0 = var[2]
 
         # Select the reference cast
-        Sppc0 = Sppc[i0,j0,...]
-        Tppc0 = Tppc[i0,j0,...]
+        Sppc0 = Sppc[i0, j0, ...]
+        Tppc0 = Tppc[i0, j0, ...]
 
         # Choose iso-value that will intersect (i0,j0,p0).
-        (s0,t0) = ppc.val2(P, Sppc0, Tppc0, p0)
-        d0 = densjmd95.rho(s0, t0, pref)
+        (s0, t0) = ppc.val2(P, Sppc0, Tppc0, p0)
+        d0 = densjmd95.rho(s0, t0, p_ref)
     else:
         raise TypeError("var must be a scalar or 3 element tuple")
 
-
     # Calculate 3D field for vertical interpolation
-    D = densjmd95.rho(S, T, pref)
+    D = densjmd95.rho(S, T, p_ref)
     if densjmd95.rho(34.5, 3, 1000) > 1:
         # eos is in-situ density, increasing with 3rd argument
         D.sort()
@@ -181,15 +189,11 @@ def pot_dens_surf(S, T, P, pref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
     # Get started with the discrete version (and linear interpolation)
     p = ppc.linterp(D, P, d0)
 
-    # Evaluate s and t on the initial surface
-    s = ppc.val(P, Sppc, p)
-    t = ppc.val(P, Tppc, p)
-
     # Start timer after all the setup has been done.
     # iter_tic = tic();
 
     # Solve non-linear root finding problem in each cast
-    vertsolve(p, s, t, P, Sppc, Tppc, BotK, pref, d0, TOL_P_UPDATE)
+    (s, t) = vertsolve(p, P, Sppc, Tppc, BotK, p_ref, d0, TOL_P_UPDATE)
 
     return (p, s, t)
 
