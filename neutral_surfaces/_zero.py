@@ -12,6 +12,8 @@ eps = np.finfo(np.float64).eps
 @numba.njit
 def brent(f, a, b, t):
     """
+    brent(f, a, b, t)
+
     Find the zero of a function within a given range using Brent's method.
 
     Parameters
@@ -104,6 +106,8 @@ def brent(f, a, b, t):
 @numba.njit
 def guess_to_bounds(f, x, lb, ub):
     """
+    guess_to_bounds(f, x, lb, ub)
+
     Search for a range containing a sign change.
 
     This is used as a first step in zero-finding, providing a small search
