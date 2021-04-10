@@ -1,34 +1,5 @@
 """
-This is a quick test to see whether brent and guess_to_bounds
-can be decorated with "njit", along with the function
-supplied to brent.  It includes 2 such functions, one
-being quadratic and the other 6th order, so that brent should
-have a slightly harder time with the second.
-
-Results, running in ipython:
-
-In [15]: run fzero_testjit.py
-(-2.5999999999999988, -0.7737258300203049, -2.500000409065004)
-
-In [16]: %timeit one_root()
-169 ns ± 2.45 ns per loop (mean ± std. dev. of 7 runs, 10000000 loops each)
-
-In [17]: %timeit one_root3()
-176 ns ± 0.701 ns per loop (mean ± std. dev. of 7 runs, 10000000 loops each)
-
-In [18]: %timeit myfun_univar(1.1)
-100 ns ± 1.2 ns per loop (mean ± std. dev. of 7 runs, 10000000 loops each)
-
-In [19]: %timeit myfun_univar3(1.1)
-100 ns ± 0.976 ns per loop (mean ± std. dev. of 7 runs, 10000000 loops each)
-
-The last two results are showing mostly the overhead of calling the jitted
-function from Python.
-
-The only change I had to make to enable njit to work was to use the nan from
-numpy instead of using the Python float() function.  Probably using math.nan
-would be identical.
-
+Functions for finding the zero of a univariate function.
 """
 
 import numba
@@ -40,6 +11,24 @@ eps = np.finfo(np.float64).eps
 
 @numba.njit
 def brent(f, a, b, t):
+    """
+    Find the zero of a function within a given range using Brent's method.
+
+    Parameters
+    ----------
+    f : function
+        Continuous function of a single variable.
+    a, b : float
+        Range within which to search.
+    t : float
+        Tolerance for convergence.
+
+    Returns
+    -------
+    float
+        Value of x where f(x) ~ 0.
+
+    """
 
     fa = f(a)
     fb = f(b)
@@ -114,8 +103,30 @@ def brent(f, a, b, t):
 
 @numba.njit
 def guess_to_bounds(f, x, lb, ub):
+    """
+    Search for a range containing a sign change.
 
-    # Geometrically expand from the guess x; until a sign change is found
+    This is used as a first step in zero-finding, providing a small search
+    range for the Brent algorithm.
+
+    Parameters
+    ----------
+    f : function
+        Continuous function of a single variable
+    x : float
+        Central point for starting the search
+    lb, ub : float
+        Lower and upper bounds, containing x, within which to search.
+
+    Returns
+    -------
+    lb, ub : float
+        Lower and upper bounds within which f(x) changes sign.
+
+    Notes
+    -----
+    The search expands geometrically outwards from the guess *x*.
+    """
 
     nan = np.nan
 
