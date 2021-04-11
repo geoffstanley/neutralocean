@@ -10,7 +10,7 @@ eps = np.finfo(np.float64).eps
 
 
 @numba.njit
-def brent(f, a, b, t):
+def brent(f, args, a, b, t):
     """
     brent(f, a, b, t)
 
@@ -32,8 +32,10 @@ def brent(f, a, b, t):
 
     """
 
-    fa = f(a)
-    fb = f(b)
+    fa = f(a, *args)
+    fb = f(b, *args)
+    if not fa * fb <= 0:
+        return np.nan  # Protection against bad input search range.
     c = a
     fc = fa
     e = b - a
@@ -92,7 +94,7 @@ def brent(f, a, b, t):
         else:
             b -= tol
 
-        fb = f(b)
+        fb = f(b, *args)
 
         if (0.0 < fb and 0.0 < fc) or (fb <= 0.0 and fc <= 0.0):
             c = a
@@ -104,7 +106,7 @@ def brent(f, a, b, t):
 
 
 @numba.njit
-def guess_to_bounds(f, x, lb, ub):
+def guess_to_bounds(f, args, x, lb, ub):
     """
     guess_to_bounds(f, x, lb, ub)
 
@@ -153,15 +155,15 @@ def guess_to_bounds(f, x, lb, ub):
     else:
         b = x
 
-    fapos = f(a) > 0.0
-    fbpos = f(b) > 0.0
+    fapos = f(a, *args) > 0.0
+    fbpos = f(b, *args) > 0.0
 
     while True:
         if a > lb:
             # Move a left; & test for a sign change
             dxm *= 1.414213562373095
             a = max(x - dxm, lb)
-            fapos = f(a) > 0.0
+            fapos = f(a, *args) > 0.0
             if fapos != fbpos:  # fa & fb have different signs
                 return (a, b)
         elif b == ub:  # also a .== lb; so cannot expand anymore
@@ -174,7 +176,7 @@ def guess_to_bounds(f, x, lb, ub):
             # Move b right; & test for a sign change
             dxp *= 1.414213562373095
             b = min(x + dxp, ub)
-            fbpos = f(b) > 0.0
+            fbpos = f(b, *args) > 0.0
             if fapos != fbpos:  # fa & fb have different signs
                 return (a, b)
         elif a == lb:  # also b .== ub; so cannot expand anymore
