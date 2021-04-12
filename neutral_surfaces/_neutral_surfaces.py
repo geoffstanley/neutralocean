@@ -4,7 +4,7 @@ from neutral_surfaces._vertsolve import vertsolve, process_arrays, func_zero
 
 
 def pot_dens_surf(S, T, P, p_ref, target, axis=-1, tol=1e-4):
-    ngood, stp_args = process_arrays(S, T, P)
+    ngood, stp_args = process_arrays(S, T, P, axis=axis)
     if isinstance(target, tuple):
         ptarget = target[-1]
         ind = target[:-1]
