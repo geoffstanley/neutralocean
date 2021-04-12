@@ -12,7 +12,7 @@ eps = np.finfo(np.float64).eps
 @numba.njit
 def brent(f, args, a, b, t):
     """
-    brent(f, a, b, t)
+    brent(f, args, a, b, t)
 
     Find the zero of a function within a given range using Brent's method.
 
@@ -20,6 +20,8 @@ def brent(f, args, a, b, t):
     ----------
     f : function
         Continuous function of a single variable.
+    args : tuple
+        Additional arguments beyond the optimization argument.
     a, b : float
         Range within which to search.
     t : float
@@ -108,7 +110,7 @@ def brent(f, args, a, b, t):
 @numba.njit
 def guess_to_bounds(f, args, x, lb, ub):
     """
-    guess_to_bounds(f, x, lb, ub)
+    guess_to_bounds(f, args, x, lb, ub)
 
     Search for a range containing a sign change.
 
@@ -119,6 +121,8 @@ def guess_to_bounds(f, args, x, lb, ub):
     ----------
     f : function
         Continuous function of a single variable
+    args : tuple
+        Additional arguments beyond the optimization argument.
     x : float
         Central point for starting the search
     lb, ub : float
