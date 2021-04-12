@@ -3,8 +3,7 @@ import itertools
 import pytest
 
 import numpy as np
-from neutral_surfaces._vertsolve import (process_arrays, func_zero,
-vertsolve1, vertsolve)
+from neutral_surfaces._vertsolve import process_arrays, func_zero, vertsolve1, vertsolve
 from neutral_surfaces._densjmd95 import rho, rho_ufunc
 
 
@@ -12,7 +11,6 @@ def make_simple_stp(shape, p_axis=-1, p_is_1d=True):
     s = np.empty(shape, dtype=float)
     t = np.empty(shape, dtype=float)
     nlevels = shape[p_axis]
-    nlocs = s.size / nlevels
     p1 = (np.linspace(0, 1, nlevels) ** 1.5) * 5000
     # Both salinity and temperature cause increase in potential density with
     # depth, for convenience in making a sanity check, below.
@@ -100,9 +98,6 @@ def test_vertsolve_with_nans():
     # One with only one level left.
     s[3, 0, 1:] = t[3, 0, 1:] = np.nan
     ngood, stp_args = process_arrays(s, t, p)
-    # d0 = 1026.0 * np.ones((4, 3), dtype=float)
-    # p_ref = np.zeros((4, 3), dtype=float)
-    # p_start = 1500.0 * np.ones((4, 3), dtype=float)
     shape = ngood.shape
     p_start = np.broadcast_to(1500.0, shape)
     p_ref = np.broadcast_to(0.0, shape)
