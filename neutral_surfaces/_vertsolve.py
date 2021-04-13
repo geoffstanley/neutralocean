@@ -67,7 +67,7 @@ def vertsolve(p_start, p_ref, d0, ngood, stp_args, tol):
 
 def process_arrays(s, t, p, axis=-1):
     # need a better name for this...
-    if axis != -1 and axis != s.ndim - 1:
+    if axis not in (-1, s.ndim -1):
         s = np.moveaxis(s, axis, -1)
         t = np.moveaxis(t, axis, -1)
         if p.ndim == s.ndim:
