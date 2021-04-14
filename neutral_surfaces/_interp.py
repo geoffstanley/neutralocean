@@ -39,3 +39,30 @@ def linear_eval2(ptarget, p, y1, c1, y2, c2):
     y_int1 = y1[ii] + dp * c1[ii]
     y_int2 = y2[ii] + dp * c2[ii]
     return (y_int1, y_int2)
+
+@numba.njit(
+    float64(
+        float64[:], float64[:], float64[:], float64
+    )
+)
+def val(X, Y, Yppc, x):
+    ii = search(X, x)
+    if ii == -1:
+        return np.nan
+    dx = x - X[ii]  # dx >= 0
+    y = Y[ii] + dx * Yppc[ii]
+    return y
+
+@numba.njit(
+    numba.typeof((1.0, 1.0))(
+        float64[:], float64[:], float64[:], float64[:], float64[:], float64
+    )
+)
+def val2(X, Y, Yppc, Z, Zppc, x):
+    ii = search(X, x)
+    if ii == -1:
+        return (np.nan, np.nan)
+    dx = x - X[ii]  # dx >= 0
+    y = Y[ii] + dx * Yppc[ii]
+    z = Z[ii] + dx * Zppc[ii]
+    return (y, z)
