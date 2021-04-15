@@ -27,20 +27,6 @@ def search(p, ptarget):
 
 
 @numba.njit(
-    numba.typeof((1.0, 1.0))(
-        float64, float64[:], float64[:], float64[:], float64[:], float64[:]
-    )
-)
-def linear_eval2(ptarget, p, y1, c1, y2, c2):
-    ii = search(p, ptarget)
-    if ii == -1:
-        return (np.nan, np.nan)
-    dp = ptarget - p[ii]  # dp >= 0
-    y_int1 = y1[ii] + dp * c1[ii]
-    y_int2 = y2[ii] + dp * c2[ii]
-    return (y_int1, y_int2)
-
-@numba.njit(
     float64(
         float64[:], float64[:], float64[:], float64
     )

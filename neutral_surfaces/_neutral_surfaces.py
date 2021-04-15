@@ -1,9 +1,11 @@
 import numpy as np
 import numba
 
-from neutral_surfaces._densjmd95 import rho, rho_ufunc
-from neutral_surfaces._interp import linear_coefficients, linear_eval2, val, val2
+from neutral_surfaces._densjmd95 import rho_bsq
+from neutral_surfaces import interp_ppc
 from neutral_surfaces._zero import guess_to_bounds, brent
+
+
 
 def process_arrays(S, T, P, axis=-1):
     # need a better name for this...
@@ -19,64 +21,61 @@ def process_arrays(S, T, P, axis=-1):
     P = np.require(P, dtype=np.float64, requirements="C")
     # Assume S and T have the same nan locations for missing
     # profiles or depths below the bottom.
-    BotK = (~np.isnan(S)).sum(axis=-1)
-    return S, T, P, BotK
+    
+    n_good = find_first_nan(S)
+    
+    return S, T, P, n_good
 
 def pot_dens_surf(S, T, P, p_ref, target, axis=-1, tol=1e-4):
-    S, T, P, BotK = process_arrays(S, T, P, axis=axis)
+    S, T, P, n_good = process_arrays(S, T, P, axis=axis)
     
-    Sppc = linear_coefficients(P, S)
-    Tppc = linear_coefficients(P, T)
+    Sppc = interp_ppc.linear_coefficients(P, S)
+    Tppc = interp_ppc.linear_coefficients(P, T)
+    
     
     if isinstance(target, tuple):
         p0 = target[-1]   # target pressure 
         n0 = target[:-1]  # index to water column which intersects the surface at the target pressure
         
-        # Select the reference cast
-        P0 = P[(*n0, ...)]
-        S0 = S[(*n0, ...)]
-        T0 = T[(*n0, ...)]
-        Sppc0 = Sppc[(*n0, ...)]
-        Tppc0 = Tppc[(*n0, ...)]
-        
-        # Choose iso-value that will intersect (i0,j0,p0).
-        d0 = func_sigma(p0, P0, S0, Sppc0, T0, Tppc0, p_ref, 0.)
+        # Choose iso-value that will intersect cast n0 at p0.
+        d0 = func_sigma(p0, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p_ref, 0.)
     else:
         d0 = target
         
-    shape = BotK.shape
+    shape = S.shape[0:-1]
     p = np.empty(shape)
+    p.fill(np.nan)  # Instead of linearly interpolating density below to get the initial guess, we'll just use the mid-depth. 
 
-    # Calculate 3D field for vertical interpolation
-    D = rho_ufunc(S, T, p_ref)
-    if rho(34.5, 3, 1000) > 1:
-        # eos is in-situ density, increasing with 3rd argument
-        D.sort()
-    else:
-        # eos is specific volume, decreasing with 3rd argument
-        D[::-1].sort()
+#     # Calculate 3D field for vertical interpolation
+#     D = rho_ufunc(S, T, p_ref)
+#     if rho_bsq(34.5, 3, 1000) > 1:
+#         # eos is in-situ density, increasing with 3rd argument
+#         D.sort()
+#     else:
+#         # eos is specific volume, decreasing with 3rd argument
+#         D[::-1].sort()
     
-    # Get started with the discrete version (and linear interpolation)
-    Pppc = linear_coefficients(D, P)
-    for n in np.ndindex(shape):
-        p[n] = val(D[(*n,...)], P[(*n,...)], Pppc[(*n,...)], d0)  # DEV: would like a nicer way to do this than the for loop.
+#     # Get started with the discrete version (and linear interpolation)
+#     Pppc = linear_coefficients(D, P)
+#     for n in np.ndindex(shape):
+#         p[n] = val(D[(*n,...)], P[(*n,...)], Pppc[(*n,...)], d0)  # DEV: would like a nicer way to do this than the for loop.
     
     
     # Solve non-linear root finding problem in each cast
-    s, t = vertsolve(p, p_ref, d0, BotK, P, S, Sppc, T, Tppc, tol)
+    s, t, p = vertsolve(p, p_ref, d0, n_good, P, S, Sppc, T, Tppc, tol)
     return s, t, p
     
 @numba.njit
 def func_sigma(p, P, S, Sppc, T, Tppc, p_ref, d0):
     #s, t = linear_eval2(p, *stp_args)
-    s, t = val2(P, S, Sppc, T, Tppc, p)
-    return rho(s, t, p_ref) - d0
+    s, t = interp_ppc.val2(P, S, Sppc, T, Tppc, p)
+    return rho_bsq(s, t, p_ref) - d0
 
 
 # @numba.njit
 # def func_delta(p, P, S, Sppc, T, Tppc, s_ref, t_ref, d0):
 #     s, t = val2(P, S, Sppc, T, Tppc, p)
-#     return rho(s, t, p) - rho(s_ref, t_ref, p) - d0
+#     return rho_bsq(s, t, p) - rho_bsq(s_ref, t_ref, p) - d0
 
 # @numba.njit
 # def func_omega(p, Sppc, Tppc, P, phi_minus_rho0, p0)
@@ -92,20 +91,19 @@ def func_sigma(p, P, S, Sppc, T, Tppc, p_ref, d0):
 #     s, t = linear_eval2(p, *STPppc)
 
 #     # Calculate the potential density or potential specific volume difference
-#     return rho(s, t, p0) + phi_minus_rho0
+#     return rho_bsq(s, t, p0) + phi_minus_rho0
 
 
 @numba.njit
-def vertsolve(p, p_ref, d0, BotK, P, S, Sppc, T, Tppc, tol):
-    # Note! this mutates p
+def vertsolve(p_in, p_ref, d0, n_good, P, S, Sppc, T, Tppc, tol):
     
-    s = np.empty(p.shape, dtype=np.float64)
+    s = np.empty(p_in.shape, dtype=np.float64)
     s.fill(np.nan)
     t = s.copy()
-    #p = s.copy()
+    p = s.copy()
     
-    for n in np.ndindex(p.shape):
-        k = BotK[n]
+    for n in np.ndindex(p_in.shape):
+        k = n_good[n]
         if k > 1:
             tup = (*n, slice(k))
             # Unfortunately, we can't do the following:
@@ -124,7 +122,7 @@ def vertsolve(p, p_ref, d0, BotK, P, S, Sppc, T, Tppc, tol):
             
             # Initial guess could be nan, which would send guess_to_bounds
             # into an infinite loop.  In this case, try initial guess at mid-depth.
-            pn = p[n]
+            pn = p_in[n]
             if np.isnan(pn):
                 pn = (Pn[0] + Pn[-1]) * 0.5
             
@@ -137,10 +135,30 @@ def vertsolve(p, p_ref, d0, BotK, P, S, Sppc, T, Tppc, tol):
                 p[n] = brent(func_sigma, (Pn, Sn, Sppcn, Tn, Tppcn, p_ref, d0), lb, ub, tol)
                 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = val2(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
+                s[n], t[n] = interp_ppc.val2(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
         
         # else:
             # only one grid cell so cannot interpolate.
             # This will ensure s,t,p all have the same nan structure
             
-    return s, t
+    return s, t, p
+
+
+
+@numba.njit
+def find_first_nan(a):
+    """
+    find_first_nan(a)
+
+    Find the index to the first nan in a along the last axis. 
+    If no nan's are present, the length of the last dimension is returned. 
+    """
+    nk = a.shape[-1]
+    k = np.empty(a.shape[0:-1], dtype=np.intp)
+    k.fill(nk)
+    for n in np.ndindex(a.shape[0:-1]):
+        for i in range(nk):
+            if np.isnan(a[n][i]):
+                k[n] = i
+                break
+    return k
