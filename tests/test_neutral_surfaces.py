@@ -1,10 +1,15 @@
+import itertools
 import pytest
 import numpy as np
-from neutral_surfaces._neutral_surfaces import pot_dens_surf
 from neutral_surfaces._densjmd95 import rho_ufunc
+from neutral_surfaces.interp_ppc import linear_coefficients
+from neutral_surfaces._neutral_surfaces import (
+    pot_dens_surf,
+    process_arrays,
+    sigma_vertsolve,
+    func_sigma,
+)
 
-
-# Copied from test_vertsolve; consolidate later.
 def make_simple_stp(shape, p_axis=-1, p_is_1d=True):
     s = np.empty(shape, dtype=float)
     t = np.empty(shape, dtype=float)
@@ -46,4 +51,88 @@ def test_pot_dens_surf(target):
     rho_found = np.ma.masked_invalid(rho_ufunc(ss, tt, p_ref))
     if not isinstance(target, tuple):
         assert np.ma.allclose(rho_found, target)
+    assert rho_found.size - rho_found.count() == 3
+
+    
+arg_combos = itertools.product([0, 1, 2], [True, False])
+@pytest.mark.parametrize("p_axis,p_1d", arg_combos)
+def test_process_arrays(p_axis, p_1d):
+    shape = (3, 4, 5)
+    s, t, p = make_simple_stp(shape, p_axis, p_is_1d=p_1d)
+    S, T, P, n_good = process_arrays(s, t, p, axis=p_axis)
+    nlevels = S.shape[-1]
+    assert np.all(n_good == nlevels)
+    newshape = S.shape
+    assert n_good.shape == newshape[:-1]
+    assert T.shape == newshape
+    assert P.shape == newshape
+    assert S.flags.c_contiguous
+    assert T.flags.c_contiguous
+    assert P.flags.c_contiguous
+    
+        
+def test_func_sigma():
+    shape = (50,)
+    s, t, p = make_simple_stp(shape)
+    S, T, P, n_good = process_arrays(s, t, p)
+    Sppc = linear_coefficients(P, S)
+    Tppc = linear_coefficients(P, T)
+    # Setting p_ref and d0 to 0 makes the function return the potential density.
+    rho_upper = func_sigma(p[25], P, S, Sppc, T, Tppc, 0.0, 0.0)
+    rho_lower = func_sigma(p[26], P, S, Sppc, T, Tppc, 0.0, 0.0)
+    rho_mid   = func_sigma((0.5 * (p[25] + p[26])), P, S, Sppc, T, Tppc, 0.0, 0.0)
+    assert rho_lower > rho_mid > rho_upper
+    # Interpolating the density is almost the same as interpolating S and T.
+    rho_interp = 0.5 * (rho_upper + rho_lower)
+    assert abs(rho_mid - rho_interp) < 1e6 * (rho_lower - rho_upper)
+
+
+# def test_vertsolve1():
+#     shape = (50,)
+#     s, t, p = make_simple_stp(shape)
+#     ngood, stp_args = process_arrays(s, t, p)
+#     d0 = 1026.0
+#     p_ref = 0.0
+#     p_start = 1500.0
+#     ss, tt, pp = vertsolve1(p_start, p_ref, d0, stp_args, 1e-8)
+#     rho_found = rho(ss, tt, p_ref)
+#     assert abs(rho_found - d0) < 1e-8
+
+
+def test_vertsolve_sigma():
+    shape = (3, 4, 50)
+    s, t, p = make_simple_stp(shape)
+    S, T, P, n_good = process_arrays(s, t, p)
+    Sppc = linear_coefficients(P, S)
+    Tppc = linear_coefficients(P, T)
+    d0 = 1026.0
+    p_ref = 0.0
+    tol = 1e-8
+    ss, tt, pp = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
+    rho_found = rho_ufunc(ss, tt, p_ref)
+    assert np.all(np.abs(rho_found - d0) < tol)
+
+
+def test_vertsolve_with_nans():
+    shape = (4, 3, 50)
+    s, t, p = make_simple_stp(shape)
+    # All nans for one profile.
+    s[0, 0] = t[0, 0] = np.nan
+    # Raise the bottom of two more.
+    s[1, 0, 45:] = t[1, 0, 45:] = np.nan
+    s[2, 0, 5:] = t[2, 0, 5:] = np.nan
+    # One with only one level left.
+    s[3, 0, 1:] = t[3, 0, 1:] = np.nan
+    S, T, P, n_good = process_arrays(s, t, p)
+    Sppc = linear_coefficients(P, S)
+    Tppc = linear_coefficients(P, T)
+    shape = n_good.shape
+    d0 = 1026.0
+    p_ref = 0.0
+    tol = 1e-8
+    ss, tt, pp = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
+    for ind in ((0, 0), (3, 0)):
+        assert np.isnan([ss[ind], tt[ind], pp[ind]]).all()
+    rho_found = np.ma.masked_invalid(rho_ufunc(ss, tt, p_ref))
+    assert np.ma.allclose(rho_found, d0)
     assert rho_found.size - rho_found.count() == 3
