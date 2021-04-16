@@ -24,12 +24,12 @@ def test_linear():
     expected_S = np.empty_like(expected_T)
     result_S = np.empty_like(expected_T)
     result_T = np.empty_like(expected_T)
-    
-    d_vert = S.ndim -1 # index to vertical dimension
-    
+
+    d_vert = S.ndim - 1  # index to vertical dimension
+
     assert Sppc.shape[d_vert] == S.shape[d_vert] - 1
     assert Tppc.shape[d_vert] == T.shape[d_vert] - 1
-    
+
     for i in range(ncasts):
         expected_T[i] = np.interp(targets, pgrid, T[i])
         expected_S[i] = np.interp(targets, pgrid, S[i])

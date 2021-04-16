@@ -10,6 +10,7 @@ from neutral_surfaces._neutral_surfaces import (
     func_sigma,
 )
 
+
 def make_simple_stp(shape, p_axis=-1, p_is_1d=True):
     s = np.empty(shape, dtype=float)
     t = np.empty(shape, dtype=float)
@@ -53,8 +54,10 @@ def test_pot_dens_surf(target):
         assert np.ma.allclose(rho_found, target)
     assert rho_found.size - rho_found.count() == 3
 
-    
+
 arg_combos = itertools.product([0, 1, 2], [True, False])
+
+
 @pytest.mark.parametrize("p_axis,p_1d", arg_combos)
 def test_process_arrays(p_axis, p_1d):
     shape = (3, 4, 5)
@@ -69,8 +72,8 @@ def test_process_arrays(p_axis, p_1d):
     assert S.flags.c_contiguous
     assert T.flags.c_contiguous
     assert P.flags.c_contiguous
-    
-        
+
+
 def test_func_sigma():
     shape = (50,)
     s, t, p = make_simple_stp(shape)
@@ -80,7 +83,7 @@ def test_func_sigma():
     # Setting p_ref and d0 to 0 makes the function return the potential density.
     rho_upper = func_sigma(p[25], P, S, Sppc, T, Tppc, 0.0, 0.0)
     rho_lower = func_sigma(p[26], P, S, Sppc, T, Tppc, 0.0, 0.0)
-    rho_mid   = func_sigma((0.5 * (p[25] + p[26])), P, S, Sppc, T, Tppc, 0.0, 0.0)
+    rho_mid = func_sigma((0.5 * (p[25] + p[26])), P, S, Sppc, T, Tppc, 0.0, 0.0)
     assert rho_lower > rho_mid > rho_upper
     # Interpolating the density is almost the same as interpolating S and T.
     rho_interp = 0.5 * (rho_upper + rho_lower)
