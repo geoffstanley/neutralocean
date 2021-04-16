@@ -1,12 +1,15 @@
 import itertools
 import pytest
 import numpy as np
-from neutral_surfaces._neutral_surfaces import pot_dens_surf, process_arrays, vertsolve
 from neutral_surfaces._densjmd95 import rho_ufunc
 from neutral_surfaces.interp_ppc import linear_coefficients
+from neutral_surfaces._neutral_surfaces import (
+    pot_dens_surf,
+    process_arrays,
+    sigma_vertsolve,
+    func_sigma,
+)
 
-
-# Copied from test_vertsolve; consolidate later.
 def make_simple_stp(shape, p_axis=-1, p_is_1d=True):
     s = np.empty(shape, dtype=float)
     t = np.empty(shape, dtype=float)
@@ -96,18 +99,18 @@ def test_func_sigma():
 #     assert abs(rho_found - d0) < 1e-8
 
 
-def test_vertsolve():
+def test_vertsolve_sigma():
     shape = (3, 4, 50)
     s, t, p = make_simple_stp(shape)
     S, T, P, n_good = process_arrays(s, t, p)
     Sppc = linear_coefficients(P, S)
     Tppc = linear_coefficients(P, T)
-    d0 = 1026.0 * np.ones(shape[0:2], dtype=float)
-    p_ref = np.zeros(shape[0:2], dtype=float)
-    p_start = 1500.0 * np.ones(shape[0:2], dtype=float)
-    ss, tt, pp = vertsolve(p_start, p_ref, d0, n_good, P, S, Sppc, T, Tppc, 1e-8)
+    d0 = 1026.0
+    p_ref = 0.0
+    tol = 1e-8
+    ss, tt, pp = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
     rho_found = rho_ufunc(ss, tt, p_ref)
-    assert np.all(np.abs(rho_found - d0) < 1e-8)
+    assert np.all(np.abs(rho_found - d0) < tol)
 
 
 def test_vertsolve_with_nans():
@@ -124,10 +127,10 @@ def test_vertsolve_with_nans():
     Sppc = linear_coefficients(P, S)
     Tppc = linear_coefficients(P, T)
     shape = n_good.shape
-    p_start = np.broadcast_to(1500.0, shape)
-    p_ref = np.broadcast_to(0.0, shape)
-    d0 = np.broadcast_to(1026.0, shape)
-    ss, tt, pp = vertsolve(p_start, p_ref, d0, n_good, P, S, Sppc, T, Tppc, 1e-8)
+    d0 = 1026.0
+    p_ref = 0.0
+    tol = 1e-8
+    ss, tt, pp = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
     for ind in ((0, 0), (3, 0)):
         assert np.isnan([ss[ind], tt[ind], pp[ind]]).all()
     rho_found = np.ma.masked_invalid(rho_ufunc(ss, tt, p_ref))
