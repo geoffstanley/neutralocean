@@ -14,9 +14,9 @@ rho_s_t :: compute the partial derivatives of in-situ density with respect
 
 import numpy as np
 import numba
+from numba import float64
 
-
-@numba.njit(numba.float64(numba.float64, numba.float64, numba.float64))
+@numba.njit(float64(float64, float64, float64))
 def rho(s, t, p):
     """
     rho(s, t, p)
@@ -74,12 +74,14 @@ def rho_ufunc(s, t, p):
     return rho(s, t, p)
 
 
-@numba.njit(numba.float64(numba.float64, numba.float64, numba.float64))
+@numba.njit(float64(float64, float64, float64))
 def rho_bsq(s, t, z):
     # Hardcoded conversion from input depth into pressure
     return rho(s, t, z * (1e-4 * 9.81 * 1027.5))
 
 
+#@numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
+@numba.njit
 def rho_s_t(s, t, p):
     """
     Fast salinity and potential temperature derivatives of JMD95 in-situ density.
@@ -169,9 +171,6 @@ def rho_s_t(s, t, p):
       6.128773e-09, # .== original / 10
       6.207323e-11] # .== original / 10
 
-    # Hardcoded conversion from input depth into pressure
-    p *= (1e-4 * 9.81 * 1027.5) # depth to pressure conversion [dbar / m]
-
     s1o2 = np.sqrt(s)
 
     # The secant bulk modulus
@@ -232,3 +231,9 @@ def rho_s_t(s, t, p):
     rho_t = (rho_0_T * K - work * K_t) / (K - p)
 
     return rho_s, rho_t
+
+#@numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))
+@numba.njit
+def rho_s_t_bsq(s, t, z):
+    # Hardcoded conversion from input depth into pressure
+    return rho_s_t(s, t, z * (1e-4 * 9.81 * 1027.5))
