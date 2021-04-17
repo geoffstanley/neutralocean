@@ -33,9 +33,8 @@ def pot_dens_surf(S, T, P, p_ref, target, axis=-1, tol=1e-4):
 
     if isinstance(target, tuple):
         p0 = target[-1]  # target pressure
-        n0 = target[
-            :-1
-        ]  # index to water column which intersects the surface at the target pressure
+        n0 = target[:-1]  # index to water column which intersects the surface
+        #                   at the target pressure
 
         # Choose iso-value that will intersect cast n0 at p0.
         d0 = func_sigma(p0, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p_ref, 0.0)

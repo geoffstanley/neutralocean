@@ -16,6 +16,7 @@ import numpy as np
 import numba
 from numba import float64
 
+
 @numba.njit(float64(float64, float64, float64))
 def rho(s, t, p):
     """
@@ -80,7 +81,7 @@ def rho_bsq(s, t, z):
     return rho(s, t, z * (1e-4 * 9.81 * 1027.5))
 
 
-#@numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
+# @numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
 @numba.njit
 def rho_s_t(s, t, p):
     """
@@ -232,7 +233,8 @@ def rho_s_t(s, t, p):
 
     return rho_s, rho_t
 
-#@numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))
+
+# @numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))
 @numba.njit
 def rho_s_t_bsq(s, t, z):
     # Hardcoded conversion from input depth into pressure
