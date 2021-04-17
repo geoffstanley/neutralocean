@@ -77,7 +77,7 @@ def rho_ufunc(s, t, p):
 @numba.njit(numba.float64(numba.float64, numba.float64, numba.float64))
 def rho_bsq(s, t, z):
     # Hardcoded conversion from input depth into pressure
-    return rho(s,t, z * (1e-4 * 9.81 * 1027.5))
+    return rho(s, t, z * (1e-4 * 9.81 * 1027.5))
 
 
 def rho_s_t(s, t, p):
