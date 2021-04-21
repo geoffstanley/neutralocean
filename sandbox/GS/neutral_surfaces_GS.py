@@ -130,7 +130,7 @@ def pot_dens_surf(S, T, P, p_ref, var, TOL_P_UPDATE=1e-4, INTERPFN=ppc.linterp):
                 # Search for a sign-change, expanding outward from an initial guess
                 (lb, ub) = fzero.guess_to_bounds(f, p[n], P[0], P[k-1])
 
-                if ~np.isnan(lb):
+                if not np.isnan(lb):
                     # A sign change was discovered, so a root exists in the interval.
                     # Solve the nonlinear root-finding problem using Brent's method
                     p[n] = fzero.brent(f, lb, ub, TOL)

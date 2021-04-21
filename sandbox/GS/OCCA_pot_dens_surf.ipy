@@ -1,80 +1,75 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-#%% In[1]:
-
+#%% Imports
 
 #%matplotlib notebook
-# get_ipython().run_line_magic('matplotlib', 'inline')
+#%matplotlib inline
 
 import numpy as np
-import xarray as xr
 import matplotlib.pyplot as plt
 
-from neutral_surfaces import pot_dens_surf, delta_surf
-#from neutral_surfaces._densjmd95 import rho_ufunc
+from neutral_surfaces.load_data import load_OCCA
+from neutral_surfaces import pot_dens_surf, delta_surf, omega_surf
+from neutral_surfaces._densjmd95 import rho_bsq
 from neutral_surfaces.lib import ϵ_norms
 
 
-#%% In[2]:
+#%% Load OCCA data
+g, S, T, P, _ = load_OCCA("~/work/data/OCCA/")
+Z = -g.RC  # DEV: currently ignoring distinction between Z and P, until Boussinesq equation of state is ready.
 
-wrap = (False, True)  # (latitude, longitude)
-OCCA_dir = "~/work/data/OCCA/"
-xrs = xr.open_dataset(OCCA_dir + "DDsalt.0406annclim.nc")
-xrt = xr.open_dataset(OCCA_dir + "DDtheta.0406annclim.nc")
-lon = xrs.Longitude_t.values
-lat = xrs.Latitude_t.values
-S = np.require(xrs.salt.values[0] , dtype=np.float64, requirements="C")  # pick first time
-T = np.require(xrt.theta.values[0], dtype=np.float64, requirements="C")  # pick first time
-Z = np.require(xrs.Depth_c, dtype=np.float64, requirements="C")     # DEV: currently ignoring distinction between Z and P, until Boussinesq equation of state is ready.
-S = np.moveaxis(S, 0, -1) # Move vertical axis to end
-T = np.moveaxis(T, 0, -1) # Move vertical axis to end
+ni, nj, nk = S.shape
+nij = ni * nj
 
 # Select pinning cast
-i0 = int(len(lon) / 2)
-j0 = int(len(lat) / 2)
+i0 = int(ni / 2)
+j0 = int(nj / 2)
 z0 = 1500.
 
-#%% In[3]
+
+#%% Potential Density surface
+
+# s, t, z_sigma = pot_dens_surf(S, T, Z, 1500., (j0, i0, z0), axis=-1, tol=1e-4)
+s_sigma, t_sigma, z_sigma = pot_dens_surf(S, T, Z, 1500., (i0, j0, z0), axis=-1, tol=1e-4)
+
+ϵ_L2, ϵ_L1 = ϵ_norms(s_sigma, t_sigma, z_sigma, g.wrap, 1, 1, 1, 1)
+
+#%% Delta surface
+s_delta, t_delta, z_delta = delta_surf(S, T, Z, (), (), (i0, j0, z0), axis=-1, tol=1e-4)
+
+# %% Omega surface
+z_omega, s, t, diags = omega_surf(S, T, Z, z_sigma, (i0, j0), g.wrap, axis=-1, ITER_MAX=10)
+# Initial surface has log_10(|ϵ|_2) = -2.342477 ..................
+# Iter  1 [  0.19 sec] log_10(|ϵ|_2) = -3.972863 by |ϕ|_1 = 2.015180e-02;   29 casts freshly wet; |Δp|_2 = 2.009176e+01
+# Iter  2 [  0.21 sec] log_10(|ϵ|_2) = -4.279229 by |ϕ|_1 = 3.621773e-04;  272 casts freshly wet; |Δp|_2 = 1.701764e+00
+# Iter  3 [  0.23 sec] log_10(|ϵ|_2) = -4.287579 by |ϕ|_1 = 2.237068e-05;    2 casts freshly wet; |Δp|_2 = 1.468717e-01
+# Iter  4 [  0.25 sec] log_10(|ϵ|_2) = -4.287644 by |ϕ|_1 = 9.968479e-07;    0 casts freshly wet; |Δp|_2 = 7.314240e-03
+# Iter  5 [  0.24 sec] log_10(|ϵ|_2) = -4.287643 by |ϕ|_1 = 1.449314e-07;    0 casts freshly wet; |Δp|_2 = 2.144395e-03
+# Iter  6 [  0.23 sec] log_10(|ϵ|_2) = -4.287643 by |ϕ|_1 = 2.316665e-08;    0 casts freshly wet; |Δp|_2 = 3.548166e-04
 
 
-# Here we discard the unneeded time axis.
-# get_ipython().run_line_magic('time', 's, t, z_sigma = pot_dens_surf(S, T, Z, 0., (j0, i0, z0), axis=-1, tol=1e-4)')
-s, t, z_sigma = pot_dens_surf(S, T, Z, 0., (j0, i0, z0), axis=-1, tol=1e-4)
+# z_omega, s, t, diags = omega_surf(
+#     S, T, Z, z_delta, (i0, j0), g.wrap, axis=-1, ITER_MAX=10, ITER_START_WETTING=np.inf,
+#     DIST1_iJ=g.DXCvec,  # Distance [m] in 1st dimension centred at (I-1/2, J)
+#     DIST2_Ij=g.DYCsc,  # Distance [m] in 2nd dimension centred at (I, J-1/2)
+#     DIST2_iJ=g.DYGsc,  # Distance [m] in 2nd dimension centred at (I-1/2, J)
+#     DIST1_Ij=g.DXGvec,  # Distance [m] in 1st dimension centred at (I, J-1/2)
+#     )
+# Initial surface has log_10(|ϵ|_2) = -7.723916 ..................
+# Iter  1 [  0.20 sec] log_10(|ϵ|_2) = -8.726053 by |ϕ|_1 = 1.040064e-02;    0 casts freshly wet; |Δp|_2 = 2.167515e+01
+# Iter  2 [  0.19 sec] log_10(|ϵ|_2) = -9.237233 by |ϕ|_1 = 6.336332e-04;    0 casts freshly wet; |Δp|_2 = 6.089017e+00
+# Iter  3 [  0.19 sec] log_10(|ϵ|_2) = -9.338989 by |ϕ|_1 = 6.601303e-05;    0 casts freshly wet; |Δp|_2 = 1.187603e+00
+# Iter  4 [  0.19 sec] log_10(|ϵ|_2) = -9.340732 by |ϕ|_1 = 6.353485e-06;    0 casts freshly wet; |Δp|_2 = 2.204033e-01
+# Iter  5 [  0.18 sec] log_10(|ϵ|_2) = -9.340763 by |ϕ|_1 = 6.398824e-07;    0 casts freshly wet; |Δp|_2 = 2.975967e-02
+# Iter  6 [  0.17 sec] log_10(|ϵ|_2) = -9.340763 by |ϕ|_1 = 6.579950e-08;    0 casts freshly wet; |Δp|_2 = 3.238430e-03
+# Note:  10 ** -9.340763 == 4.56285848989746e-10  -- matches Stanley et al (2021) Fig 4.
 
-ϵL2, ϵL1 = ϵ_norms(s, t, z_sigma, wrap, 1, 1, 1, 1)
-
-
-#%%% In[4]:
+#%% Show figure
 
 fig, ax = plt.subplots()
-cs = ax.contourf(lon, lat, z_sigma)
+cs = ax.imshow(z_omega.T, origin="lower")
+# cs = ax.contourf(lon, lat, z_sigma.T)
 cbar = fig.colorbar(cs, ax=ax)
 cbar.set_label("Depth [m]")
 ax.set_title(r"Depth of surface in OCCA");
-
-
-# %% In[5]:
-
-
-get_ipython().run_line_magic('time', 's, t, z_delta = delta_surf(S, T, Z, (), (), (j0, i0, z0), axis=-1, tol=1e-4)')
-
-
-# %% In[6]:
-
-
-fig, ax = plt.subplots()
-cs = ax.contourf(lon, lat, z_delta)
-cbar = fig.colorbar(cs, ax=ax)
-cbar.set_label("Depth [m]")
-ax.set_title(r"Depth of surface in OCCA");
-
-
-# %% In[7]:
-
-
-fig, ax = plt.subplots()
-cs = ax.contourf(lon, lat, z_delta - z_sigma)
-cbar = fig.colorbar(cs, ax=ax)
-cbar.set_label("Depth [m]")
-ax.set_title(r"Depth difference in OCCA");
