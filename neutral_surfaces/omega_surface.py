@@ -237,7 +237,6 @@ def omega_surf(
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
         TOL_LRPD_L1 = TOL_LRPD_L1 * 1000.0 ** 2
 
-
     # Calculate the ratios of distances, and auto expand to [ni,nj] sizes, for eps_norms()
     # DEV:  The following broadcast_to calls are probably not general enough...
     # If DIST2_Ij is a vector of length nj, for instance, this crashes.
