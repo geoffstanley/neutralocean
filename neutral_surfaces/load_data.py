@@ -32,25 +32,25 @@ class gridC(object):
         self.nx = XCvec.size
         self.ny = YCvec.size
         self.nz = RC.size
-        self.RACvec = (
-            rSphere ** 2
-            / resx
-            * deg2rad
-            * abs(np.sin((YGvec + 1 / resy) * deg2rad) - np.sin(YGvec * deg2rad))
-        )  # Vertical area of the tracer cells [m^2]
-        self.RAWvec = self.RACvec  # Vertical area of the U cells [m^2]
-        self.RASvec = (
-            rSphere ** 2
-            / resx
-            * deg2rad
-            * abs(np.sin(YCvec * deg2rad) - np.sin((YCvec - 1 / resy) * deg2rad))
-        )  # Vertical area of the V cells [m^2]
-        self.RAZvec = (
-            rSphere ** 2
-            / resx
-            * deg2rad
-            * abs(np.sin(YCvec * deg2rad) - np.sin((YCvec - 1 / resy) * deg2rad))
-        )  # Vertical area of the vorticity cells [m^2]
+
+        # Vertical area of the tracer cells [m^2]
+        self.RACvec = (rSphere ** 2 / resx * deg2rad) * abs(
+            np.sin((YGvec + 1 / resy) * deg2rad) - np.sin(YGvec * deg2rad)
+        )
+
+        # Vertical area of the U cells [m^2]
+        self.RAWvec = self.RACvec
+
+        # Vertical area of the V cells [m^2]
+        self.RASvec = (rSphere ** 2 / resx * deg2rad) * abs(
+            np.sin(YCvec * deg2rad) - np.sin((YCvec - 1 / resy) * deg2rad)
+        )
+
+        # Vertical area of the vorticity cells [m^2]
+        self.RAZvec = (rSphere ** 2 / resx * deg2rad) * abs(
+            np.sin(YCvec * deg2rad) - np.sin((YCvec - 1 / resy) * deg2rad)
+        )
+
         self.DXGvec = rSphere * np.cos(YGvec * deg2rad) / resx * deg2rad
         self.DYGsc = rSphere * deg2rad / resy
         self.DXCvec = rSphere * np.cos(YCvec * deg2rad) / resx * deg2rad
@@ -94,34 +94,25 @@ def load_OCCA(OCCA_dir, ts=0):
 
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "theta"))
     T = x.theta.values[ts]  # (depth, lat, lon)
-    T = np.moveaxis(
-        T, (0, 1, 2), (2, 1, 0)
-    )  # Move vertical axis to end.  (lon, lat, depth)
+    T = np.moveaxis(T, (0, 1, 2), (2, 1, 0))  # (lon, lat, depth)
     T = np.require(T, dtype=np.float64, requirements="C")
     x.close()
 
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "salt"))
     S = x.salt.values[ts]  # (depth, lat, lon)
-    S = np.moveaxis(
-        S, (0, 1, 2), (2, 1, 0)
-    )  # Move vertical axis to end.  (lon, lat, depth)
+    S = np.moveaxis(S, (0, 1, 2), (2, 1, 0))  # (lon, lat, depth)
     S = np.require(S, dtype=np.float64, requirements="C")
     x.close()
 
     # phihyd = Pres / rho_c +  grav * z
-    varname = "phihyd"
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "phihyd"))
     P = x.phihyd.values[ts]  # (depth, lat, lon)
-    P = np.moveaxis(
-        P, (0, 1, 2), (2, 1, 0)
-    )  # Move vertical axis to end.  (lon, lat, depth)
+    P = np.moveaxis(P, (0, 1, 2), (2, 1, 0))  # (lon, lat, depth)
     P = np.require(P, dtype=np.float64, requirements="C")
-    P = (P - g.grav * g.RC.reshape(1, 1, -1)) * (
-        g.ρ_c * Pa2db
-    )  # convert to full in-situ pressure, in [dbar]
+    # convert to full in-situ pressure, in [dbar]
+    P = (P - g.grav * g.RC.reshape(1, 1, -1)) * (g.ρ_c * Pa2db)
     x.close()
 
-    varname = "etan"
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "etan"))
     η = x.etan.values[ts]  # (lat, lon)
     η = η.T  # (lon, lat)
