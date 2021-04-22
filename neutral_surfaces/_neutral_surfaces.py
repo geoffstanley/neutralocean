@@ -100,7 +100,7 @@ def sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol):
                 )
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = interp_ppc.val2(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
+                s[n], t[n] = interp_ppc.val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
 
         # else:
         # only one grid cell so cannot interpolate.
@@ -112,7 +112,7 @@ def sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol):
 @numba.njit
 def func_sigma(p, P, S, Sppc, T, Tppc, p_ref, d0):
     # s, t = linear_eval2(p, *stp_args)
-    s, t = interp_ppc.val2(P, S, Sppc, T, Tppc, p)
+    s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
     return rho_bsq(s, t, p_ref) - d0
 
 
@@ -123,12 +123,11 @@ def delta_surf(S, T, P, s_ref, t_ref, target, axis=-1, tol=1e-4):
 
     if isinstance(target, tuple):
         p0 = target[-1]  # target pressure
-        n0 = target[
-            :-1
-        ]  # index to water column which intersects the surface at the target pressure
+        n0 = target[:-1]  # index to water column which intersects the surface
+        #                   at the target pressure
 
         # evaluate salinity and temperature at the chosen location
-        s0, t0 = interp_ppc.val2(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p0)
+        s0, t0 = interp_ppc.val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p0)
 
         if isinstance(s_ref, float) and isinstance(t_ref, float):
             # reference S and T provided. Choose iso-value that will intersect cast n0 at p0.
@@ -194,7 +193,7 @@ def delta_vertsolve(P, S, Sppc, T, Tppc, n_good, s_ref, t_ref, d0, tol):
                 )
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = interp_ppc.val2(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
+                s[n], t[n] = interp_ppc.val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
 
         # else:
         # only one grid cell so cannot interpolate.
@@ -205,25 +204,8 @@ def delta_vertsolve(P, S, Sppc, T, Tppc, n_good, s_ref, t_ref, d0, tol):
 
 @numba.njit
 def func_delta(p, P, S, Sppc, T, Tppc, s_ref, t_ref, d0):
-    s, t = interp_ppc.val2(P, S, Sppc, T, Tppc, p)
+    s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
     return rho_bsq(s, t, p) - rho_bsq(s_ref, t_ref, p) - d0
-
-
-# @numba.njit
-# def func_omega(p, Sppc, Tppc, P, phi_minus_rho0, p0)
-# #     Evaluate difference between (a) eos at location on the cast where the
-# #     pressure or depth is p, plus the density perturbation phi, and (b) eos at
-# #     location on the cast where the surface currently resides (at pressure or
-# #     depth p0).  The combination of d and part (b) is precomputed as phi_minus_rho0.
-# #     Here, eos always evaluated at the pressure or depth of the original position,
-# #     p0; this is to calculate locally referenced potential density with reference
-# #     pressure p0.
-
-#     # Interpolate S and T to the current pressure or depth
-#     s, t = interp_ppc.val2(P, S, Sppc, T, Tppc, p)
-
-#     # Calculate the potential density or potential specific volume difference
-#     return rho_bsq(s, t, p0) + phi_minus_rho0
 
 
 @numba.njit
