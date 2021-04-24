@@ -1,9 +1,33 @@
+import ctypes
+import functools
+
 import numpy as np
 import numba
+import gsw
 
 from neutral_surfaces._densjmd95 import rho_bsq
+from neutral_surfaces._densjmd95 import rho as rho_jmd95
 from neutral_surfaces import interp_ppc
 from neutral_surfaces._zero import guess_to_bounds, brent
+
+from neutral_surfaces._zero_freeze import make_brent_funcs
+
+
+dllname = gsw._gsw_ufuncs.__file__
+gswlib = ctypes.cdll.LoadLibrary(dllname)
+rho_gsw_ctypes = gswlib.gsw_rho
+rho_gsw_ctypes.restype = ctypes.c_double
+rho_gsw_ctypes.argtypes = (ctypes.c_double, ctypes.c_double, ctypes.c_double)
+
+
+# Wrapping the ctypes function with a jit reduces call overhead and makes it
+# hashable.
+@numba.njit
+def rho_gsw(s, t, p):
+    return rho_gsw_ctypes(s, t, p)
+
+
+eosdict = dict(jmd95=rho_jmd95, gsw=rho_gsw)
 
 
 def process_arrays(S, T, P, axis=-1):
@@ -26,10 +50,12 @@ def process_arrays(S, T, P, axis=-1):
     return S, T, P, n_good
 
 
-def pot_dens_surf(S, T, P, p_ref, target, axis=-1, tol=1e-4):
+def pot_dens_surf(S, T, P, p_ref, target, eos="jmd95", axis=-1, tol=1e-4):
     S, T, P, n_good = process_arrays(S, T, P, axis=axis)
     Sppc = interp_ppc.linear_coefficients(P, S)
     Tppc = interp_ppc.linear_coefficients(P, T)
+
+    func_sigma, sigma_vertsolve = make_sigma_workers(eosdict[eos])
 
     if isinstance(target, tuple):
         p0 = target[-1]  # target pressure
@@ -64,56 +90,59 @@ def pot_dens_surf(S, T, P, p_ref, target, axis=-1, tol=1e-4):
     return s, t, p
 
 
-@numba.njit
-def sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol):
+@functools.lru_cache(maxsize=10)
+def make_sigma_workers(rho):
+    @numba.njit
+    def func_sigma(p, P, S, Sppc, T, Tppc, p_ref, d0):
+        # s, t = linear_eval2(p, *stp_args)
+        s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
+        return rho(s, t, p_ref) - d0
 
-    s = np.empty(n_good.shape, dtype=np.float64)
-    s.fill(np.nan)
-    t = s.copy()
-    p = s.copy()
+    guess_to_bounds, brent = make_brent_funcs(func_sigma)
 
-    for n in np.ndindex(n_good.shape):
-        k = n_good[n]
-        if k > 1:
+    @numba.njit
+    def sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol):
 
-            # Select this water column
-            tup = (*n, slice(k))
-            Pn = P[tup]
-            Sn = S[tup]
-            Tn = T[tup]
-            Sppcn = Sppc[tup]
-            Tppcn = Tppc[tup]
+        s = np.empty(n_good.shape, dtype=np.float64)
+        s.fill(np.nan)
+        t = s.copy()
+        p = s.copy()
 
-            # Use mid-depth as initial guess
-            pn = (Pn[0] + Pn[-1]) * 0.5
+        for n in np.ndindex(n_good.shape):
+            k = n_good[n]
+            if k > 1:
 
-            # Search for a sign-change, expanding outward from an initial guess
-            lb, ub = guess_to_bounds(
-                func_sigma, (Pn, Sn, Sppcn, Tn, Tppcn, p_ref, d0), pn, Pn[0], Pn[-1]
-            )
+                # Select this water column
+                tup = (*n, slice(k))
+                Pn = P[tup]
+                Sn = S[tup]
+                Tn = T[tup]
+                Sppcn = Sppc[tup]
+                Tppcn = Tppc[tup]
 
-            if not np.isnan(lb):
-                # A sign change was discovered, so a root exists in the interval.
-                # Solve the nonlinear root-finding problem using Brent's method
-                p[n] = brent(
-                    func_sigma, (Pn, Sn, Sppcn, Tn, Tppcn, p_ref, d0), lb, ub, tol
+                # Use mid-depth as initial guess
+                pn = (Pn[0] + Pn[-1]) * 0.5
+
+                # Search for a sign-change, expanding outward from an initial guess
+                lb, ub = guess_to_bounds(
+                    (Pn, Sn, Sppcn, Tn, Tppcn, p_ref, d0), pn, Pn[0], Pn[-1]
                 )
 
-                # Interpolate S and T onto the updated surface
-                s[n], t[n] = interp_ppc.val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
+                if not np.isnan(lb):
+                    # A sign change was discovered, so a root exists in the interval.
+                    # Solve the nonlinear root-finding problem using Brent's method
+                    p[n] = brent((Pn, Sn, Sppcn, Tn, Tppcn, p_ref, d0), lb, ub, tol)
 
-        # else:
-        # only one grid cell so cannot interpolate.
-        # This will ensure s,t,p all have the same nan structure
+                    # Interpolate S and T onto the updated surface
+                    s[n], t[n] = interp_ppc.val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
 
-    return s, t, p
+            # else:
+            # only one grid cell so cannot interpolate.
+            # This will ensure s,t,p all have the same nan structure
 
+        return s, t, p
 
-@numba.njit
-def func_sigma(p, P, S, Sppc, T, Tppc, p_ref, d0):
-    # s, t = linear_eval2(p, *stp_args)
-    s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
-    return rho_bsq(s, t, p_ref) - d0
+    return func_sigma, sigma_vertsolve
 
 
 def delta_surf(S, T, P, s_ref, t_ref, target, axis=-1, tol=1e-4):

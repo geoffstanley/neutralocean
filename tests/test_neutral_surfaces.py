@@ -1,13 +1,16 @@
 import itertools
 import pytest
 import numpy as np
+import gsw
 from neutral_surfaces._densjmd95 import rho_ufunc
 from neutral_surfaces.interp_ppc import linear_coefficients
 from neutral_surfaces._neutral_surfaces import (
     pot_dens_surf,
     process_arrays,
-    sigma_vertsolve,
-    func_sigma,
+    # sigma_vertsolve,
+    # func_sigma,
+    make_sigma_workers,
+    eosdict,
 )
 
 
@@ -74,7 +77,9 @@ def test_process_arrays(p_axis, p_1d):
     assert P.flags.c_contiguous
 
 
-def test_func_sigma():
+@pytest.mark.parametrize("eos", eosdict.keys())
+def test_func_sigma(eos):
+    func_sigma, _ = make_sigma_workers(eosdict[eos])
     shape = (50,)
     s, t, p = make_simple_stp(shape)
     S, T, P, n_good = process_arrays(s, t, p)
@@ -90,19 +95,9 @@ def test_func_sigma():
     assert abs(rho_mid - rho_interp) < 1e6 * (rho_lower - rho_upper)
 
 
-# def test_vertsolve1():
-#     shape = (50,)
-#     s, t, p = make_simple_stp(shape)
-#     ngood, stp_args = process_arrays(s, t, p)
-#     d0 = 1026.0
-#     p_ref = 0.0
-#     p_start = 1500.0
-#     ss, tt, pp = vertsolve1(p_start, p_ref, d0, stp_args, 1e-8)
-#     rho_found = rho(ss, tt, p_ref)
-#     assert abs(rho_found - d0) < 1e-8
-
-
-def test_vertsolve_sigma():
+@pytest.mark.parametrize("eos", eosdict.keys())
+def test_vertsolve_sigma(eos):
+    _, sigma_vertsolve = make_sigma_workers(eosdict[eos])
     shape = (3, 4, 50)
     s, t, p = make_simple_stp(shape)
     S, T, P, n_good = process_arrays(s, t, p)
@@ -112,11 +107,16 @@ def test_vertsolve_sigma():
     p_ref = 0.0
     tol = 1e-8
     ss, tt, pp = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
-    rho_found = rho_ufunc(ss, tt, p_ref)
+    if eos == "jmd95":
+        rho_found = rho_ufunc(ss, tt, p_ref)
+    else:
+        rho_found = gsw.rho(ss, tt, p_ref)
     assert np.all(np.abs(rho_found - d0) < tol)
 
 
-def test_vertsolve_with_nans():
+@pytest.mark.parametrize("eos", eosdict.keys())
+def test_vertsolve_with_nans(eos):
+    _, sigma_vertsolve = make_sigma_workers(eosdict[eos])
     shape = (4, 3, 50)
     s, t, p = make_simple_stp(shape)
     # All nans for one profile.
@@ -136,6 +136,30 @@ def test_vertsolve_with_nans():
     ss, tt, pp = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
     for ind in ((0, 0), (3, 0)):
         assert np.isnan([ss[ind], tt[ind], pp[ind]]).all()
-    rho_found = np.ma.masked_invalid(rho_ufunc(ss, tt, p_ref))
+    if eos == "jmd95":
+        rho_found = np.ma.masked_invalid(rho_ufunc(ss, tt, p_ref))
+    else:
+        rho_found = np.ma.masked_invalid(gsw.rho(ss, tt, p_ref))
     assert np.ma.allclose(rho_found, d0)
     assert rho_found.size - rho_found.count() == 3
+
+
+def test_eos_switch():
+    shape = (3, 4, 50)
+    s, t, p = make_simple_stp(shape)
+    S, T, P, n_good = process_arrays(s, t, p)
+    Sppc = linear_coefficients(P, S)
+    Tppc = linear_coefficients(P, T)
+    d0 = 1026.0
+    p_ref = 0.0
+    tol = 1e-8
+    _, sigma_vertsolve = make_sigma_workers(eosdict["jmd95"])
+    out1 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
+    _, sigma_vertsolve = make_sigma_workers(eosdict["gsw"])
+    out2 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
+    _, sigma_vertsolve = make_sigma_workers(eosdict["jmd95"])
+    out3 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
+    for var1, var3 in zip(out1, out3):
+        assert np.all(var1 == var3)
+    for var1, var2 in zip(out1, out2):
+        assert not np.all(var1 == var2)
