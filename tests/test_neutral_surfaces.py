@@ -79,7 +79,7 @@ def test_process_arrays(p_axis, p_1d):
 
 @pytest.mark.parametrize("eos", eosdict.keys())
 def test_func_sigma(eos):
-    func_sigma, _ = make_sigma_workers(eosdict[eos])
+    func_sigma, _ = make_sigma_workers(eosdict[eos], 0)
     shape = (50,)
     s, t, p = make_simple_stp(shape)
     S, T, P, n_good = process_arrays(s, t, p)
@@ -97,7 +97,7 @@ def test_func_sigma(eos):
 
 @pytest.mark.parametrize("eos", eosdict.keys())
 def test_vertsolve_sigma(eos):
-    _, sigma_vertsolve = make_sigma_workers(eosdict[eos])
+    _, sigma_vertsolve = make_sigma_workers(eosdict[eos], 0)
     shape = (3, 4, 50)
     s, t, p = make_simple_stp(shape)
     S, T, P, n_good = process_arrays(s, t, p)
@@ -116,7 +116,7 @@ def test_vertsolve_sigma(eos):
 
 @pytest.mark.parametrize("eos", eosdict.keys())
 def test_vertsolve_with_nans(eos):
-    _, sigma_vertsolve = make_sigma_workers(eosdict[eos])
+    _, sigma_vertsolve = make_sigma_workers(eosdict[eos], 0)
     shape = (4, 3, 50)
     s, t, p = make_simple_stp(shape)
     # All nans for one profile.
@@ -144,21 +144,20 @@ def test_vertsolve_with_nans(eos):
     assert rho_found.size - rho_found.count() == 3
 
 
-def test_eos_switch():
+@pytest.mark.parametrize("ref,d0", [(0, 1026), ((35, 0), -2.0)])
+def test_eos_switch(ref, d0):
     shape = (3, 4, 50)
     s, t, p = make_simple_stp(shape)
     S, T, P, n_good = process_arrays(s, t, p)
     Sppc = linear_coefficients(P, S)
     Tppc = linear_coefficients(P, T)
-    d0 = 1026.0
-    p_ref = 0.0
     tol = 1e-8
-    _, sigma_vertsolve = make_sigma_workers(eosdict["jmd95"])
-    out1 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
-    _, sigma_vertsolve = make_sigma_workers(eosdict["gsw"])
-    out2 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
-    _, sigma_vertsolve = make_sigma_workers(eosdict["jmd95"])
-    out3 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, p_ref, d0, tol)
+    _, sigma_vertsolve = make_sigma_workers(eosdict["jmd95"], ref)
+    out1 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, ref, d0, tol)
+    _, sigma_vertsolve = make_sigma_workers(eosdict["gsw"], ref)
+    out2 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, ref, d0, tol)
+    _, sigma_vertsolve = make_sigma_workers(eosdict["jmd95"], ref)
+    out3 = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, ref, d0, tol)
     for var1, var3 in zip(out1, out3):
         assert np.all(var1 == var3)
     for var1, var2 in zip(out1, out2):
