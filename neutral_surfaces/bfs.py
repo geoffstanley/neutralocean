@@ -76,7 +76,7 @@ def bfs_conncomp1(G, A, r):
 def bfs_conncomp1_wet(s, t, p, P, S, Sppc, T, Tppc, tolp, A, n_good, r):
     # Note! Mutates s, t, p
 
-    ni, nj = p.shape
+    ni, nj, nk = S.shape
     nij = ni * nj
 
     freshly_wet = 0
@@ -94,16 +94,16 @@ def bfs_conncomp1_wet(s, t, p, P, S, Sppc, T, Tppc, tolp, A, n_good, r):
     dry = (n_good > 1) & ~G
 
     # Flatten lateral dimension of inputs to be 1D.  Use reshape() to get a view.
-    G = np.reshape(G, -1)
-    dry = np.reshape(dry, -1)
-    s = np.reshape(s, -1)
-    t = np.reshape(t, -1)
-    p = np.reshape(p, -1)
-    S = np.reshape(S, (nij, -1))
-    T = np.reshape(T, (nij, -1))
-    P = np.reshape(P, (nij, -1))
-    Sppc = np.reshape(Sppc, (nij, -1))
-    Tppc = np.reshape(Tppc, (nij, -1))
+    G = np.reshape(G, nij)
+    dry = np.reshape(dry, nij)
+    s = np.reshape(s, nij)
+    t = np.reshape(t, nij)
+    p = np.reshape(p, nij)
+    S = np.reshape(S, (nij, nk))
+    T = np.reshape(T, (nij, nk))
+    P = np.reshape(P, (nij, nk))
+    Sppc = np.reshape(Sppc, (nij, nk - 1, -1))
+    Tppc = np.reshape(Tppc, (nij, nk - 1, -1))
     n_good = np.reshape(n_good, -1)
 
     # Initialize BFS from root node

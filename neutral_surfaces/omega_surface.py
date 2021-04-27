@@ -6,7 +6,7 @@ from time import time
 
 from neutral_surfaces._neutral_surfaces import process_arrays
 from neutral_surfaces._densjmd95 import rho_bsq, rho_s_t_bsq
-from neutral_surfaces.interp_ppc import linear_coefficients, val2_0d, val2
+from neutral_surfaces.interp_ppc import linear_coefficients, pchip_coeffs, val2_0d, val2
 from neutral_surfaces.lib import ϵ_norms
 from neutral_surfaces.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
 from neutral_surfaces._zero import guess_to_bounds, brent
@@ -34,6 +34,7 @@ def omega_surf(
     Tppc=np.zeros(
         (0, 0, 0, 0)
     ),  # Pre-computed interpolation coefficients.  None given here.
+    interp_fn=linear_coefficients,  # function for vertical interpolation
     ITER_MIN=1,  # minimum number of iterations
     ITER_MAX=10,  # maximum number of iterations
     ITER_START_WETTING=1,  # start wetting immediately
@@ -214,8 +215,6 @@ def omega_surf(
     ni, nj, nk = S.shape
     nij = ni * nj
 
-    qu = np.empty(nij, dtype=int)
-
     Δp_L2 = 0.0  # ensure this is defined; needed if OPTS.TOL_P_CHANGE_L2 == 0
     # Process OPTS
     assert len(wrap) == 2, "wrap must be a two element logical array"
@@ -256,9 +255,9 @@ def omega_surf(
     # end
 
     # Compute interpolants for S and T casts (unless already provided)
-    if Sppc.shape != (ni, nj, nk - 1) or Tppc.shape != (ni, nj, nk):
-        Sppc = linear_coefficients(P, S)
-        Tppc = linear_coefficients(P, T)
+    if Sppc.shape[0:3] != (ni, nj, nk - 1) or Tppc.shape[0:3] != (ni, nj, nk - 1):
+        Sppc = interp_fn(P, S)
+        Tppc = interp_fn(P, T)
 
     # Interpolate S and T onto the surface
     s, t = val2(P, S, Sppc, T, Tppc, p)
@@ -410,8 +409,8 @@ def omega_surf(
 
     if DIAGS:
         # Trim output
-        for key, val in diags.items():
-            diags[key] = val[0 : iter_ - 1 + (key in ["ϵ_L1", "ϵ_L2"])]
+        for k, v in diags.items():
+            diags[k] = v[0 : iter_ - 1 + (k in ["ϵ_L1", "ϵ_L2"])]
         return p, s, t, diags
     else:
         return p, s, t
