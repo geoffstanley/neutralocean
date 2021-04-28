@@ -79,37 +79,41 @@ def pot_dens_surf(S, T, P, ref, target, eos="jmd95", axis=-1, tol=1e-4):
         #                   at the target pressure
 
         # Choose iso-value that will intersect cast n0 at p0.
-        d0 = func_sigma(p0, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], ref, 0.0)
+        d0 = func_sigma(p0, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], 0.0)
     else:
         d0 = target
 
     # Solve non-linear root finding problem in each cast
-    s, t, p = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, ref, d0, tol)
+    s, t, p = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, d0, tol)
     return s, t, p
 
 
 @functools.lru_cache(maxsize=10)
-def make_sigma_workers(rho, ref):
+def make_sigma_workers(eos, ref):
     if np.iterable(ref):
 
         @numba.njit
-        def func_sigma(p, P, S, Sppc, T, Tppc, ref, d0):
-            # s, t = linear_eval2(p, *stp_args)
+        def func_sigma(p, P, S, Sppc, T, Tppc, d0):
             s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
-            return rho(s, t, p) - rho(ref[0], ref[1], p) - d0
+            return eos(s, t, p) - eos(ref[0], ref[1], p) - d0
 
     else:
 
         @numba.njit
-        def func_sigma(p, P, S, Sppc, T, Tppc, ref, d0):
-            # s, t = linear_eval2(p, *stp_args)
+        def func_sigma(p, P, S, Sppc, T, Tppc, d0):
             s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
-            return rho(s, t, ref) - d0
-
-    guess_to_bounds, brent = make_brent_funcs(func_sigma)
+            return eos(s, t, ref) - d0
 
     @numba.njit
-    def sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, ref, d0, tol):
+    def guess_to_bounds_eos(args, x, lb, ub):
+        return guess_to_bounds(func_sigma, args, x, lb, ub)
+
+    @numba.njit
+    def brent_eos(args, a, b, t):
+        return brent(func_sigma, args, a, b, t)
+
+    @numba.njit
+    def sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, d0, tol):
 
         s = np.full(n_good.shape, np.nan, dtype=np.float64)
         t = s.copy()
@@ -131,14 +135,14 @@ def make_sigma_workers(rho, ref):
                 pn = (Pn[0] + Pn[-1]) * 0.5
 
                 # Search for a sign-change, expanding outward from an initial guess
-                lb, ub = guess_to_bounds(
-                    (Pn, Sn, Sppcn, Tn, Tppcn, ref, d0), pn, Pn[0], Pn[-1]
+                lb, ub = guess_to_bounds_eos(
+                    (Pn, Sn, Sppcn, Tn, Tppcn, d0), pn, Pn[0], Pn[-1]
                 )
 
                 if not np.isnan(lb):
                     # A sign change was discovered, so a root exists in the interval.
                     # Solve the nonlinear root-finding problem using Brent's method
-                    p[n] = brent((Pn, Sn, Sppcn, Tn, Tppcn, ref, d0), lb, ub, tol)
+                    p[n] = brent_eos((Pn, Sn, Sppcn, Tn, Tppcn, d0), lb, ub, tol)
 
                     # Interpolate S and T onto the updated surface
                     s[n], t[n] = interp_ppc.val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
