@@ -6,12 +6,10 @@ import numba
 
 import gsw
 
-from neutral_surfaces._densjmd95 import rho_bsq
+# from neutral_surfaces._densjmd95 import rho_bsq
 from neutral_surfaces._densjmd95 import rho as rho_jmd95
 from neutral_surfaces import interp_ppc
 from neutral_surfaces._zero import guess_to_bounds, brent
-
-from neutral_surfaces._zero_freeze import make_brent_funcs
 
 
 # The following shows how we can access the C library scalar functions that
@@ -57,67 +55,111 @@ def process_arrays(S, T, P, axis=-1):
     return S, T, P, n_good
 
 
-def pot_dens_surf(S, T, P, ref, target, eos="jmd95", axis=-1, tol=1e-4):
+def approx_neutral_surf(
+    S,
+    T,
+    P,
+    ans_type,
+    target,
+    ref=None,
+    eos="jmd95",
+    axis=-1,
+    tol=1e-4,
+    grav=None,
+    rho_c=None,
+):
     """
-    ...format and fill in the rest later, but the new things are:
+    ...format and fill in the rest later, but the new things are
 
+    ans_type : string, either "sigma" or "delta"
     ref : p_ref, or (s_ref, t_ref)
-    eos : string, key into dictionary of eos functions
+    eos : string (key into dictionary of eos functions) or a callable
 
-    Hence, depending on ref, the same function works for potential density
-    or specific volume anomaly surfaces.
     """
     S, T, P, n_good = process_arrays(S, T, P, axis=axis)
     Sppc = interp_ppc.linear_coefficients(P, S)
     Tppc = interp_ppc.linear_coefficients(P, T)
 
-    func_sigma, sigma_vertsolve = make_sigma_workers(eosdict[eos], ref)
+    # Select equation of state and make its Boussinesq version if needed
+    if isinstance(eos, str) and eos in eosdict.keys():
+        eos = eosdict[eos]
+
+    if not callable(eos):
+        raise TypeError(
+            'eos must be a function or a string that is either "sigma" or "delta"'
+        )
+
+    if grav != None and rho_c != None:
+        z_to_p = 1e-4 * grav * rho_c
+        eos = make_bsq(eos, z_to_p)
+
+    func, vertsolve = make_workers(eos, ans_type)
 
     if isinstance(target, tuple):
         p0 = target[-1]  # target pressure
         n0 = target[:-1]  # index to water column which intersects the surface
         #                   at the target pressure
 
+        if ans_type == "sigma":
+            ref = target[-1]
+        elif ans_type == "delta":
+            # evaluate salinity and temperature at the chosen location
+            s0, t0 = interp_ppc.val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p0)
+            ref = (s0, t0)
+
         # Choose iso-value that will intersect cast n0 at p0.
-        d0 = func_sigma(p0, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], 0.0)
+        d0 = func(p0, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], ref, 0.0)
     else:
-        d0 = target
+        d0 = target  # target sigma or delta isosurface value
+        if ans_type == "sigma":
+            if ref == None:
+                raise TypeError(
+                    'Must specify reference pressure by providing "ref" a scalar'
+                )
+        elif ans_type == "delta":
+            if ref == None:
+                raise TypeError(
+                    'Must specify reference salinity and temperature by providing "ref" a 2-tuple of scalars'
+                )
 
     # Solve non-linear root finding problem in each cast
-    s, t, p = sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, d0, tol)
+    s = np.empty(n_good.shape, dtype=np.float64)
+    t = np.empty(n_good.shape, dtype=np.float64)
+    p = mid_pressure(P, n_good)
+    vertsolve(s, t, p, P, S, Sppc, T, Tppc, n_good, ref, d0, tol)
     return s, t, p
 
 
 @functools.lru_cache(maxsize=10)
-def make_sigma_workers(eos, ref):
-    if np.iterable(ref):
+def make_workers(eos, ans_type):
+    if ans_type == "sigma":
 
         @numba.njit
-        def func_sigma(p, P, S, Sppc, T, Tppc, d0):
+        def func(p, P, S, Sppc, T, Tppc, ref, d0):
+            s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
+            return eos(s, t, ref) - d0
+
+    elif ans_type == "delta":
+
+        @numba.njit
+        def func(p, P, S, Sppc, T, Tppc, ref, d0):
             s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
             return eos(s, t, p) - eos(ref[0], ref[1], p) - d0
 
     else:
-
-        @numba.njit
-        def func_sigma(p, P, S, Sppc, T, Tppc, d0):
-            s, t = interp_ppc.val2_0d(P, S, Sppc, T, Tppc, p)
-            return eos(s, t, ref) - d0
+        raise NameError(f'Unknown ans_type "{ans_type}"')
 
     @numba.njit
     def guess_to_bounds_eos(args, x, lb, ub):
-        return guess_to_bounds(func_sigma, args, x, lb, ub)
+        return guess_to_bounds(func, args, x, lb, ub)
 
     @numba.njit
     def brent_eos(args, a, b, t):
-        return brent(func_sigma, args, a, b, t)
+        return brent(func, args, a, b, t)
 
     @numba.njit
-    def sigma_vertsolve(P, S, Sppc, T, Tppc, n_good, d0, tol):
-
-        s = np.full(n_good.shape, np.nan, dtype=np.float64)
-        t = s.copy()
-        p = s.copy()
+    def vertsolve(s, t, p, P, S, Sppc, T, Tppc, n_good, ref, d0, tol):
+        # Note!  mutates s, t, p
 
         for n in np.ndindex(n_good.shape):
             k = n_good[n]
@@ -131,29 +173,37 @@ def make_sigma_workers(eos, ref):
                 Sppcn = Sppc[tup]
                 Tppcn = Tppc[tup]
 
-                # Use mid-depth as initial guess
-                pn = (Pn[0] + Pn[-1]) * 0.5
-
                 # Search for a sign-change, expanding outward from an initial guess
                 lb, ub = guess_to_bounds_eos(
-                    (Pn, Sn, Sppcn, Tn, Tppcn, d0), pn, Pn[0], Pn[-1]
+                    (Pn, Sn, Sppcn, Tn, Tppcn, ref, d0), p[n], Pn[0], Pn[-1]
                 )
 
                 if not np.isnan(lb):
                     # A sign change was discovered, so a root exists in the interval.
                     # Solve the nonlinear root-finding problem using Brent's method
-                    p[n] = brent_eos((Pn, Sn, Sppcn, Tn, Tppcn, d0), lb, ub, tol)
+                    p[n] = brent_eos((Pn, Sn, Sppcn, Tn, Tppcn, ref, d0), lb, ub, tol)
 
                     # Interpolate S and T onto the updated surface
                     s[n], t[n] = interp_ppc.val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
+                else:
+                    s[n], t[n], p[n] = np.nan, np.nan, np.nan
+            else:
+                # only one grid cell so cannot interpolate.
+                # This will ensure s,t,p all have the same nan structure
+                s[n], t[n], p[n] = np.nan, np.nan, np.nan
 
-            # else:
-            # only one grid cell so cannot interpolate.
-            # This will ensure s,t,p all have the same nan structure
+        return None
 
-        return s, t, p
+    return func, vertsolve
 
-    return func_sigma, sigma_vertsolve
+
+@functools.lru_cache(maxsize=10)
+def make_bsq(eos, z_to_p):
+    @numba.njit
+    def eos_bsq(s, t, z):
+        return eos(s, t, z * z_to_p)
+
+    return eos_bsq
 
 
 @numba.njit
@@ -172,3 +222,16 @@ def find_first_nan(a):
                 k[n] = i
                 break
     return k
+
+
+@numba.njit
+def mid_pressure(P, n_good):
+    p = np.empty(P.shape[0:-1], dtype=np.float64)
+    for n in np.ndindex(p.shape):
+        k = n_good[n]
+        if k > 0:
+            p[n] = (P[n][0] + P[n][k - 1]) * 0.5
+        else:
+            p[n] = np.nan
+
+    return p
