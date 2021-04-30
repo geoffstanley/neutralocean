@@ -10,7 +10,8 @@ import numba
 
 
 def linear_coefficients(X, Y):
-    return np.diff(Y, axis=-1) / np.diff(X, axis=-1)
+    Yppc = np.diff(Y, axis=-1) / np.diff(X, axis=-1)
+    return np.reshape(Yppc, (*Yppc.shape, 1))  # add trailing singleton dim
 
 
 @numba.njit
@@ -110,10 +111,10 @@ def pchip_coeffs(X, Y):
         X = np.broadcast_to(X, Y.shape)
     elif Y.ndim == 1 and Y.size == X.shape[-1]:
         Y = np.broadcast_to(Y, X.shape)
-    else:
-        assert (
-            X.shape == Y.shape
-        ), "X and Y must have same dimensions, or one of them be a vector of length equal to the size of the other's last dimension"
+    elif X.shape != Y.shape:
+        raise ValueError("X and Y must have the same dimensions, or one "
+            "of them must be a vector matching the other's last dimension; "
+            f"found X's shape {X.shape} and Y's shape {Y.shape}.")
 
     return pchip_coeffs_nd(X, Y)
 
@@ -139,9 +140,9 @@ def val_0d(X, Y, Yppc, x):
 
     dx = x - X[i]  # dx > 0 guaranteed
 
-    if Yppc.ndim == 1:
+    if Yppc.shape[-1] == 1:
         # Linear:
-        y = Y[i] + dx * Yppc[i]
+        y = Y[i] + dx * Yppc[i, 0]
     else:
         # Higher order: use nested multiplications, e.g. for quadratic:
         # y = dx^2 * Yppc[i,0] + dx * Yppc[i,1] + Y[i]
@@ -184,7 +185,7 @@ def val(X, Y, Yppc, x):
     X = np.broadcast_to(X, (*shape, nk))
     Y = np.broadcast_to(Y, (*shape, nk))
     x = np.broadcast_to(x, shape)
-    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, *Yppc.shape[len(shape) + 1 :]))
+    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
 
     return val_nd(X, Y, Yppc, x)
 
@@ -268,7 +269,7 @@ def val2(X, Y, Yppc, Z, Zppc, x):
     Y = np.broadcast_to(Y, (*shape, nk))
     Z = np.broadcast_to(Z, (*shape, nk))
     x = np.broadcast_to(x, shape)
-    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, *Yppc.shape[len(shape) + 1 :]))
-    Zppc = np.broadcast_to(Zppc, (*shape, nk - 1, *Zppc.shape[len(shape) + 1 :]))
+    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
+    Zppc = np.broadcast_to(Zppc, (*shape, nk - 1, Zppc.shape[-1]))
 
     return val2_nd(X, Y, Yppc, Z, Zppc, x)
