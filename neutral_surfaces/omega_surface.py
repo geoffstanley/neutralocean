@@ -13,6 +13,9 @@ from neutral_surfaces._zero import guess_to_bounds, brent
 
 import matplotlib.pyplot as plt
 
+# import logging
+import sys
+
 
 def omega_surf(
     S,
@@ -46,7 +49,7 @@ def omega_surf(
     TOL_P_UPDATE=1e-4,
     VERBOSE=1,  # show a moderate level of information. Requires DIAGS == true
     DIAGS=True,  # return diagnostics for each iteration
-    # FILE_ID = 1, # standard output to MATLAB terminal
+    FILE_NAME=None,  # output textual info to this file
     # eos::Function = densjmd95,
     # eos_s_t::Function = densjmd95_s_t
     # grav::Float64 = NaN,
@@ -212,13 +215,20 @@ def omega_surf(
 
     Δp_L2 = 0.0  # ensure this is defined; needed if OPTS.TOL_P_CHANGE_L2 == 0
     # Process OPTS
-    assert len(wrap) == 2, "wrap must be a two element logical array"
-    assert (
-        ref_cast[0] >= 0 and ref_cast[1] >= 0 and ref_cast[0] < ni and ref_cast[1] < nj
-    ), "ref_cast must index a cast within the domain."
-    assert (P.ndim == 1 and len(P) == nk) or (
-        P.ndim == 3 and P.shape == S.shape
-    ), "P must match dimensions of S, or be 1D matching the first dimension of S"
+    if len(wrap) != 2:
+        raise TypeError("wrap must be a two element logical vector")
+    if len(ref_cast) != 2:
+        raise TypeError("ref_cast must be a two element logical vector")
+    if ref_cast[0] < 0 or ref_cast[1] < 0 or ref_cast[0] >= ni or ref_cast[1] >= nj:
+        raise ValueError(
+            "ref_cast must index a cast within the domain;"
+            f"found ref_cast = {ref_cast} outside the bounds (0,{ni-1}) x (0,{nj-1})"
+        )
+    if not (P.shape == S.shape or P.ndim == 1 and len(P) == nk):
+        raise TypeError(
+            "P must match dimensions of S, or be 1D matching the last dimension of S;"
+            f"found P.shape = {P.shape} but S.shape = {S.shape}"
+        )
     I_ref = np.ravel_multi_index(ref_cast, (ni, nj))  # Convert into linear index
 
     # Pre-calculate things for Breadth First Search:
@@ -250,7 +260,12 @@ def omega_surf(
     # end
 
     # Compute interpolants for S and T casts (unless already provided)
-    if Sppc == None or Sppc.shape[0:3] != (ni, nj, nk - 1) or Tppc == None or Tppc.shape[0:3] != (ni, nj, nk - 1):
+    if (
+        Sppc == None
+        or Sppc.shape[0:3] != (ni, nj, nk - 1)
+        or Tppc == None
+        or Tppc.shape[0:3] != (ni, nj, nk - 1)
+    ):
         Sppc = interp_fn(P, S)
         Tppc = interp_fn(P, T)
 
@@ -259,6 +274,28 @@ def omega_surf(
 
     # ensure same nan structure between s, t, and p. Just in case user gives, e.g., repeat(1000,ni,nj) for a 1000dbar isobaric surface
     p[np.isnan(s)] = np.nan
+
+    # Setup logging.  Replace print() statements with logger.info()....
+    # this doesn't work well.  It adds a new stream each time the function is called!
+    # logger = logging.getLogger()  # no __name__
+
+    # if VERBOSE == 1:
+    #     logger.setLevel(logging.INFO)
+    # elif VERBOSE > 2:
+    #     logger.setLevel(logging.DEBUG)
+
+    # if FILE_NAME == None:
+    #     h = logging.StreamHandler()
+    # else:
+    #     h = logging.FileHandler(FILE_NAME)
+    #     h.mode = 'write'
+    # h.setLevel(logger.level)
+    # logger.addHandler(h)
+
+    if FILE_NAME == None:
+        file_id = sys.stdout
+    else:
+        file_id = open(FILE_NAME, "w")
 
     ## Prepare diagnostics
     if DIAGS:
@@ -289,8 +326,8 @@ def omega_surf(
 
         if VERBOSE > 0:
             print(
-                "Initial surface has log_10(|ϵ|_2) = %9.6f .................."
-                % np.log10(ϵ_L2)
+                f"Initial surface has log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f} ..................",
+                file=file_id,
             )
     else:
         diags = {}
@@ -317,7 +354,10 @@ def omega_surf(
             qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, I_ref)
             freshly_wet = 0
         timer_bfs = time() - mytime
-        assert qt >= 0, "Error: surface is NaN at the reference cast"
+        if qt < 0:
+            raise RuntimeError(
+                "The surface is NaN at the reference cast. Probably the initial surface was NaN here."
+            )
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         mytime = time()
@@ -389,28 +429,29 @@ def omega_surf(
 
             if VERBOSE > 0:
                 print(
-                    "Iter %2d [%6.2f sec] log_10(|ϵ|_2) = %9.6f by |ϕ|_1 = %.6e; %4d casts freshly wet; |Δp|_2 = %.6e"
-                    % (
-                        iter_ + 1,
-                        diags["clocktime"][iter_],
-                        np.log10(ϵ_L2),
-                        ϕ_L1,
-                        freshly_wet,
-                        Δp_L2,
-                    )
+                    f"Iter {iter_ + 1 : 2} "
+                    f"[{diags['clocktime'][iter_] : 5.2f} sec] "
+                    f"log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f} "
+                    f"by |ϕ|_1 = {ϕ_L1 : .6e}; "
+                    f"{freshly_wet : 4} casts freshly wet; "
+                    f"|Δp|_2 = {Δp_L2 : .6e}",
+                    file=file_id,
                 )
 
         # --- Check for convergence
         if (ϕ_L1 < TOL_LRPD_L1 or Δp_L2 < TOL_P_CHANGE_L2) and iter_ + 1 >= ITER_MIN:
             break
 
+    if FILE_NAME != None:
+        file_id.close()
+
     if DIAGS:
         # Trim diagnostic output
         for k, v in diags.items():
             diags[k] = v[0 : iter_ - 1 + (k in ["ϵ_L1", "ϵ_L2"])]
 
-
     return p, s, t, diags
+
 
 def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, mr):
     # Doco from MATLAB, needs updating.

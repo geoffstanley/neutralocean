@@ -112,9 +112,11 @@ def pchip_coeffs(X, Y):
     elif Y.ndim == 1 and Y.size == X.shape[-1]:
         Y = np.broadcast_to(Y, X.shape)
     elif X.shape != Y.shape:
-        raise ValueError("X and Y must have the same dimensions, or one "
+        raise ValueError(
+            "X and Y must have the same dimensions, or one "
             "of them must be a vector matching the other's last dimension; "
-            f"found X's shape {X.shape} and Y's shape {Y.shape}.")
+            f"found X's shape {X.shape} and Y's shape {Y.shape}."
+        )
 
     return pchip_coeffs_nd(X, Y)
 

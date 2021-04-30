@@ -10,7 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from neutral_surfaces.load_data import load_OCCA
-from neutral_surfaces._neutral_surfaces import approx_neutral_surf, omega_surf
+from neutral_surfaces._neutral_surfaces import approx_neutral_surf
+from neutral_surfaces.omega_surface import omega_surf
 from neutral_surfaces._densjmd95 import rho_bsq
 from neutral_surfaces.lib import ϵ_norms
 
