@@ -36,7 +36,7 @@ def brent(f, args, a, b, t):
 
     fa = f(a, *args)
     fb = f(b, *args)
-    if not fa * fb <= 0:
+    if not fa * fb <= 0:  # DEV note: check if this should be fa * fb < 0
         return np.nan  # Protection against bad input search range.
     c = a
     fc = fa
