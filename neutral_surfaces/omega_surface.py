@@ -6,7 +6,7 @@ from time import time
 
 from neutral_surfaces._neutral_surfaces import process_arrays
 from neutral_surfaces._densjmd95 import rho_bsq, rho_s_t_bsq
-from neutral_surfaces.interp_ppc import linear_coefficients, val2_0d, val2
+from neutral_surfaces.interp_ppc import linear_coefficients, pchip_coeffs, val2_0d, val2
 from neutral_surfaces.lib import ϵ_norms
 from neutral_surfaces.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
 from neutral_surfaces._zero import guess_to_bounds, brent
@@ -25,15 +25,12 @@ def omega_surf(
     DIST2_Ij=1,  # Distance [m] in 2nd dimension centred at (I, J-1/2)
     DIST2_iJ=1,  # Distance [m] in 2nd dimension centred at (I-1/2, J)
     DIST1_Ij=1,  # Distance [m] in 1st dimension centred at (I, J-1/2)
-    ML=np.zeros((0, 0)),  # Do not remove the Mixed Layer
+    ML=None,  # Do not remove the Mixed Layer
     FIGS_SHOW=False,  # do not show figures
     # INTERPFN = ppc_linterp, # Use linear interpolation in the vertical dimension.
-    Sppc=np.zeros(
-        (0, 0, 0, 0)
-    ),  # Pre-computed interpolation coefficients.  None given here.
-    Tppc=np.zeros(
-        (0, 0, 0, 0)
-    ),  # Pre-computed interpolation coefficients.  None given here.
+    Sppc=None,  # Pre-computed interpolation coefficients.  None given here.
+    Tppc=None,  # Pre-computed interpolation coefficients.  None given here.
+    interp_fn=linear_coefficients,  # function for vertical interpolation
     ITER_MIN=1,  # minimum number of iterations
     ITER_MAX=10,  # maximum number of iterations
     ITER_START_WETTING=1,  # start wetting immediately
@@ -212,9 +209,6 @@ def omega_surf(
 
     # Get size of 3D hydrography
     ni, nj, nk = S.shape
-    nij = ni * nj
-
-    qu = np.empty(nij, dtype=int)
 
     Δp_L2 = 0.0  # ensure this is defined; needed if OPTS.TOL_P_CHANGE_L2 == 0
     # Process OPTS
@@ -256,9 +250,9 @@ def omega_surf(
     # end
 
     # Compute interpolants for S and T casts (unless already provided)
-    if Sppc.shape != (ni, nj, nk - 1) or Tppc.shape != (ni, nj, nk):
-        Sppc = linear_coefficients(P, S)
-        Tppc = linear_coefficients(P, T)
+    if Sppc == None or Sppc.shape[0:3] != (ni, nj, nk - 1) or Tppc == None or Tppc.shape[0:3] != (ni, nj, nk - 1):
+        Sppc = interp_fn(P, S)
+        Tppc = interp_fn(P, T)
 
     # Interpolate S and T onto the surface
     s, t = val2(P, S, Sppc, T, Tppc, p)
@@ -298,6 +292,8 @@ def omega_surf(
                 "Initial surface has log_10(|ϵ|_2) = %9.6f .................."
                 % np.log10(ϵ_L2)
             )
+    else:
+        diags = {}
 
     ## Begin iterations
     # Note: the surface exists wherever p is non-nan.  The nan structure of s
@@ -308,7 +304,7 @@ def omega_surf(
         # --- Remove the Mixed Layer
         # But keep it for the first iteration; which may be initialized from a
         # not very neutral surface()
-        if iter_ > 0 and ML.size == nij:
+        if iter_ > 0 and ML != None:
             p[p < ML] = np.nan
 
         # --- Determine the connected component containing the reference cast; via Breadth First Search
@@ -409,13 +405,12 @@ def omega_surf(
             break
 
     if DIAGS:
-        # Trim output
-        for key, val in diags.items():
-            diags[key] = val[0 : iter_ - 1 + (key in ["ϵ_L1", "ϵ_L2"])]
-        return p, s, t, diags
-    else:
-        return p, s, t
+        # Trim diagnostic output
+        for k, v in diags.items():
+            diags[k] = v[0 : iter_ - 1 + (k in ["ϵ_L1", "ϵ_L2"])]
 
+
+    return p, s, t, diags
 
 def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, mr):
     # Doco from MATLAB, needs updating.
