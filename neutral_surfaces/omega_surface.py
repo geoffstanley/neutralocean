@@ -1,7 +1,9 @@
 import numpy as np
 import numba
 from scipy.sparse import csc_matrix
-from scipy.sparse.linalg import spsolve
+
+# from scipy.sparse.linalg import spsolve
+from sksparse.cholmod import cholesky
 from time import time
 
 from neutral_surfaces._neutral_surfaces import process_arrays
@@ -448,7 +450,7 @@ def omega_surf(
     if DIAGS:
         # Trim diagnostic output
         for k, v in diags.items():
-            diags[k] = v[0 : iter_ - 1 + (k in ["ϵ_L1", "ϵ_L2"])]
+            diags[k] = v[0 : iter_ + 1 + (k in ["ϵ_L1", "ϵ_L2"])]
 
     return p, s, t, diags
 
@@ -645,8 +647,7 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
     # The above change renders the mr'th column on all rows irrelevant
     # since ϕ[mr] will be zero.  So, we may also set this column to 0
     # which we do here by setting the appropriate links in L to 0. This
-    # maintains symmetry of the matrix, and speeds up solution by a
-    # factor of about 2.
+    # maintains symmetry of the matrix, enabling the use of a Cholesky solver.
     mrI = np.ravel_multi_index(mr, (ni, nj))  # get linear index for mr
     if A5[mrI, IP] != nij:
         L[A5[mrI, IP], IM] = 0
@@ -671,8 +672,12 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
     # Build the values of the sparse matrix
     v = L[m]
 
-    # Ignore connections to dry pixels (though they should have zero values anyway, this is faster)
-    good = c >= 0
+    # Prune the entries to
+    # (a) ignore connections to adjacent pixels that are dry (including those
+    #     that are "adjacent" across a non-periodic boundary), and
+    # (b) ignore the upper triangle of the matrix, since cholesky only
+    #     accessses the lower triangular part of the matrix
+    good = (c >= 0) & (r >= c)
 
     # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
     # function, so that this can be njit'ed.  But numba doesn't support
@@ -683,10 +688,12 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
     # Build the sparse matrix; with N rows & N columns
     mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
 
-    # raise('halt')
-
     # Solve the matrix problem
-    sol = spsolve(mat, rhs)  # DEV: check that this uses Cholesky
+    factor = cholesky(mat)
+    sol = factor(rhs)
+
+    # spsolve (requires good = (c >= 0) above) is slower than using cholesky
+    # sol = spsolve(mat, rhs)
 
     # Save solution
     ϕ[m] = sol
