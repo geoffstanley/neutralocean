@@ -2,7 +2,7 @@ import numpy as np
 
 from neutral_surfaces._neutral_surfaces import find_first_nan
 from neutral_surfaces.interp_ppc import (
-    linear_coefficients,
+    linear_coeffs,
     pchip_coeffs,
     pchip_coeffs_0d,
     val,
@@ -27,7 +27,7 @@ p_targets = np.sort(np.concatenate((P, P[0:-1] + np.diff(P) / 2)))
 
 def test_linear():
 
-    Sppc = linear_coefficients(P, S)
+    Sppc = linear_coeffs(P, S)
 
     expected_s = np.empty((ncasts, p_targets.size), dtype=float)
     result_s = np.empty_like(expected_s)
