@@ -28,7 +28,9 @@ def ntp_errors(s, t, p, eos_s_t, wrap):
     return ϵx, ϵy
 
 
-def ϵ_norms(s, t, p, eos_s_t, wrap, DIST1_iJ=1, DIST2_Ij=1, DIST2_iJ=1, DIST1_Ij=1, *args):
+def ϵ_norms(
+    s, t, p, eos_s_t, wrap, DIST1_iJ=1, DIST2_Ij=1, DIST2_iJ=1, DIST1_Ij=1, *args
+):
 
     ϵ_iJ, ϵ_Ij = ntp_errors(s, t, p, eos_s_t, wrap)
 
@@ -70,6 +72,7 @@ def ϵ_norms(s, t, p, eos_s_t, wrap, DIST1_iJ=1, DIST2_Ij=1, DIST2_iJ=1, DIST1_I
 # @functools.lru_cache(maxsize=10)
 # def make_ntp_bottle_to_cast(eos):
 
+
 @numba.njit
 def _func(p, sB, tB, pB, S, T, P, Sppc, Tppc, eos):
     # Evaluate difference between (a) eos at location on the cast (S, T, P)
@@ -79,6 +82,7 @@ def _func(p, sB, tB, pB, S, T, P, Sppc, Tppc, eos):
     s, t = val2_0d(P, S, Sppc, T, Tppc, p)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
+
 
 @numba.njit
 def ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, k, tol_p, eos):

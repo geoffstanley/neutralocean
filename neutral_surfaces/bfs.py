@@ -139,7 +139,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
                         Tppc[n],
                         n_good[n],
                         tol_p,
-                        eos
+                        eos,
                     )
 
                     if np.isfinite(p[n]):
