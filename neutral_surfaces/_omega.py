@@ -4,8 +4,12 @@ from scipy.sparse import csc_matrix
 # from scipy.sparse.linalg import spsolve
 from sksparse.cholmod import cholesky
 
+from time import time
 
-def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, mr, eos_s_t):
+
+def _omega_matsolve_poisson(
+    s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, mr, eos_s_t
+):
     # Doco from MATLAB, needs updating.
 
     # OMEGA_MATSOLVE_POISSON  Build & solve the sparse matrix Poisson problem for omega surfaces
@@ -45,22 +49,29 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
     # Email     : g.stanley@unsw.edu.au
     # Email     : geoffstanley@gmail.com
 
-    def im1(F):  # G[i,j] == F[i-1,j]
-        return np.roll(F, 1, axis=0)
-
-    def ip1(F):  # G[i,j] == F[i+1,j]
-        return np.roll(F, -1, axis=0)
-
-    def jm1(F):  # G[i,j] == F[i,j-1]
-        return np.roll(F, 1, axis=1)
-
-    def jp1(F):  # G[i,j] == F[i,j+1]
-        return np.roll(F, -1, axis=1)
+    mytime = time()
 
     ni, nj = p.shape
 
-    # The value nij appears in A5 to index neighbours that would go across a non-periodic boundary
+    # The value nij appears in A5 to index neighbours that would go across a
+    # non-periodic boundary
     nij = ni * nj
+
+    # --- Build & solve sparse matrix problem
+    ϕ = np.full(nij, np.nan, dtype=np.float64)
+
+    # If there is only one water column, there are no equations to solve,
+    # and the solution is simply phi = 0 at that water column, and nan elsewhere.
+    # Note, qt > 0 (N >= 1) should be guaranteed by omega_surf(), so N <= 1 should
+    # imply N == 1.  If qt > 0 weren't guaranteed, this could throw an error.
+    N = qt + 1  # Number of water columns
+    if N <= 1:  # There are definitely no equations to solve
+        ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
+        return ϕ.reshape(ni, nj), 0.0
+
+    # Collect & sort linear indices to all pixels in this region
+    # sorting here makes matrix better structured; overall speedup.
+    m = np.sort(qu[0 : qt + 1])
 
     # If both gridding variables are 1, then grid is uniform
     UNIFORM_GRID = (
@@ -70,7 +81,7 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
         and DIST1on2_Ij == 1
     )
 
-    ## Begin building D = divergence of ϵ, and L = Laplacian [compact representation]
+    # Begin building D = divergence of ϵ, and L = Laplacian [compact representation]
 
     # L refers to neighbours in this order [so does A4, except without the 5'th entry]:
     # . 1 .
@@ -108,13 +119,13 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
     ϵ = vs * (sm - sn) + vt * (tm - tn)
 
     bad = np.isnan(ϵ)
-    ϵ[bad] = 0
+    ϵ[bad] = 0.0
 
     if UNIFORM_GRID:
         fac = np.float64(~bad)  # 0 and 1
     else:
         fac = DIST2on1_iJ.copy()
-        fac[bad] = 0
+        fac[bad] = 0.0
         ϵ *= fac  # scale ϵ
 
     D = ϵ - ip1(ϵ)
@@ -155,25 +166,6 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
 
     L_IP[:] = -jp1(fac)
 
-    # --- Finish building L
-    # For any m where all neighbours are NaN, set L[IJ,m] to 1 so that this
-    # equation amounts to:  1 * ϕ[m] = 0. This keϵ ϕ[m] = 0, rather than
-    # becoming NaN & infecting its neighbours.
-    L_IJ[L_IJ == 0.0] = 1.0
-
-    # --- Build & solve sparse matrix problem
-    ϕ = np.full(nij, np.nan, dtype=np.float64)
-
-    # Collect & sort linear indices to all pixels in this region
-    # sorting here makes matrix better structured; overall speedup.
-    m = np.sort(qu[0 : qt + 1])
-
-    # Note: N > 0 guaranteed by qt > 0 in caller function
-    N = len(m)  # Number of water columns
-    if N <= 1:  # There are definitely no equations to solve
-        ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
-        return ϕ.reshape(ni, nj)
-
     # `remap` changes from linear indices for the entire 2D space (0, 1, ..., ni*nj-1) into linear
     # indices for the current connected component (0, 1, ..., N-1)
     # If the domain were doubly periodic, we would want `remap` to be a 2D array
@@ -184,7 +176,7 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
     # and the fake water column for non-periodic boundaries are all left
     # to have a remap value of -1.
     remap = np.full(nij + 1, -1, dtype=int)
-    remap[m] = range(N)
+    remap[m] = np.arange(N)
 
     # Pin surface at mr by changing the mr'th equation to be 1 * ϕ[mr] = 0.
     D[mr] = 0.0
@@ -235,17 +227,32 @@ def omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, 
     # that one ourselves)
     # return r[good], c[good], v[good], N, rhs, m
 
+    timer_build = time() - mytime
+
     # Build the sparse matrix; with N rows & N columns
     mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
 
     # Solve the matrix problem
     factor = cholesky(mat)
-    sol = factor(rhs)
+    ϕ[m] = factor(rhs)
 
     # spsolve (requires good = (c >= 0) above) is slower than using cholesky
-    # sol = spsolve(mat, rhs)
+    # ϕ[m] = spsolve(mat, rhs)
 
-    # Save solution
-    ϕ[m] = sol
+    return ϕ.reshape(ni, nj), timer_build
 
-    return ϕ.reshape(ni, nj)
+
+def im1(F):  # G[i,j] == F[i-1,j]
+    return np.roll(F, 1, axis=0)
+
+
+def ip1(F):  # G[i,j] == F[i+1,j]
+    return np.roll(F, -1, axis=0)
+
+
+def jm1(F):  # G[i,j] == F[i,j-1]
+    return np.roll(F, 1, axis=1)
+
+
+def jp1(F):  # G[i,j] == F[i,j+1]
+    return np.roll(F, -1, axis=1)

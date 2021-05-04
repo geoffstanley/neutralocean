@@ -10,13 +10,15 @@ from neutral_surfaces._zero import guess_to_bounds, brent
 from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val2
 from neutral_surfaces.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
 from neutral_surfaces.lib import ϵ_norms
-from neutral_surfaces.omega_surface import omega_matsolve_poisson
+from neutral_surfaces._omega import _omega_matsolve_poisson
 
 
 # signatures:
 # pot_dens_surf(*args, ref_p, isoval)
 # pot_dens_surf(*args, ref_p, pin)
 # pot_dens_surf(*args, pin)
+
+
 def pot_dens_surf(
     S,
     T,
@@ -24,18 +26,14 @@ def pot_dens_surf(
     ref=None,
     isoval=None,
     pin=None,
-
     axis=-1,
     n_good=None,
-
     Sppc=None,
     Tppc=None,
     interp_fn=linear_coeffs,
-
-    eos='jmd95',
+    eos="jmd95",
     grav=None,
     rho_c=None,
-
     tol_p=1e-4,
 ):
 
@@ -66,7 +64,7 @@ def pot_dens_surf(
         )
 
     # Solve non-linear root finding problem in each cast
-    f = make_vertsolve(eos, 'sigma')
+    f = make_vertsolve(eos, "sigma")
     return f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
 
 
@@ -77,18 +75,14 @@ def delta_surf(
     ref=None,
     isoval=None,
     pin=None,
-
     axis=-1,
     n_good=None,
-
     Sppc=None,
     Tppc=None,
     interp_fn=linear_coeffs,
-
-    eos='jmd95',
+    eos="jmd95",
     grav=None,
     rho_c=None,
-
     tol_p=1e-4,
 ):
 
@@ -120,7 +114,7 @@ def delta_surf(
         )
 
     # Solve non-linear root finding problem in each cast
-    f = make_vertsolve(eos, 'delta')
+    f = make_vertsolve(eos, "delta")
     return f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
 
 
@@ -131,46 +125,37 @@ def omega_surf(
     wrap,
     pin,
     p_init=None,
-
     # params about S, T, P
     axis=-1,
     n_good=None,
-
     # params about interpolation
     Sppc=None,
     Tppc=None,
     interp_fn=linear_coeffs,
-
     # params about equation of state
-    eos='jmd95',
-    eos_s_t='jmd95',
+    eos="jmd95",
+    eos_s_t=None,
     grav=None,
     rho_c=None,
-
     ML=None,  # mixed layer
-
     # params about grid
     DIST1_iJ=1,
     DIST2_Ij=1,
     DIST2_iJ=1,
     DIST1_Ij=1,
-
     # params about iteration
     ITER_MIN=1,
     ITER_MAX=10,
     ITER_START_WETTING=1,
     ITER_STOP_WETTING=5,
-
     # params about tolerances / convergence
     TOL_LRPD_L1=1e-7,
     TOL_P_CHANGE_L2=0.0,
     tol_p=1e-4,
-
     # params about diagnostics
     DIAGS=True,
     VERBOSE=1,
     FILE_NAME=None,
-
     # params for pot_dens_surf in case p_init=None
     ref=None,
 ):
@@ -179,9 +164,10 @@ def omega_surf(
         S, T, P, pin, axis, n_good, Sppc, Tppc, interp_fn
     )
 
-    if isinstance(eos, str) and not isinstance(eos_s_t, str) or eos != eos_s_t:
-        raise ValueError(
-            'eos and eos_s_t, if strings, must be the same string')
+    if eos_s_t is None and isinstance(eos, str):
+        eos_s_t = eos
+    elif isinstance(eos, str) and isinstance(eos_s_t, str) and eos != eos_s_t:
+        raise ValueError("eos and eos_s_t, if strings, must be the same string")
 
     eos = make_eos(eos, grav, rho_c)
     eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
@@ -252,14 +238,23 @@ def omega_surf(
     # Calculate an initial surface through `pin` if none given
     if p_init is None:
         s, t, p = pot_dens_surf(
-            S, T, P, ref=ref, pin=pin, n_good=n_good, Sppc=Sppc, Tppc=Tppc, eos=eos, tol_p=tol_p
+            S,
+            T,
+            P,
+            ref=ref,
+            pin=pin,
+            n_good=n_good,
+            Sppc=Sppc,
+            Tppc=Tppc,
+            eos=eos,
+            tol_p=tol_p,
         )
 
     else:
         p = p_init.copy()
 
         if len(pin) == 3 and pin[-1] != p_init[ref_cast]:
-            raise RuntimeError('pin[-1] does not match p_init at ref_cast')
+            raise RuntimeError("pin[-1] does not match p_init at ref_cast")
 
         # Interpolate S and T onto the surface
         s, t = val2(P, S, Sppc, T, Tppc, p)
@@ -296,6 +291,7 @@ def omega_surf(
             "Δp_Linf": np.empty(ITER_MAX, dtype=np.float64),
             "freshly_wet": np.empty(ITER_MAX, dtype=int),
             "clocktime": np.empty(ITER_MAX, dtype=np.float64),
+            "timer_matbuild": np.empty(ITER_MAX, dtype=np.float64),
             "timer_solver": np.empty(ITER_MAX, dtype=np.float64),
             "timer_update": np.empty(ITER_MAX, dtype=np.float64),
             "timer_bfs": np.empty(ITER_MAX, dtype=np.float64),
@@ -303,7 +299,17 @@ def omega_surf(
 
         # Diagnostics about state BEFORE the first iteration
         ϵ_L2, ϵ_L1 = ϵ_norms(
-            s, t, p, eos_s_t, wrap, DIST1_iJ, DIST2_Ij, DIST2_iJ, DIST1_Ij, AREA_iJ, AREA_Ij
+            s,
+            t,
+            p,
+            eos_s_t,
+            wrap,
+            DIST1_iJ,
+            DIST2_Ij,
+            DIST2_iJ,
+            DIST1_Ij,
+            AREA_iJ,
+            AREA_Ij,
         )
         # mean_p = np.nanmean(p)
         # mean_eos = np.nanmean(eos(s, t, p))
@@ -314,7 +320,7 @@ def omega_surf(
 
         if VERBOSE > 0:
             print(
-                f'Initial surface has log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f} ..................',
+                f"Initial surface has log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f} ..................",
                 file=file_id,
             )
     else:
@@ -324,7 +330,7 @@ def omega_surf(
     # Note: the surface exists wherever p is non-nan.  The nan structure of s
     # and t is made to match that of p when the vertical solve step is done.
     Δp_L2 = 0.0  # ensure this is defined; needed if OPTS.TOL_P_CHANGE_L2 == 0
-    vertsolve_omega = make_vertsolve(eos, 'omega')
+    vertsolve_omega = make_vertsolve(eos, "omega")
     for iter_ in range(ITER_MAX):
         iter_time = time()
 
@@ -346,21 +352,15 @@ def omega_surf(
         timer_bfs = time() - mytime
         if qt < 0:
             raise RuntimeError(
-                'The surface is NaN at the reference cast. Probably the initial surface was NaN here.'
+                "The surface is NaN at the reference cast. Probably the initial surface was NaN here."
             )
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         mytime = time()
-        # r, c, v, N, rhs, m = omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, ref_cast)
-        # mat = csc_matrix((v, (r, c)), shape=(N, N) )
-        # sol = spsolve(mat, rhs)
-        # ϕ = np.full(nij, np.nan, dtype=np.float64)
-        # ϕ[m] = sol
-        # ϕ = ϕ.reshape(ni, nj)
-        ϕ = omega_matsolve_poisson(
+        ϕ, timer_matbuild = _omega_matsolve_poisson(
             s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, ref_cast, eos_s_t
         )
-        timer_solver = time() - mytime
+        timer_solver = time() - mytime - timer_matbuild
 
         # --- Update the surface
         mytime = time()
@@ -368,7 +368,7 @@ def omega_surf(
         vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p)
 
         # DEV:  time seems indistinguishable from using factory function as above
-        #_vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos())
+        # _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos)
 
         # Force p to stay constant at the reference column, identically. This
         # avoids any intolerance from the vertical solver.
@@ -400,13 +400,24 @@ def omega_surf(
             diags["Δp_Linf"][iter_] = Δp_Linf
             diags["freshly_wet"][iter_] = freshly_wet
 
+            diags["timer_matbuild"][iter_] = timer_matbuild
             diags["timer_solver"][iter_] = timer_solver
             diags["timer_update"][iter_] = timer_update
             diags["timer_bfs"][iter_] = timer_bfs
 
             # Diagnostics about the state AFTER this iteration
             ϵ_L2, ϵ_L1 = ϵ_norms(
-                s, t, p, eos_s_t, wrap, DIST1_iJ, DIST2_Ij, DIST2_iJ, DIST1_Ij, AREA_iJ, AREA_Ij
+                s,
+                t,
+                p,
+                eos_s_t,
+                wrap,
+                DIST1_iJ,
+                DIST2_Ij,
+                DIST2_iJ,
+                DIST1_Ij,
+                AREA_iJ,
+                AREA_Ij,
             )
 
             # mean_p = np.nanmean(p)
@@ -418,12 +429,12 @@ def omega_surf(
 
             if VERBOSE > 0:
                 print(
-                    f'Iter {iter_ + 1 : 2}'
+                    f"Iter {iter_ + 1 : 2}"
                     f' [{diags["clocktime"][iter_] : 5.2f} sec]'
-                    f' log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f}'
-                    f' by |ϕ|_1 = {ϕ_L1 : .6e};'
-                    f' {freshly_wet : 4} casts freshly wet;'
-                    f' |Δp|_2 = {Δp_L2 : .6e}',
+                    f" log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f}"
+                    f" by |ϕ|_1 = {ϕ_L1 : .6e};"
+                    f" {freshly_wet : 4} casts freshly wet;"
+                    f" |Δp|_2 = {Δp_L2 : .6e}",
                     file=file_id,
                 )
 
@@ -437,7 +448,7 @@ def omega_surf(
     if DIAGS:
         # Trim diagnostic output
         for k, v in diags.items():
-            diags[k] = v[0: iter_ + 1 + (k in ("ϵ_L1", "ϵ_L2"))]
+            diags[k] = v[0 : iter_ + 1 + (k in ("ϵ_L1", "ϵ_L2"))]
 
     return s, t, p, diags
 
@@ -473,10 +484,8 @@ def process_STPppc(
     T,
     P,
     pin=None,
-
     axis=-1,  # axis of the vertical dimension
     n_good=None,
-
     Sppc=None,
     Tppc=None,
     interp_fn=linear_coeffs,
@@ -512,8 +521,7 @@ def process_STPppc(
                     f'found "pin" = {pin} outside the bounds (0,{ni-1}) x (0,{nj-1})'
                 )
         else:
-            raise TypeError(
-                'If provided, "pin" must be a 2 or 3 element vector')
+            raise TypeError('If provided, "pin" must be a 2 or 3 element vector')
 
     return S, T, P, Sppc, Tppc, n_good
 
@@ -539,16 +547,22 @@ def find_first_nan(a):
 @functools.lru_cache(maxsize=10)
 def make_vertsolve(eos, ans_type):
 
-    if ans_type == 'omega':
+    if ans_type == "omega":
+
         def f(*args):
             _vertsolve_omega(*args, eos)
             return None
-    elif ans_type == 'sigma':
+
+    elif ans_type == "sigma":
+
         def f(*args):
             return _vertsolve(*args, eos, zero_sigma)
-    elif ans_type == 'delta':
+
+    elif ans_type == "delta":
+
         def f(*args):
             return _vertsolve(*args, eos, zero_delta)
+
     else:
         raise NameError(f'Unknown ans_type "{ans_type}"')
 
@@ -580,8 +594,7 @@ def _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos):
             # Here, eos always evaluated at the pressure or depth of the original position,
             # p0; this is to calculate locally referenced potential density with reference
             # pressure p0.
-            args = (Sn, Tn, Pn, Sppcn, Tppcn, pn,
-                    eos(s[n], t[n], pn) - ϕn, eos)
+            args = (Sn, Tn, Pn, Sppcn, Tppcn, pn, eos(s[n], t[n], pn) - ϕn, eos)
 
             # Search for a sign-change, expanding outward from an initial guess
             lb, ub = guess_to_bounds(zero_sigma, args, pn, Pn[0], Pn[-1])

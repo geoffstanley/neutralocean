@@ -48,13 +48,13 @@ s_sigma, t_sigma, z_sigma = s, t, z  # save alias
 ϵ_L2, ϵ_L1 = ϵ_norms(s_sigma, t_sigma, z_sigma, eos_s_t, g.wrap)
 
 # %% Delta surface
-s, t, z = delta_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
-                     tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c)
-# s, t, z, _ = approx_neutral_surf(
-#     'delta', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
-#     pin=(i0, j0, z0)
-#     )
-s_delta, t_delta, z_delta = s, t, z  # save alias
+# s, t, z = delta_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
+#                      tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c)
+# # s, t, z, _ = approx_neutral_surf(
+# #     'delta', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+# #     pin=(i0, j0, z0)
+# #     )
+# s_delta, t_delta, z_delta = s, t, z  # save alias
 
 # %% Omega surface
 
@@ -65,7 +65,7 @@ s, t, z, diags = omega_surf(
     wrap=g.wrap, pin=(i0, j0, z0),  # p_init=z_in,
     axis=-1,
     eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
-    ITER_MAX=10,
+    ITER_MAX=10, ITER_START_WETTING=1,
     tol_p=1e-4,
 )
 # s, t, z, diags = approx_neutral_surf(
@@ -74,9 +74,10 @@ s, t, z, diags = omega_surf(
 #     ITER_MAX=10
 #     )
 print(f'Total time  : {np.sum(diags["clocktime"]) : .4f} sec')
-print(f'    bfs time: {np.sum(diags["timer_bfs"]) : .4f} sec')
-print(f' solver time: {np.sum(diags["timer_solver"]) : .4f} sec')
-print(f' update time: {np.sum(diags["timer_update"]) : .4f} sec')
+print(f'      bfs time: {np.sum(diags["timer_bfs"]) : .4f} sec')
+print(f' matbuild time: {np.sum(diags["timer_matbuild"]) : .4f} sec')
+print(f'   solver time: {np.sum(diags["timer_solver"]) : .4f} sec')
+print(f'   update time: {np.sum(diags["timer_update"]) : .4f} sec')
 
 # old tests below:
 
@@ -107,10 +108,9 @@ print(f' update time: {np.sum(diags["timer_update"]) : .4f} sec')
 
 # %% Show figure
 
-fig, ax = plt.subplots()
-cs = ax.imshow(z.T, origin="lower")
-# cs = ax.contourf(lon, lat, z_sigma.T)
-cbar = fig.colorbar(cs, ax=ax)
-cbar.set_label("Depth [m]")
-ax.set_title(r"Depth of surface in OCCA")
-
+# fig, ax = plt.subplots()
+# cs = ax.imshow(z.T, origin="lower")
+# # cs = ax.contourf(lon, lat, z_sigma.T)
+# cbar = fig.colorbar(cs, ax=ax)
+# cbar.set_label("Depth [m]")
+# ax.set_title(r"Depth of surface in OCCA")
