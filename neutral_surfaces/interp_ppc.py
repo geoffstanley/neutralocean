@@ -9,7 +9,7 @@ import numba
 # from numba import float64, intc
 
 
-def linear_coefficients(X, Y):
+def linear_coeffs(X, Y):
     Yppc = np.diff(Y, axis=-1) / np.diff(X, axis=-1)
     return np.reshape(Yppc, (*Yppc.shape, 1))  # add trailing singleton dim
 

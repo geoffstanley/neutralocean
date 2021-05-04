@@ -1,5 +1,6 @@
 import numpy as np
 import numba
+import functools
 
 from neutral_surfaces.lib import ntp_bottle_to_cast
 
@@ -73,7 +74,7 @@ def bfs_conncomp1(G, A, r):
 
 
 @numba.njit
-def bfs_conncomp1_wet(s, t, p, P, S, Sppc, T, Tppc, tolp, A, n_good, r):
+def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     # Note! Mutates s, t, p
 
     ni, nj, nk = S.shape
@@ -131,13 +132,14 @@ def bfs_conncomp1_wet(s, t, p, P, S, Sppc, T, Tppc, tolp, A, n_good, r):
                         s[m],
                         t[m],
                         p[m],
-                        P[n],
                         S[n],
-                        Sppc[n],
                         T[n],
+                        P[n],
+                        Sppc[n],
                         Tppc[n],
                         n_good[n],
-                        tolp,
+                        tol_p,
+                        eos,
                     )
 
                     if np.isfinite(p[n]):

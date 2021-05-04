@@ -1,24 +1,24 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-#%% Imports
+# %% Imports
 
-#%matplotlib notebook
-#%matplotlib inline
+# %matplotlib notebook
+# %matplotlib inline
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+from neutral_surfaces._neutral_surfaces import pot_dens_surf, delta_surf, omega_surf
 from neutral_surfaces.load_data import load_OCCA
-from neutral_surfaces._neutral_surfaces import approx_neutral_surf
-from neutral_surfaces.omega_surface import omega_surf
-from neutral_surfaces._densjmd95 import rho_bsq
 from neutral_surfaces.lib import ϵ_norms
 
+from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 
-#%% Load OCCA data
+# %% Load OCCA data
 g, S, T, P, _ = load_OCCA("~/work/data/OCCA/")
-Z = -g.RC  # DEV: currently ignoring distinction between Z and P, until Boussinesq equation of state is ready.
+# DEV: currently ignoring distinction between Z and P, until Boussinesq equation of state is ready.
+Z = -g.RC
 
 ni, nj, nk = S.shape
 nij = ni * nj
@@ -28,20 +28,59 @@ i0 = int(ni / 2)
 j0 = int(nj / 2)
 z0 = 1500.
 
+eos = make_eos('jmd95', g.grav, g.ρ_c)
+eos_s_t = make_eos_s_t('jmd95', g.grav, g.ρ_c)
 
-#%% Potential Density surface
+# %% Potential Density surface
 
-# s, t, z_sigma = pot_dens_surf(S, T, Z, 1500., (j0, i0, z0), axis=-1, tol=1e-4)
+s, t, z = pot_dens_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
+                        ref=1500., tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c)
 #s_sigma, t_sigma, z_sigma = pot_dens_surf(S, T, Z, 1500., (i0, j0, z0), axis=-1, tol=1e-4)
-s_sigma, t_sigma, z_sigma = approx_neutral_surf(S, T, Z, "sigma", (i0, j0, z0), ref=1500.0, axis=-1, tol=1e-4, grav=9.81, rho_c=1027.5)
+# s, t, z, _ = approx_neutral_surf(
+#     'sigma', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+#     ref=1500.0, pin=(i0, j0, z0)
+#     )
 
-ϵ_L2, ϵ_L1 = ϵ_norms(s_sigma, t_sigma, z_sigma, g.wrap, 1, 1, 1, 1)  # Need to update this to select EOS.
 
-#%% Delta surface
-s_delta, t_delta, z_delta = approx_neutral_surf(S, T, Z, "delta", (i0, j0, z0), axis=-1, tol=1e-4, grav=9.81, rho_c=1027.5)
+s_sigma, t_sigma, z_sigma = s, t, z  # save alias
+
+# Need to update this to select EOS.
+ϵ_L2, ϵ_L1 = ϵ_norms(s_sigma, t_sigma, z_sigma, eos_s_t, g.wrap)
+
+# %% Delta surface
+# s, t, z = delta_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
+#                      tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c)
+# # s, t, z, _ = approx_neutral_surf(
+# #     'delta', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+# #     pin=(i0, j0, z0)
+# #     )
+# s_delta, t_delta, z_delta = s, t, z  # save alias
 
 # %% Omega surface
-z_omega, s, t, diags = omega_surf(S, T, Z, z_sigma, (i0, j0), g.wrap, axis=-1, ITER_MAX=10)
+
+#z_in = z_sigma.copy()
+#z_in[i0,j0] = z0
+s, t, z, diags = omega_surf(
+    S, T, Z,
+    wrap=g.wrap, pin=(i0, j0, z0),  # p_init=z_in,
+    axis=-1,
+    eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+    ITER_MAX=10, ITER_START_WETTING=1,
+    tol_p=1e-4,
+)
+# s, t, z, diags = approx_neutral_surf(
+#     'omega', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+#     pin=(i0, j0, z0), wrap=g.wrap,
+#     ITER_MAX=10
+#     )
+print(f'Total time  : {np.sum(diags["clocktime"]) : .4f} sec')
+print(f'      bfs time: {np.sum(diags["timer_bfs"]) : .4f} sec')
+print(f' matbuild time: {np.sum(diags["timer_matbuild"]) : .4f} sec')
+print(f'   solver time: {np.sum(diags["timer_solver"]) : .4f} sec')
+print(f'   update time: {np.sum(diags["timer_update"]) : .4f} sec')
+
+# old tests below:
+
 # Initial surface has log_10(|ϵ|_2) = -2.342477 ..................
 # Iter  1 [  0.19 sec] log_10(|ϵ|_2) = -3.972863 by |ϕ|_1 = 2.015180e-02;   29 casts freshly wet; |Δp|_2 = 2.009176e+01
 # Iter  2 [  0.21 sec] log_10(|ϵ|_2) = -4.279229 by |ϕ|_1 = 3.621773e-04;  272 casts freshly wet; |Δp|_2 = 1.701764e+00
@@ -67,31 +106,11 @@ z_omega, s, t, diags = omega_surf(S, T, Z, z_sigma, (i0, j0), g.wrap, axis=-1, I
 # Iter  6 [  0.17 sec] log_10(|ϵ|_2) = -9.340763 by |ϕ|_1 = 6.579950e-08;    0 casts freshly wet; |Δp|_2 = 3.238430e-03
 # Note:  10 ** -9.340763 == 4.56285848989746e-10  -- matches Stanley et al (2021) Fig 4.
 
-#%% Show figure
+# %% Show figure
 
-fig, ax = plt.subplots()
-cs = ax.imshow(z_omega.T, origin="lower")
-# cs = ax.contourf(lon, lat, z_sigma.T)
-cbar = fig.colorbar(cs, ax=ax)
-cbar.set_label("Depth [m]")
-ax.set_title(r"Depth of surface in OCCA");
-
-#%% Test Scipi interpolation
-from scipy.interpolate import PchipInterpolator
-from neutral_surfaces._neutral_surfaces import find_first_nan
-n_good = find_first_nan(S)
-
-def myfun(Z,S, n_good):
-    ni,nj,nk = S.shape
-    # f = np.full((ni,nj,nk-1,4), np.nan)
-    f = np.full((ni,nj,4,nk-1), np.nan)
-
-    for n in np.ndindex((ni,nj)):
-        k = n_good[n]
-        if k > 1:
-            f[n][:,0:k-1] = PchipInterpolator(Z[0:k], S[n][0:k]).c
-            # f[n][0:k-1,:] = PchipInterpolator(Z[0:k], S[n][0:k]).c.T
-
-    return f
-
-%time myfun(Z,S,n_good)
+# fig, ax = plt.subplots()
+# cs = ax.imshow(z.T, origin="lower")
+# # cs = ax.contourf(lon, lat, z_sigma.T)
+# cbar = fig.colorbar(cs, ax=ax)
+# cbar.set_label("Depth [m]")
+# ax.set_title(r"Depth of surface in OCCA")
