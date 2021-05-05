@@ -588,13 +588,13 @@ def _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos):
             pn = p[n]
 
             # Evaluate difference between (a) eos at location on the cast where the
-            # pressure or depth is p, plus the density perturbation ϕ, and (b) eos at
-            # location on the cast where the surface currently resides (at pressure or
-            # depth p0).  The combination of d and part (b) is precomputed as ϕ_minus_rho0.
-            # Here, eos always evaluated at the pressure or depth of the original position,
-            # p0; this is to calculate locally referenced potential density with reference
-            # pressure p0.
-            args = (Sn, Tn, Pn, Sppcn, Tppcn, pn, eos(s[n], t[n], pn) - ϕn, eos)
+            # pressure or depth is p, and (b) eos at location on the cast where the
+            # pressure or depth is p0 (where the surface currently is) plus the density
+            # perturbation d.  Part (b) is precomputed as r0.  Here, eos always
+            # evaluated at the pressure or depth of the original position, p0; this is
+            # to calculate locally referenced potential density with reference pressure
+            # p0.
+            args = (Sn, Tn, Pn, Sppcn, Tppcn, pn, eos(s[n], t[n], pn) + ϕn, eos)
 
             # Search for a sign-change, expanding outward from an initial guess
             lb, ub = guess_to_bounds(zero_sigma, args, pn, Pn[0], Pn[-1])

@@ -128,7 +128,7 @@ def _omega_matsolve_poisson(
         fac[bad] = 0.0
         ϵ *= fac  # scale ϵ
 
-    D = ϵ - ip1(ϵ)
+    D = -ϵ + ip1(ϵ)
 
     L_IJ[:] = fac + ip1(fac)
 
@@ -158,7 +158,7 @@ def _omega_matsolve_poisson(
         fac[bad] = 0.0
         ϵ *= fac  # scale ϵ
 
-    D += ϵ - jp1(ϵ)
+    D += -ϵ + jp1(ϵ)
 
     L_IJ[:] += fac + jp1(fac)
 
