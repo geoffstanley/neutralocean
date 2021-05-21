@@ -3,6 +3,15 @@ Functions for the particular usage of interpolation required by neutral
 surface calculations.
 """
 
+"""
+Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB File 
+Exchange at https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calculus
+This adaptation avoids (essentially) copying the Y array to a slice of Yppc,
+simply to save time and memory.  This does require that both Y and Yppc 
+together be passed around, as together they define the piecewise polynomial
+coefficients. 
+"""
+
 import numpy as np
 import numba
 
@@ -121,52 +130,7 @@ def pchip_coeffs(X, Y):
     return pchip_coeffs_nd(X, Y)
 
 
-@numba.njit
-def val_0d(X, Y, Yppc, x):
-
-    if np.isnan(x) or x < X[0] or X[-1] < x:
-        return np.nan
-
-    if x == X[0]:
-        return Y[0]
-
-    # i = searchsorted(X,x) is such that:
-    #   k = 0                   if x <= X[0]
-    #   k = len(X)              if X[-1] < x or np.isnan(x)
-    #   X[i-1] < x <= X[i]      otherwise
-    # Having guaranteed X[0] < x <= X[-1], then
-    #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases,
-
-    # subtract 1 so X[i] < x <= X[i+1]  and  0 <= i <= len(X)-2
-    i = np.searchsorted(X, x) - 1
-
-    dx = x - X[i]  # dx > 0 guaranteed
-
-    if Yppc.shape[-1] == 1:
-        # Linear:
-        y = Y[i] + dx * Yppc[i, 0]
-    else:
-        # Higher order: use nested multiplications, e.g. for quadratic:
-        # y = dx^2 * Yppc[i,0] + dx * Yppc[i,1] + Y[i]
-        #   = dx * (dx * Yppc[i,0] + Yppc[i,1]) + Y[i]
-
-        y = Yppc[i, 0]
-        for o in range(1, Yppc.shape[-1]):
-            y = y * dx + Yppc[i, o]
-        y = y * dx + Y[i]
-
-    return y
-
-
-@numba.njit
-def val_nd(X, Y, Yppc, x):
-    y = np.empty(x.shape, dtype=np.float64)
-    for n in np.ndindex(x.shape):
-        y[n] = val_0d(X[n], Y[n], Yppc[n], x[n])
-    return y
-
-
-def val(X, Y, Yppc, x):
+def val(X, Y, Yppc, x, d=0):
     nk = X.shape[-1]
     # assert nk == Y.shape[-1], "X and Y must have same size last dimension"
     # assert Y.shape[0:-1] == Yppc.shape[0:-1], "Y and Yppc must have same leading dimensions"
@@ -185,69 +149,115 @@ def val(X, Y, Yppc, x):
         # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match the shape of x"
 
     X = np.broadcast_to(X, (*shape, nk))
-    Y = np.broadcast_to(Y, (*shape, nk))
+    Y = np.broadcast_to(Y, (*shape, Y.shape[-1]))
     x = np.broadcast_to(x, shape)
     Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
 
-    return val_nd(X, Y, Yppc, x)
+    return val_nd(X, Y, Yppc, x, d)
 
 
-# @numba.njit(
-#     numba.typeof((1.0, 1.0))(
-#         float64[:], float64[:], float64[:], float64[:], float64[:], float64
-#     )
-# )
 @numba.njit
-def val2_0d(X, Y, Yppc, Z, Zppc, x):
+def val_nd(X, Y, Yppc, x, d):
+    y = np.empty(x.shape, dtype=np.float64)
+    if d == 0:
+        for n in np.ndindex(x.shape):
+            y[n] = val_0d(X[n], Y[n], Yppc[n], x[n])
+    else:
+        for n in np.ndindex(x.shape):
+            y[n] = dval_0d(X[n], Y[n], Yppc[n], x[n], d)
+    return y
 
+
+@numba.njit
+def val_0d(X, Y, Yppc, x):
     if np.isnan(x) or x < X[0] or X[-1] < x:
-        return (np.nan, np.nan)
+        return np.nan
 
     if x == X[0]:
-        return (Y[0], Z[0])
+        return Y[0]
 
     # i = searchsorted(X,x) is such that:
-    #   k = 0                   if x <= X[0]
-    #   k = len(X)              if X[-1] < x or np.isnan(x)
+    #   i = 0                   if x <= X[0]
+    #   i = len(X)              if X[-1] < x or np.isnan(x)
     #   X[i-1] < x <= X[i]      otherwise
-    # Having guaranteed X[0] < x <= X[-1], then
-    #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases,
-
-    # subtract 1 so X[i] < x <= X[i+1]  and  0 <= i <= len(X)-2
+    # Having guaranteed X[0] < x <= X[-1] and x is not nan, then
+    #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases.
+    # Subtract 1 so X[i] < x <= X[i+1]  and  0 <= i <= len(X)-2
     i = np.searchsorted(X, x) - 1
+
+    return val_0d_i(X, Y, Yppc, x, i)
+
+
+@numba.njit
+def dval_0d(X, Y, Yppc, x, d):
+    # Assumes d is an integer greater than zero.
+
+    # if d == 0:
+    #     return val_0d(X, Y, Yppc, x)
+
+    if np.isnan(x) or x < X[0] or X[-1] < x:
+        return np.nan
+
+    if x == X[0]:
+        p = 1.0  # Build integer multiplying the coefficient
+        for a in range(1, d + 1):
+            p *= a
+        # p = np.prod(np.arange(1, d + 1))  # slow!
+        return Yppc[0, -d] * p
+
+    i = np.searchsorted(X, x) - 1
+
+    return dval_0d_i(X, Y, Yppc, x, d, i)
+
+
+@numba.njit
+def val_0d_i(X, Y, Yppc, x, i):
+    #  Like val_0d, but provide i such that  X[i] <= x <= X[i+1]
+
+    dx = x - X[i]
+
+    # Evaluate polynomial, using nested multiplication.
+    # E.g. the cubic case is:
+    # y = dx^3 * Yppc[i,0] + dx^2 * Yppc[i,1] + dx * Yppc[i,2] + Y[i]
+    #   = dx * (dx * (dx * Yppc[i,0] + Yppc[i,1]) + Yppc[i,2]) + Y[i]
+    y = 0.0
+    for o in range(0, Yppc.shape[-1]):
+        y = y * dx + Yppc[i, o]
+    y = y * dx + Y[i]
+
+    return y
+
+
+@numba.njit
+def dval_0d_i(X, Y, Yppc, x, d, i):
+    #  Like dval_0d, but provide i such that  X[i] <= x <= X[i+1]
+    # Assumes d is an integer greater than zero.
+
+    # if d == 0:
+    #     return val_0d_i(X, Y, Yppc, x, i)
+
+    degree = Yppc.shape[1]
 
     dx = x - X[i]  # dx > 0 guaranteed
 
-    if Yppc.ndim == 1:
-        # Linear:
-        y = Y[i] + dx * Yppc[i]
-        z = Z[i] + dx * Zppc[i]
-    else:
-        # Higher order: use nested multiplications, e.g. for quadratic:
-        # y = dx^2 * Yppc[i,0] + dx * Yppc[i,1] + Y[i]
-        #   = dx * (dx * Yppc[i,0] + Yppc[i,1]) + Y[i]
+    # Evaluate polynomial derivative, using nested multiplication.
+    # E.g. the second derivative of the cubic case is:
+    # y = 6 * dx * Yppc[i,0] + 2 * Yppc[i,1]
+    y = 0.0
+    for o in range(0, degree - d + 1):
+        p = 1.0  # Build integer multiplying the coefficient
+        for a in range(degree - o - d + 1, degree - o + 1):
+            p *= a
+        # p = np.prod(np.arange(degree - o - d + 1, degree - o + 1))  # slow!
+        y = y * dx + Yppc[i, o] * p
 
-        y = Yppc[i, 0]
-        z = Zppc[i, 0]
-        for o in range(1, Yppc.shape[-1]):
-            y = y * dx + Yppc[i, o]
-            z = z * dx + Zppc[i, o]
-        y = y * dx + Y[i]
-        z = z * dx + Z[i]
-
-    return y, z
+    return y
 
 
-@numba.njit
-def val2_nd(X, Y, Yppc, Z, Zppc, x):
-    y = np.empty(x.shape, dtype=np.float64)
-    z = np.empty(x.shape, dtype=np.float64)
-    for n in np.ndindex(x.shape):
-        y[n], z[n] = val2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n])
-    return y, z
-
-
-def val2(X, Y, Yppc, Z, Zppc, x):
+# Similar routines to evaluate two piecewise polynomials.  These are faster
+# than calling the val routines twice, because these only call np.searchsorted
+# once.
+def val2(X, Y, Yppc, Z, Zppc, x, d=0):
     nk = X.shape[-1]
     # assert nk == Y.shape[-1], "X and Y must have same size last dimension"
     # assert Y.shape[0:-1] == Yppc.shape[0:-1], "Y and Yppc must have same leading dimensions"
@@ -268,10 +278,120 @@ def val2(X, Y, Yppc, Z, Zppc, x):
         # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match the shape of x"
 
     X = np.broadcast_to(X, (*shape, nk))
-    Y = np.broadcast_to(Y, (*shape, nk))
-    Z = np.broadcast_to(Z, (*shape, nk))
+    Y = np.broadcast_to(Y, (*shape, Y.shape[-1]))
+    Z = np.broadcast_to(Z, (*shape, Z.shape[-1]))
     x = np.broadcast_to(x, shape)
     Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
     Zppc = np.broadcast_to(Zppc, (*shape, nk - 1, Zppc.shape[-1]))
 
-    return val2_nd(X, Y, Yppc, Z, Zppc, x)
+    return val2_nd(X, Y, Yppc, Z, Zppc, x, d)
+
+
+@numba.njit
+def val2_nd(X, Y, Yppc, Z, Zppc, x, d):
+    y = np.empty(x.shape, dtype=np.float64)
+    z = np.empty(x.shape, dtype=np.float64)
+    if d == 0:
+        for n in np.ndindex(x.shape):
+            y[n], z[n] = val2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n])
+    else:
+        for n in np.ndindex(x.shape):
+            y[n], z[n] = dval2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n], d)
+    return y, z
+
+
+@numba.njit
+def val2_0d(X, Y, Yppc, Z, Zppc, x):
+    if np.isnan(x) or x < X[0] or X[-1] < x:
+        return np.nan, np.nan
+
+    if x == X[0]:
+        return Y[0], Z[0]
+
+    i = np.searchsorted(X, x) - 1
+    y = val_0d_i(X, Y, Yppc, x, i)
+    z = val_0d_i(X, Z, Zppc, x, i)
+    return y, z
+
+
+@numba.njit
+def dval2_0d(X, Y, Yppc, Z, Zppc, x, d):
+
+    # if d == 0:
+    #     return val2_0d(X, Y, Yppc, Z, Zppc, x)
+
+    if np.isnan(x) or x < X[0] or X[-1] < x:
+        return np.nan, np.nan
+
+    if x == X[0]:
+        p = 1.0  # Build integer multiplying the coefficient
+        for a in range(1, d + 1):
+            p *= a
+        # p = np.prod(np.arange(1, d + 1))  # slow!
+        return Yppc[0, -d] * p, Zppc[0, -d] * p
+
+    i = np.searchsorted(X, x) - 1
+    y = dval_0d_i(X, Y, Yppc, x, d, i)
+    z = dval_0d_i(X, Z, Zppc, x, d, i)
+    return y, z
+
+
+def deriv(X, Y, Yppc, d=1):
+    # Differentiate a piecewise polynomial.
+    #
+    #
+    # YX, YXppc = deriv(X, Y, Yppc, d)
+    # returns the coefficients (YX, YXppc) for the piecwise polynomial that is the d'th
+    # derivative of the piecewise polynomial whose coefficients are (Y, Yppc).  Both
+    # piecewise polynomials have knots given by X.
+    #
+    #
+    # --- Input:
+    # X [N, K] or [K], knots of the piecewise polynomials
+    # Y [N, K-1], values of the piecewise polynomial at the knots
+    # Yppc [N, K-1, o-1], first and higher order coefficients of the piecewise polynomial
+    # d,        degree of the derivatives
+    #
+    #
+    # --- Output:
+    # YX, [N, K-1],  values of the derivative's piecewise polynomial at the knots
+    # YXppc [N, K-1, o-1-d], first and higher order coefficients of the derivative's piecewise polynomial
+    #
+    #
+    # --- Notes:
+    # X[n,:] must be monotonically increasing for all n.
+    #
+    # NaN's in X are treated as +Inf (and as such must come at the end of each row).
+    #
+    # The dimension `N` can actually be higher-dimensional.
+
+    o = Yppc.shape[-1] + 1  # Order of the piecewise polynomial
+
+    if not (np.isreal(d) and np.mod(d, 1) == 0 and d >= 0):
+        raise TypeError("d must be a non-negative integer")
+
+    if d == 0:
+        YX = Y.copy()
+        YXppc = Yppc.copy()
+    elif d < o:  # number of derivatives < order of polynomial
+
+        # Build coefficients that multiply the surviving terms.
+        # E.g. o = 4 (quartic polynomial) and d=2 (take second derivative)
+        # then coeffs = [12, 6, 2] = [4, 3, 2] * [3, 2, 1]
+        coeffs = np.arange(o - d, 0, -1)
+        for j in range(1, d):
+            coeffs = coeffs * np.arange(o - d + j, j, -1)
+
+        YX = Yppc[..., -d] * coeffs[-1]
+        if d == o - 1:
+            # output is a piecewise constant polynomial.  But ensure YXppc has
+            # trailing dimension that isn't 0
+            YXppc = np.zeros((*Yppc.shape[0:-1], 1))
+        else:
+            YXppc = Yppc[..., 0:-d] * coeffs[0:-1]
+    else:  # number of derivatives >= order of polynomial, so annihilates the polynomial
+
+        YX = Y * 0.0  # maintain NaN structure of Y
+        YXppc = np.zeros((*Yppc.shape[0:-1], 1))
+
+    return YX, YXppc

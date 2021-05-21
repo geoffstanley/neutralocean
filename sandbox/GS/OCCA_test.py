@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 from neutral_surfaces._neutral_surfaces import pot_dens_surf, delta_surf, omega_surf
 from neutral_surfaces.load_data import load_OCCA
 from neutral_surfaces.lib import ϵ_norms
+from neutral_surfaces.interp_ppc import linear_coeffs, deriv
+
+from neutral_surfaces.lib import veronis_density
 
 from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 
@@ -30,6 +33,10 @@ z0 = 1500.
 
 eos = make_eos('jmd95', g.grav, g.ρ_c)
 eos_s_t = make_eos_s_t('jmd95', g.grav, g.ρ_c)
+
+# %% Veronis Density
+veronis_density(0, S[i0,j0], T[i0,j0], Z, 10., 1500., eos, eos_s_t)  # 1027.7700444990107
+
 
 # %% Potential Density surface
 
