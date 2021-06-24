@@ -21,7 +21,7 @@ from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 # %% Load OCCA data
 g, S, T, P, _ = load_OCCA("~/work/data/OCCA/")
 # DEV: currently ignoring distinction between Z and P, until Boussinesq equation of state is ready.
-Z = -g.RC
+Z = -g['RC']
 
 ni, nj, nk = S.shape
 nij = ni * nj
@@ -31,34 +31,36 @@ i0 = int(ni / 2)
 j0 = int(nj / 2)
 z0 = 1500.
 
-eos = make_eos('jmd95', g.grav, g.ρ_c)
-eos_s_t = make_eos_s_t('jmd95', g.grav, g.ρ_c)
+eos = make_eos('jmd95', g['grav'], g['ρ_c'])
+eos_s_t = make_eos_s_t('jmd95', g['grav'], g['ρ_c'])
+
 
 # %% Veronis Density
-veronis_density(0, S[i0,j0], T[i0,j0], Z, 10., 1500., eos, eos_s_t)  # 1027.7700444990107
+S_ref_cast = S.values[i0,j0]
+T_ref_cast = T.values[i0,j0]
+ρ_v = veronis_density(0, S_ref_cast, T_ref_cast, Z, 10., 1500., eos, eos_s_t)  # 1027.7700444990107
 
 
 # %% Potential Density surface
 
-s, t, z = pot_dens_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
-                        ref=1500., tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c)
+s, t, z = pot_dens_surf(S, T, Z, vert_dim="Depth_c", pin=(i0, j0, z0),
+                        ref=1500., tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'])
 #s_sigma, t_sigma, z_sigma = pot_dens_surf(S, T, Z, 1500., (i0, j0, z0), axis=-1, tol=1e-4)
 # s, t, z, _ = approx_neutral_surf(
-#     'sigma', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+#     'sigma', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
 #     ref=1500.0, pin=(i0, j0, z0)
 #     )
-
 
 s_sigma, t_sigma, z_sigma = s, t, z  # save alias
 
 # Need to update this to select EOS.
-ϵ_L2, ϵ_L1 = ϵ_norms(s_sigma, t_sigma, z_sigma, eos_s_t, g.wrap)
+ϵ_L2, ϵ_L1 = ϵ_norms(s_sigma.values, t_sigma.values, z_sigma, eos_s_t, g['wrap'])
 
 # %% Delta surface
 # s, t, z = delta_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
-#                      tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c)
+#                      tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'])
 # # s, t, z, _ = approx_neutral_surf(
-# #     'delta', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+# #     'delta', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
 # #     pin=(i0, j0, z0)
 # #     )
 # s_delta, t_delta, z_delta = s, t, z  # save alias
@@ -69,15 +71,15 @@ s_sigma, t_sigma, z_sigma = s, t, z  # save alias
 #z_in[i0,j0] = z0
 s, t, z, diags = omega_surf(
     S, T, Z,
-    wrap=g.wrap, pin=(i0, j0, z0),  # p_init=z_in,
-    axis=-1,
-    eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
+    wrap=g['wrap'], pin=(i0, j0, z0),  # p_init=z_in,
+    vert_dim="Depth_c",
+    eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
     ITER_MAX=10, ITER_START_WETTING=1,
     tol_p=1e-4,
 )
 # s, t, z, diags = approx_neutral_surf(
-#     'omega', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g.grav, rho_c=g.ρ_c,
-#     pin=(i0, j0, z0), wrap=g.wrap,
+#     'omega', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
+#     pin=(i0, j0, z0), wrap=g['wrap'],
 #     ITER_MAX=10
 #     )
 print(f'Total time  : {np.sum(diags["clocktime"]) : .4f} sec')
@@ -98,11 +100,11 @@ print(f'   update time: {np.sum(diags["timer_update"]) : .4f} sec')
 
 
 # z_omega, s, t, diags = omega_surf(
-#     S, T, Z, z_delta, (i0, j0), g.wrap, axis=-1, ITER_MAX=10, ITER_START_WETTING=np.inf,
-#     DIST1_iJ=g.DXCvec,  # Distance [m] in 1st dimension centred at (I-1/2, J)
-#     DIST2_Ij=g.DYCsc,  # Distance [m] in 2nd dimension centred at (I, J-1/2)
-#     DIST2_iJ=g.DYGsc,  # Distance [m] in 2nd dimension centred at (I-1/2, J)
-#     DIST1_Ij=g.DXGvec,  # Distance [m] in 1st dimension centred at (I, J-1/2)
+#     S, T, Z, z_delta, (i0, j0), g['wrap'], axis=-1, ITER_MAX=10, ITER_START_WETTING=np.inf,
+#     DIST1_iJ=g['DXCvec'],  # Distance [m] in 1st dimension centred at (I-1/2, J)
+#     DIST2_Ij=g['DYCsc'],  # Distance [m] in 2nd dimension centred at (I, J-1/2)
+#     DIST2_iJ=g['DYGsc'],  # Distance [m] in 2nd dimension centred at (I-1/2, J)
+#     DIST1_Ij=g['DXGvec'],  # Distance [m] in 1st dimension centred at (I, J-1/2)
 #     )
 # Initial surface has log_10(|ϵ|_2) = -7.723916 ..................
 # Iter  1 [  0.20 sec] log_10(|ϵ|_2) = -8.726053 by |ϕ|_1 = 1.040064e-02;    0 casts freshly wet; |Δp|_2 = 2.167515e+01

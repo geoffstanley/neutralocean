@@ -1,4 +1,5 @@
 import numpy as np
+import xarray as xr
 import numba
 import sys
 from time import time
@@ -26,7 +27,7 @@ def pot_dens_surf(
     ref=None,
     isoval=None,
     pin=None,
-    axis=-1,
+    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
     n_good=None,
     Sppc=None,
     Tppc=None,
@@ -37,8 +38,18 @@ def pot_dens_surf(
     tol_p=1e-4,
 ):
 
+    S_is_xr = type(S) == xr.core.dataarray.DataArray
+    T_is_xr = type(T) == xr.core.dataarray.DataArray
+    P_is_xr = type(P) == xr.core.dataarray.DataArray
+    if S_is_xr:
+        s_ = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+    if T_is_xr:
+        t_ = xr.full_like(T.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+    if P_is_xr:
+        p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+
     S, T, P, Sppc, Tppc, n_good = process_STPppc(
-        S, T, P, pin, axis, n_good, Sppc, Tppc, interp_fn
+        S, T, P, pin, vert_dim, n_good, Sppc, Tppc, interp_fn
     )
 
     eos = make_eos(eos, grav, rho_c)
@@ -65,7 +76,19 @@ def pot_dens_surf(
 
     # Solve non-linear root finding problem in each cast
     f = make_vertsolve(eos, "sigma")
-    return f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
+    s, t, p = f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
+
+    if S_is_xr:
+        s_.data = s
+        s = s_
+    if T_is_xr:
+        t_.data = t
+        t = t_
+    if P_is_xr:
+        p_.data = p
+        p = p_
+
+    return s, t, p
 
 
 def delta_surf(
@@ -75,7 +98,7 @@ def delta_surf(
     ref=None,
     isoval=None,
     pin=None,
-    axis=-1,
+    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
     n_good=None,
     Sppc=None,
     Tppc=None,
@@ -86,8 +109,18 @@ def delta_surf(
     tol_p=1e-4,
 ):
 
+    S_is_xr = type(S) == xr.core.dataarray.DataArray
+    T_is_xr = type(T) == xr.core.dataarray.DataArray
+    P_is_xr = type(P) == xr.core.dataarray.DataArray
+    if S_is_xr:
+        s_ = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+    if T_is_xr:
+        t_ = xr.full_like(T.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+    if P_is_xr:
+        p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+
     S, T, P, Sppc, Tppc, n_good = process_STPppc(
-        S, T, P, pin, axis, n_good, Sppc, Tppc, interp_fn
+        S, T, P, pin, vert_dim, n_good, Sppc, Tppc, interp_fn
     )
 
     eos = make_eos(eos, grav, rho_c)
@@ -115,7 +148,19 @@ def delta_surf(
 
     # Solve non-linear root finding problem in each cast
     f = make_vertsolve(eos, "delta")
-    return f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
+    s, t, p = f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
+
+    if S_is_xr:
+        s_.data = s
+        s = s_
+    if T_is_xr:
+        t_.data = t
+        t = t_
+    if P_is_xr:
+        p_.data = p
+        p = p_
+
+    return s, t, p
 
 
 def omega_surf(
@@ -126,7 +171,7 @@ def omega_surf(
     pin,
     p_init=None,
     # params about S, T, P
-    axis=-1,
+    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
     n_good=None,
     # params about interpolation
     Sppc=None,
@@ -160,8 +205,18 @@ def omega_surf(
     ref=None,
 ):
 
+    S_is_xr = type(S) == xr.core.dataarray.DataArray
+    T_is_xr = type(T) == xr.core.dataarray.DataArray
+    P_is_xr = type(P) == xr.core.dataarray.DataArray
+    if S_is_xr:
+        s_ = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+    if T_is_xr:
+        t_ = xr.full_like(T.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+    if P_is_xr:
+        p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
+
     S, T, P, Sppc, Tppc, n_good = process_STPppc(
-        S, T, P, pin, axis, n_good, Sppc, Tppc, interp_fn
+        S, T, P, pin, vert_dim, n_good, Sppc, Tppc, interp_fn
     )
 
     if eos_s_t is None and isinstance(eos, str):
@@ -450,18 +505,38 @@ def omega_surf(
         for k, v in diags.items():
             diags[k] = v[0 : iter_ + 1 + (k in ("ϵ_L1", "ϵ_L2"))]
 
+    if S_is_xr:
+        s_.data = s
+        s = s_
+    if T_is_xr:
+        t_.data = t
+        t = t_
+    if P_is_xr:
+        p_.data = p
+        p = p_
+
     return s, t, p, diags
 
 
-def process_STP(S, T, P, axis):
+def process_STP(S, T, P, vert_dim):
     # DEV:  if inputs are 2D (i.e. for a hydrographic section), expand them here
     # to be 3D?  Would want to modify s,t,p output though too...
 
-    if axis not in (-1, S.ndim - 1):
-        S = np.moveaxis(S, axis, -1)
-        T = np.moveaxis(T, axis, -1)
+    # Extract numpy arrays from xarrays
+    if type(S) == xr.core.dataarray.DataArray:
+        # Assume S, T are all xarrays, with same dimension ordering
+        if vert_dim in S.dims:
+            vert_dim = S.dims.index(vert_dim)
+        S = S.values
+        T = T.values
+    if type(P) == xr.core.dataarray.DataArray:
+        P = P.values
+
+    if vert_dim not in (-1, S.ndim - 1):
+        S = np.moveaxis(S, vert_dim, -1)
+        T = np.moveaxis(T, vert_dim, -1)
         if P.ndim == S.ndim:
-            P = np.moveaxis(P, axis, -1)
+            P = np.moveaxis(P, vert_dim, -1)
     if P.ndim < S.ndim:
         P = np.broadcast_to(P, S.shape)
     S = np.require(S, dtype=np.float64, requirements="C")
@@ -484,14 +559,14 @@ def process_STPppc(
     T,
     P,
     pin=None,
-    axis=-1,  # axis of the vertical dimension
+    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
     n_good=None,
     Sppc=None,
     Tppc=None,
     interp_fn=linear_coeffs,
 ):
 
-    S, T, P = process_STP(S, T, P, axis=axis)
+    S, T, P = process_STP(S, T, P, vert_dim)
 
     if n_good is None:
         n_good = find_first_nan(S)
