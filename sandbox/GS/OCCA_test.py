@@ -9,10 +9,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from neutral_surfaces._neutral_surfaces import pot_dens_surf, delta_surf, omega_surf
+from neutral_surfaces._neutral_surfaces import approx_neutral_surf
 from neutral_surfaces.load_data import load_OCCA
 from neutral_surfaces.lib import ϵ_norms
-from neutral_surfaces.interp_ppc import linear_coeffs, deriv
 
 from neutral_surfaces.lib import veronis_density
 
@@ -43,7 +42,7 @@ T_ref_cast = T.values[i0,j0]
 
 # %% Potential Density surface
 
-s, t, z = pot_dens_surf(S, T, Z, vert_dim="Depth_c", pin=(i0, j0, z0),
+s, t, z, d = approx_neutral_surf('sigma', S, T, Z, g['wrap'], vert_dim="Depth_c", pin=(i0, j0, z0),
                         ref=1500., tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'])
 #s_sigma, t_sigma, z_sigma = pot_dens_surf(S, T, Z, 1500., (i0, j0, z0), axis=-1, tol=1e-4)
 # s, t, z, _ = approx_neutral_surf(
@@ -69,10 +68,12 @@ s_sigma, t_sigma, z_sigma = s, t, z  # save alias
 
 #z_in = z_sigma.copy()
 #z_in[i0,j0] = z0
-s, t, z, diags = omega_surf(
+s, t, z, d = approx_neutral_surf(
+    'omega',
     S, T, Z,
-    wrap=g['wrap'], pin=(i0, j0, z0),  # p_init=z_in,
+    wrap=g['wrap'], 
     vert_dim="Depth_c",
+    pin=(i0, j0, z0), # p_init=z_in,
     eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
     ITER_MAX=10, ITER_START_WETTING=1,
     tol_p=1e-4,
@@ -82,11 +83,11 @@ s, t, z, diags = omega_surf(
 #     pin=(i0, j0, z0), wrap=g['wrap'],
 #     ITER_MAX=10
 #     )
-print(f'Total time  : {np.sum(diags["clocktime"]) : .4f} sec')
-print(f'      bfs time: {np.sum(diags["timer_bfs"]) : .4f} sec')
-print(f' matbuild time: {np.sum(diags["timer_matbuild"]) : .4f} sec')
-print(f'   solver time: {np.sum(diags["timer_solver"]) : .4f} sec')
-print(f'   update time: {np.sum(diags["timer_update"]) : .4f} sec')
+print(f'Total time  : {np.sum(d["timer"]) : .4f} sec')
+print(f'      bfs time: {np.sum(d["timer_bfs"]) : .4f} sec')
+print(f' matbuild time: {np.sum(d["timer_matbuild"]) : .4f} sec')
+print(f' matsolve time: {np.sum(d["timer_matsolve"]) : .4f} sec')
+print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
 # old tests below:
 

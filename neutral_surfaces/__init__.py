@@ -1,5 +1,4 @@
 """
-Calculate surfaces in the ocean along which water parcels can be exchanged
-without doing work.
+Calculate approximately neutral surfaces in the ocean.
 """
-from ._neutral_surfaces import pot_dens_surf, omega_surf
+from ._neutral_surfaces import approx_neutral_surf

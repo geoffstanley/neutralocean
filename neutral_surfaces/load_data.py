@@ -11,7 +11,7 @@ def load_OCCA(OCCA_dir, ts=0):
     Pa2db = 1e-4
     deg2rad = np.pi / 180
 
-    g = dict()
+    g = dict()  # model grid and parameters
     g["ρ_c"] = 1027.5  # A guess. Same as ECCO2
     g["grav"] = 9.81  # A guess. Same as ECCO2
     g["rSphere"] = 6.37e6  # A guess. Same as ECCO2

@@ -13,34 +13,85 @@ from neutral_surfaces.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacenc
 from neutral_surfaces.lib import ϵ_norms
 from neutral_surfaces._omega import _omega_matsolve_poisson
 
-
 # signatures:
-# pot_dens_surf(*args, ref_p, isoval)
-# pot_dens_surf(*args, ref_p, pin)
-# pot_dens_surf(*args, pin)
+# approx_neutral_surf('sigma', *args, pin)
+# approx_neutral_surf('sigma', *args, pin, ref_p)
+# approx_neutral_surf('sigma', *args, isoval, ref_p)
+
+# approx_neutral_surf('omega', *args, pin)
+# approx_neutral_surf('omega', *args, pin, ref_p)
 
 
-def pot_dens_surf(
-    S,
-    T,
-    P,
-    ref=None,
-    isoval=None,
-    pin=None,
-    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
-    n_good=None,
-    Sppc=None,
-    Tppc=None,
-    interp_fn=linear_coeffs,
-    eos="jmd95",
-    grav=None,
-    rho_c=None,
-    tol_p=1e-4,
-):
+def approx_neutral_surf(ans_type, S, T, P, wrap, vert_dim, **kwargs):
+    """
+    Parameters
+    ----------
+    ans_type : str
+        'sigma', 'delta', or 'omega'
+    S : numpy.ndarray or xarray.DataArray
+        3D practical / Absolute salinity.
+    T : TYPE
+        3D potential / Conservative temperature    
+    P : TYPE
+        1D or 3D pressure or depth
+    wrap : tuple of bool (S is numpy array), or tuple of str (if S is xarray)
+        specifying which dimensions are periodic
+    vert_dim : int (S is numpy array) or str (S is xarray)
+        Specifies which dimension of S, T, P is vertical
+    ...and more!
+    
 
-    S_is_xr = type(S) == xr.core.dataarray.DataArray
-    T_is_xr = type(T) == xr.core.dataarray.DataArray
-    P_is_xr = type(P) == xr.core.dataarray.DataArray
+    Returns
+    -------
+    s : numpy.ndarray or xarray.DataArray
+        practical / Absolute salinity on surface
+    t : numpy.ndarray or xarray.DataArray
+        potential / Conservative temperature on surface
+    p : numpy.ndarray or xarray.DataArray
+        pressure or depth on surface
+    d : dict
+        diagnostics
+
+    """
+
+    mytime = time()
+
+    if ans_type not in ("sigma", "delta", "omega"):
+        raise ValueError("ans_type must be one of ('sigma', 'delta', 'omega')")
+
+    # Get extra arguments
+    # fmt: off
+    ref = kwargs.get('ref')
+    pin = kwargs.get('pin')
+    
+    # grid distances.  (soft notation: i = I-1/2; j = J-1/2)
+    dist1_iJ = kwargs.get('dist1_iJ', 1)  # Distance [m] in 1st dim centred at (I-1/2, J)
+    dist2_Ij = kwargs.get('dist2_Ij', 1)  # Distance [m] in 2nd dim centred at (I, J-1/2)
+    dist2_iJ = kwargs.get('dist2_iJ', 1)  # Distance [m] in 1st dim centred at (I-1/2, J)
+    dist1_Ij = kwargs.get('dist1_Ij', 1)  # Distance [m] in 2nd dim centred at (I, J-1/2)
+    
+    eos = kwargs.get('eos', 'gsw')
+    eos_s_t = kwargs.get('eos_s_t')
+    grav = kwargs.get('grav')
+    rho_c = kwargs.get('rho_c')
+    
+    interp_fn = kwargs.get('interp_fn', linear_coeffs)
+    n_good = kwargs.get('n_good')
+    Sppc = kwargs.get('Sppc')
+    Tppc = kwargs.get('Tppc')
+    
+    file_name = kwargs.get('file_name') # name for file where textual info is output; None for stdout
+    verbose = kwargs.get('verbose', 1)  # show a moderate level of information. Requires diags == true
+    diags = kwargs.get('diags', True) # return diagnostics for each iteration
+    
+    # Error tolerance for root-finding to update surface; same units as P [dbar] or [m]
+    tol_p = kwargs.get('tol_p', 1e-4) 
+    # fmt: on
+
+    # Prepare xarray container for outputs if xarrays given for inputs
+    S_is_xr = isinstance(S, xr.core.dataarray.DataArray)
+    T_is_xr = isinstance(T, xr.core.dataarray.DataArray)
+    P_is_xr = isinstance(P, xr.core.dataarray.DataArray)
     if S_is_xr:
         s_ = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
     if T_is_xr:
@@ -48,463 +99,390 @@ def pot_dens_surf(
     if P_is_xr:
         p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
 
-    S, T, P, Sppc, Tppc, n_good = process_STPppc(
-        S, T, P, pin, vert_dim, n_good, Sppc, Tppc, interp_fn
-    )
+    # Process 3D hydrography
+    S, T, P, vert_dim = unpack_STP(S, T, P, vert_dim)
+    ni, nj, nk = S.shape  # Get size of 3D hydrography
+    if n_good is None:
+        n_good = find_first_nan(S)
 
-    eos = make_eos(eos, grav, rho_c)
+    # Compute interpolants for S and T casts (unless already provided)
+    if (
+        Sppc is None
+        or Sppc.shape[0:3] != (ni, nj, nk - 1)
+        or Tppc is None
+        or Tppc.shape[0:3] != (ni, nj, nk - 1)
+    ):
+        Sppc = interp_fn(P, S)
+        Tppc = interp_fn(P, T)
 
-    if isinstance(pin, (tuple, list)) and len(pin) == 3:
-        p0 = pin[-1]  # pin pressure
-        n0 = pin[:-1]  # index to water column which intersects the surface
-        #                   at the pin pressure
-
-        # evaluate S and T on the surface at the chosen location
-        s0, t0 = val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p0)
-
-        if ref is None:
-            ref = pin[-1]
-
-        # Choose iso-value that will intersect cast n0 at p0.
-        isoval = eos(s0, t0, ref)
-
-    elif ref is None or isoval is None:
-        raise TypeError(
-            'Without a 3 element vector for "pin", must provide'
-            ' "ref" and "isoval" (both scalars)'
-        )
-
-    # Solve non-linear root finding problem in each cast
-    f = make_vertsolve(eos, "sigma")
-    s, t, p = f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
-
-    if S_is_xr:
-        s_.data = s
-        s = s_
-    if T_is_xr:
-        t_.data = t
-        t = t_
-    if P_is_xr:
-        p_.data = p
-        p = p_
-
-    return s, t, p
-
-
-def delta_surf(
-    S,
-    T,
-    P,
-    ref=None,
-    isoval=None,
-    pin=None,
-    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
-    n_good=None,
-    Sppc=None,
-    Tppc=None,
-    interp_fn=linear_coeffs,
-    eos="jmd95",
-    grav=None,
-    rho_c=None,
-    tol_p=1e-4,
-):
-
-    S_is_xr = type(S) == xr.core.dataarray.DataArray
-    T_is_xr = type(T) == xr.core.dataarray.DataArray
-    P_is_xr = type(P) == xr.core.dataarray.DataArray
-    if S_is_xr:
-        s_ = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if T_is_xr:
-        t_ = xr.full_like(T.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if P_is_xr:
-        p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-
-    S, T, P, Sppc, Tppc, n_good = process_STPppc(
-        S, T, P, pin, vert_dim, n_good, Sppc, Tppc, interp_fn
-    )
-
-    eos = make_eos(eos, grav, rho_c)
-
-    if isinstance(pin, (tuple, list)) and len(pin) == 3:
-        p0 = pin[-1]  # pin pressure
-        n0 = pin[:-1]  # index to water column which intersects the surface
-        #                   at the pin pressure
-
-        # evaluate S and T on the surface at the chosen location
-        s0, t0 = val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p0)
-
-        # Choose iso-value that will intersect cast n0 at p0.
-        if ref is None:
-            ref = (s0, t0)
-            isoval = 0.0
-        else:
-            isoval = eos(s0, t0, p0) - eos(ref[0], ref[1], p0)
-
-    elif ref is None or isoval is None:
-        raise TypeError(
-            'Without a 3 element vector for "pin", must provide'
-            ' "ref" (2 element vector) and "isoval" (scalar)'
-        )
-
-    # Solve non-linear root finding problem in each cast
-    f = make_vertsolve(eos, "delta")
-    s, t, p = f(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
-
-    if S_is_xr:
-        s_.data = s
-        s = s_
-    if T_is_xr:
-        t_.data = t
-        t = t_
-    if P_is_xr:
-        p_.data = p
-        p = p_
-
-    return s, t, p
-
-
-def omega_surf(
-    S,
-    T,
-    P,
-    wrap,
-    pin,
-    p_init=None,
-    # params about S, T, P
-    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
-    n_good=None,
-    # params about interpolation
-    Sppc=None,
-    Tppc=None,
-    interp_fn=linear_coeffs,
-    # params about equation of state
-    eos="jmd95",
-    eos_s_t=None,
-    grav=None,
-    rho_c=None,
-    ML=None,  # mixed layer
-    # params about grid
-    DIST1_iJ=1,
-    DIST2_Ij=1,
-    DIST2_iJ=1,
-    DIST1_Ij=1,
-    # params about iteration
-    ITER_MIN=1,
-    ITER_MAX=10,
-    ITER_START_WETTING=1,
-    ITER_STOP_WETTING=5,
-    # params about tolerances / convergence
-    TOL_LRPD_L1=1e-7,
-    TOL_P_CHANGE_L2=0.0,
-    tol_p=1e-4,
-    # params about diagnostics
-    DIAGS=True,
-    VERBOSE=1,
-    FILE_NAME=None,
-    # params for pot_dens_surf in case p_init=None
-    ref=None,
-):
-
-    S_is_xr = type(S) == xr.core.dataarray.DataArray
-    T_is_xr = type(T) == xr.core.dataarray.DataArray
-    P_is_xr = type(P) == xr.core.dataarray.DataArray
-    if S_is_xr:
-        s_ = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if T_is_xr:
-        t_ = xr.full_like(T.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if P_is_xr:
-        p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-
-    S, T, P, Sppc, Tppc, n_good = process_STPppc(
-        S, T, P, pin, vert_dim, n_good, Sppc, Tppc, interp_fn
-    )
-
+    # Process equation of state function
     if eos_s_t is None and isinstance(eos, str):
         eos_s_t = eos
     elif isinstance(eos, str) and isinstance(eos_s_t, str) and eos != eos_s_t:
         raise ValueError("eos and eos_s_t, if strings, must be the same string")
-
     eos = make_eos(eos, grav, rho_c)
     eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
+    vertsolve = make_vertsolve(eos, ans_type)
 
-    # # --- Get extra arguments
-    # # fmt: off
-
-    # # Below uses soft notation, similar to that in MOM6: i = I-1/2; j = J-1/2
-    # DIST1_iJ = kwargs.get('DIST1_iJ', 1)  # Distance [m] in 1st dim centred at (I-1/2, J)
-    # DIST2_Ij = kwargs.get('DIST2_Ij', 1)  # Distance [m] in 2nd dim centred at (I, J-1/2)
-    # DIST2_iJ = kwargs.get('DIST2_iJ', 1)  # Distance [m] in 1st dim centred at (I-1/2, J)
-    # DIST1_Ij = kwargs.get('DIST1_Ij', 1)  # Distance [m] in 2nd dim centred at (I, J-1/2)
-
-    # ML = kwargs.get("ML")  # Mixed layer pressure or depth to remove
-
-    # ITER_MIN = kwargs.get("ITER_MIN", 1)  # min number of iterations
-    # ITER_MAX = kwargs.get("ITER_MAX", 10)  # max number of iterations
-    # ITER_START_WETTING = kwargs.get("ITER_START_WETTING", 1)  # start wetting on this iteration (first iteration is 1)
-    # ITER_STOP_WETTING = kwargs.get("ITER_STOP_WETTING", 5)  # stop wetting after this many iterations (useful to avoid adding then removing some pesky casts)
-
-    # # Exit iterations when the L2 change of pressure (or depth) on the surface
-    # # is less than this value. Set to 0 to deactivate. Units are the same as P [dbar or m].
-    # TOL_LRPD_L1 = kwargs.get("TOL_LRPD_L1", 1e-7)
-
-    # # Exit iterations when the L1 change of the Locally Referenced Potential
-    # # Density perturbation is less than this value [kg m^-3].  Set to 0 to deactivate.
-    # TOL_P_CHANGE_L2 = kwargs.get("TOL_P_CHANGE_L2", 0.0)
-
-    # # Error tolerance when root-finding to update surface, in the same units as
-    # # P [dbar] or [m].
-    # tol_p = kwargs.get("tol_p", 1e-4)
-
-    # VERBOSE = kwargs.get("VERBOSE", 1)  # show a moderate level of information. Requires DIAGS == true
-    # DIAGS = kwargs.get("DIAGS", True)  # return diagnostics for each iteration
-    # FILE_NAME = kwargs.get("FILE_NAME")  # output textual info to this file
-    # # fmt: on
-
-    # --- Process extra args
-    ni, nj, nk = S.shape  # Get size of 3D hydrography
-
+    # Process wrap
+    if isinstance(wrap, str):
+        wrap = (wrap,)  # Convert single string to tuple
+    if not isinstance(wrap, (tuple, list)):
+        raise TypeError("wrap must be a tuple or list")
+    if S_is_xr and all(
+        isinstance(x, str) for x in wrap
+    ):  # Convert dim names to Tuple of Bool
+        wrap = tuple(x in wrap for x in s_.dims)
     if not isinstance(wrap, (tuple, list)) or len(wrap) != 2:
-        raise TypeError("wrap must be a two element (logical) vector")
+        raise TypeError(
+            "wrap must be a two element (logical) array"
+            " or an array of strings referring to dimensions in xarray S"
+        )
 
-    ref_cast = pin[0:2]
-    I_ref = np.ravel_multi_index(ref_cast, (ni, nj))  # linear index
-
-    if eos(34.5, 3.0, 1000.0) < 1.0:
-        # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
-        TOL_LRPD_L1 = TOL_LRPD_L1 * 1000.0 ** 2
+    # Error checking on pin
+    if isinstance(pin, (tuple, list)):
+        if len(pin) in (2, 3):
+            if not all(isinstance(x, int) for x in pin[0:2]):
+                raise TypeError('First 2 elements of "pin" must be integers')
+            if pin[0] < 0 or pin[1] < 0 or pin[0] >= ni or pin[1] >= nj:
+                raise ValueError(
+                    '"pin" must index a cast within the domain;'
+                    f'found "pin" = {pin} outside the bounds (0,{ni-1}) x (0,{nj-1})'
+                )
+        else:
+            raise TypeError('If provided, "pin" must be a 2 or 3 element vector')
 
     # Calculate the ratios of distances, and auto expand to [ni,nj] sizes, for eps_norms()
     # DEV:  The following broadcast_to calls are probably not general enough...
-    # If DIST2_Ij is a vector of length nj, for instance, this crashes.
-    DIST1_iJ = np.broadcast_to(DIST1_iJ, (ni, nj))
-    DIST1_Ij = np.broadcast_to(DIST1_Ij, (ni, nj))
-    DIST2_Ij = np.broadcast_to(DIST2_Ij, (ni, nj))
-    DIST2_iJ = np.broadcast_to(DIST2_iJ, (ni, nj))
-    AREA_iJ = DIST1_iJ * DIST2_iJ
-    AREA_Ij = DIST1_Ij * DIST2_Ij
-    DIST2on1_iJ = DIST2_iJ / DIST1_iJ
-    DIST1on2_Ij = DIST1_Ij / DIST2_Ij
+    # If dist2_Ij is a vector of length nj, for instance, this crashes.
+    dist1_iJ = np.broadcast_to(dist1_iJ, (ni, nj))
+    dist1_Ij = np.broadcast_to(dist1_Ij, (ni, nj))
+    dist2_Ij = np.broadcast_to(dist2_Ij, (ni, nj))
+    dist2_iJ = np.broadcast_to(dist2_iJ, (ni, nj))
+    areaiJ = dist1_iJ * dist2_iJ
+    areaIj = dist1_Ij * dist2_Ij
 
-    if FILE_NAME is None:
+    d = dict()
+
+    if file_name is None:
         file_id = sys.stdout
     else:
-        file_id = open(FILE_NAME, "w")
+        file_id = open(file_name, "w")
 
-    # Calculate an initial surface through `pin` if none given
-    if p_init is None:
-        s, t, p = pot_dens_surf(
-            S,
-            T,
-            P,
-            ref=ref,
-            pin=pin,
-            n_good=n_good,
-            Sppc=Sppc,
-            Tppc=Tppc,
-            eos=eos,
-            tol_p=tol_p,
-        )
+    if ans_type in ("sigma", "delta"):
 
-    else:
-        p = p_init.copy()
+        # Get extra arguments
+        isoval = kwargs.get("isoval", None)
 
-        if len(pin) == 3 and pin[-1] != p_init[ref_cast]:
-            raise RuntimeError("pin[-1] does not match p_init at ref_cast")
+        if isinstance(pin, (tuple, list)) and len(pin) == 3:
+            p0 = pin[-1]  # pin pressure
+            n0 = pin[:-1]  # index to water column which intersects the surface
+            #                at the pin pressure
 
-        # Interpolate S and T onto the surface
-        s, t = val2(P, S, Sppc, T, Tppc, p)
+            # evaluate S and T on the surface at the chosen location
+            s0, t0 = val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], p0)
 
-    if len(pin) == 3:
-        p0 = pin[-1]
-    else:
-        p0 = p[ref_cast]
+            # Choose reference value(s) and isovalue that will intersect cast n0 at p0
+            if ans_type == "sigma":
+                if ref is None:
+                    ref = pin[-1]
+                isoval = eos(s0, t0, ref)
 
-    # Pre-calculate things for Breadth First Search:
-    # all grid points that are adjacent to all grid points, using 5-connectivity
-    A5 = grid_adjacency((ni, nj), 5, wrap)
-    # all grid points that are adjacent to all grid points, using 4-connectivity
-    A4 = A5[:, 0:-1]
+            else:  # ans_type == 'delta'
+                if ref is None:
+                    ref = (s0, t0)
+                    isoval = 0.0
+                else:
+                    isoval = eos(s0, t0, p0) - eos(ref[0], ref[1], p0)
 
-    # Get ML: the pressure of the mixed layer
-    # if ITER_MAX > 1 && if isstruct(OPTS.ML)
-    #   # Compute the mixed layer from parameter inputs
-    #   ML = mixed_layer(S, T, P, ML)
-    # end
+        elif ref is None or isoval is None:
+            if ans_type == "sigma":
+                raise TypeError(
+                    'Without a 3 element vector for "pin", must provide'
+                    ' "ref" (scalar) and "isoval" (scalar)'
+                )
+            else:  # ans_type == 'delta'
+                raise TypeError(
+                    'Without a 3 element vector for "pin", must provide'
+                    ' "ref" (2 element vector) and "isoval" (scalar)'
+                )
 
-    # ensure same nan structure between s, t, and p. Just in case user gives
-    # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
-    p[np.isnan(s)] = np.nan
+        # Solve non-linear root finding problem in each cast
+        mytime = time()
+        s, t, p = vertsolve(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
+        d["timer"] = time() - mytime
 
-    # --- Prepare diagnostics
-    if DIAGS:
-        diags = {
-            "ϵ_L1": np.empty(ITER_MAX + 1, dtype=np.float64),
-            "ϵ_L2": np.empty(ITER_MAX + 1, dtype=np.float64),
-            "ϕ_L1": np.empty(ITER_MAX, dtype=np.float64),
-            "Δp_L1": np.empty(ITER_MAX, dtype=np.float64),
-            "Δp_L2": np.empty(ITER_MAX, dtype=np.float64),
-            "Δp_Linf": np.empty(ITER_MAX, dtype=np.float64),
-            "freshly_wet": np.empty(ITER_MAX, dtype=int),
-            "clocktime": np.empty(ITER_MAX, dtype=np.float64),
-            "timer_matbuild": np.empty(ITER_MAX, dtype=np.float64),
-            "timer_solver": np.empty(ITER_MAX, dtype=np.float64),
-            "timer_update": np.empty(ITER_MAX, dtype=np.float64),
-            "timer_bfs": np.empty(ITER_MAX, dtype=np.float64),
-        }
-
-        # Diagnostics about state BEFORE the first iteration
-        ϵ_L2, ϵ_L1 = ϵ_norms(
+        # Diagnostics
+        d["ϵ_L2"], d["ϵ_L1"] = ϵ_norms(
             s,
             t,
             p,
             eos_s_t,
             wrap,
-            DIST1_iJ,
-            DIST2_Ij,
-            DIST2_iJ,
-            DIST1_Ij,
-            AREA_iJ,
-            AREA_Ij,
+            dist1_iJ,
+            dist2_Ij,
+            dist2_iJ,
+            dist1_Ij,
+            areaiJ,
+            areaIj,
         )
-        # mean_p = np.nanmean(p)
-        # mean_eos = np.nanmean(eos(s, t, p))
-        diags["ϵ_L1"][0] = ϵ_L1
-        diags["ϵ_L2"][0] = ϵ_L2
-        # diags["mean_p"][0] = mean_p
-        # diags["mean_eos"][0] = mean_eos
 
-        if VERBOSE > 0:
+        if verbose > 0:
             print(
-                f"Initial surface has log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f} ..................",
+                f"{ans_type} done"
+                f" | {d['timer']:5.2f} sec"
+                f" | log_10(|ϵ|_2) = {np.log10(d['ϵ_L2']) : 9.6f}",
                 file=file_id,
             )
-    else:
-        diags = {}
 
-    # --- Begin iterations
-    # Note: the surface exists wherever p is non-nan.  The nan structure of s
-    # and t is made to match that of p when the vertical solve step is done.
-    Δp_L2 = 0.0  # ensure this is defined; needed if OPTS.TOL_P_CHANGE_L2 == 0
-    vertsolve_omega = make_vertsolve(eos, "omega")
-    for iter_ in range(ITER_MAX):
-        iter_time = time()
+    else:  # ans_type == 'omega':
 
-        # --- Remove the Mixed Layer
-        # But keep it for the first iteration; which may be initialized from a
-        # not very neutral surface()
-        if iter_ + 1 > 1 and ML != None:
-            p[p < ML] = np.nan
+        # --- Get extra arguments
+        # fmt: off
+        p_init = kwargs.get("p_init", None)
+        
+        ML = kwargs.get("ML")  # Mixed layer pressure or depth to remove
+    
+        ITER_MIN = kwargs.get("ITER_MIN", 1)  # min number of iterations
+        ITER_MAX = kwargs.get("ITER_MAX", 10)  # max number of iterations
+        ITER_START_WETTING = kwargs.get("ITER_START_WETTING", 1)  # start wetting on this iteration (first iteration is 1)
+        ITER_STOP_WETTING = kwargs.get("ITER_STOP_WETTING", 5)  # stop wetting after this many iterations (useful to avoid adding then removing some pesky casts)
+    
+        # Exit iterations when the L2 change of pressure (or depth) on the surface
+        # is less than this value. Set to 0 to deactivate. Units are the same as P [dbar or m].
+        TOL_LRPD_L1 = kwargs.get("TOL_LRPD_L1", 1e-7)
+    
+        # Exit iterations when the L1 change of the Locally Referenced Potential
+        # Density perturbation is less than this value [kg m^-3].  Set to 0 to deactivate.
+        TOL_P_CHANGE_L2 = kwargs.get("TOL_P_CHANGE_L2", 0.0)
+        # fmt: on
 
-        # --- Determine the connected component containing the reference cast; via Breadth First Search
-        mytime = time()
-        if iter_ + 1 >= ITER_START_WETTING and iter_ + 1 <= ITER_STOP_WETTING:
-            qu, qt, freshly_wet = bfs_conncomp1_wet(
-                s, t, p, S, T, P, Sppc, Tppc, n_good, A4, I_ref, tol_p, eos
+        dist2on1_iJ = dist2_iJ / dist1_iJ
+        dist1on2_Ij = dist1_Ij / dist2_Ij
+
+        ref_cast = pin[0:2]
+        I_ref = np.ravel_multi_index(ref_cast, (ni, nj))  # linear index
+
+        if eos(34.5, 3.0, 1000.0) < 1.0:
+            # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
+            TOL_LRPD_L1 = TOL_LRPD_L1 * 1000.0 ** 2
+
+        # Pre-allocate arrays for diagnostics
+        d = {
+            "ϵ_L1": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "ϵ_L2": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "timer": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "ϕ_L1": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "Δp_L1": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "Δp_L2": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "Δp_Linf": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "freshly_wet": np.zeros(ITER_MAX + 1, dtype=int),
+            "timer_bfs": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "timer_matbuild": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "timer_matsolve": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "timer_update": np.zeros(ITER_MAX + 1, dtype=np.float64),
+        }
+
+        # Calculate an initial surface through `pin` if none given
+        if p_init is None:
+            s, t, p, d_ = approx_neutral_surf(
+                "sigma",
+                S,
+                T,
+                P,
+                wrap,
+                vert_dim,
+                ref=ref,
+                pin=pin,
+                n_good=n_good,
+                Sppc=Sppc,
+                Tppc=Tppc,
+                eos=eos,
+                eos_s_t=eos_s_t,
+                dist1_iJ=dist1_iJ,
+                dist2_Ij=dist2_Ij,
+                dist2_iJ=dist2_iJ,
+                dist1_Ij=dist1_Ij,
+                tol_p=tol_p,
             )
+
+            d["ϵ_L1"][0] = d_["ϵ_L1"]
+            d["ϵ_L2"][0] = d_["ϵ_L2"]
+
         else:
-            qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, I_ref)
-            freshly_wet = 0
-        timer_bfs = time() - mytime
-        if qt < 0:
-            raise RuntimeError(
-                "The surface is NaN at the reference cast. Probably the initial surface was NaN here."
-            )
+            p = p_init.copy()
 
-        # --- Solve global matrix problem for the exactly determined Poisson equation
-        mytime = time()
-        ϕ, timer_matbuild = _omega_matsolve_poisson(
-            s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, ref_cast, eos_s_t
-        )
-        timer_solver = time() - mytime - timer_matbuild
+            if len(pin) == 3 and pin[-1] != p_init[ref_cast]:
+                raise RuntimeError("pin[-1] does not match p_init at ref_cast")
 
-        # --- Update the surface
-        mytime = time()
-        p_old = p.copy()  # Record old surface for pinning & diags
-        vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p)
+            # Interpolate S and T onto the surface
+            s, t = val2(P, S, Sppc, T, Tppc, p)
 
-        # DEV:  time seems indistinguishable from using factory function as above
-        # _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos)
-
-        # Force p to stay constant at the reference column, identically. This
-        # avoids any intolerance from the vertical solver.
-        p[ref_cast] = p0
-
-        timer_update = time() - mytime
-
-        # --- Closing Remarks
-        ϕ_L1 = np.nanmean(abs(ϕ))  # Actually MAV, not L1 norm!
-        if DIAGS or TOL_P_CHANGE_L2 > 0:
-            Δp = p - p_old
-            Δp_L2 = np.sqrt(np.nanmean(Δp ** 2))  # Actually RMS, not L1 norm!
-
-        # fig, ax = plt.subplots()
-        # cs = ax.imshow(Δp, origin='lower')
-        # cbar = fig.colorbar(cs, ax=ax)
-
-        if DIAGS:
-
-            diags["clocktime"][iter_] = time() - iter_time
-
-            Δp_L1 = np.nanmean(abs(Δp))
-            Δp_Linf = np.nanmax(abs(Δp))
-
-            # Diagnostics about what THIS iteration did
-            diags["ϕ_L1"][iter_] = ϕ_L1
-            diags["Δp_L1"][iter_] = Δp_L1
-            diags["Δp_L2"][iter_] = Δp_L2
-            diags["Δp_Linf"][iter_] = Δp_Linf
-            diags["freshly_wet"][iter_] = freshly_wet
-
-            diags["timer_matbuild"][iter_] = timer_matbuild
-            diags["timer_solver"][iter_] = timer_solver
-            diags["timer_update"][iter_] = timer_update
-            diags["timer_bfs"][iter_] = timer_bfs
-
-            # Diagnostics about the state AFTER this iteration
-            ϵ_L2, ϵ_L1 = ϵ_norms(
+            # Diagnostics
+            d["ϵ_L2"][0], d["ϵ_L1"][0] = ϵ_norms(
                 s,
                 t,
                 p,
                 eos_s_t,
                 wrap,
-                DIST1_iJ,
-                DIST2_Ij,
-                DIST2_iJ,
-                DIST1_Ij,
-                AREA_iJ,
-                AREA_Ij,
+                dist1_iJ,
+                dist2_Ij,
+                dist2_iJ,
+                dist1_Ij,
+                areaiJ,
+                areaIj,
             )
 
-            # mean_p = np.nanmean(p)
-            # mean_eos = np.nanmean(eos(s, t, p))
-            diags["ϵ_L1"][iter_ + 1] = ϵ_L1
-            diags["ϵ_L2"][iter_ + 1] = ϵ_L2
-            # diags["mean_p"][iter_+1]    = mean_p
-            # diags["mean_eos"][iter_+1]  = mean_eos
+        if len(pin) == 3:
+            p0 = pin[-1]
+        else:
+            p0 = p[ref_cast]
 
-            if VERBOSE > 0:
-                print(
-                    f"Iter {iter_ + 1 : 2}"
-                    f' [{diags["clocktime"][iter_] : 5.2f} sec]'
-                    f" log_10(|ϵ|_2) = {np.log10(ϵ_L2) : 9.6f}"
-                    f" by |ϕ|_1 = {ϕ_L1 : .6e};"
-                    f" {freshly_wet : 4} casts freshly wet;"
-                    f" |Δp|_2 = {Δp_L2 : .6e}",
-                    file=file_id,
+        # Pre-calculate things for Breadth First Search:
+        # all grid points that are adjacent to all grid points, using 5-connectivity
+        A5 = grid_adjacency((ni, nj), 5, wrap)
+        # all grid points that are adjacent to all grid points, using 4-connectivity
+        A4 = A5[:, 0:-1]
+
+        # Get ML: the pressure of the mixed layer
+        # if ITER_MAX > 1 && if isstruct(OPTS.ML)
+        #   # Compute the mixed layer from parameter inputs
+        #   ML = mixed_layer(S, T, P, ML)
+        # end
+
+        # ensure same nan structure between s, t, and p. Just in case user gives
+        # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
+        p[np.isnan(s)] = np.nan
+
+        d["timer"][0] = time() - mytime
+        if diags and verbose > 0:
+            print(
+                f"{ans_type} initialized "
+                f" | {d['timer'][0]:5.2f} sec"
+                f" | log_10(|ϵ|_2) = {np.log10(d['ϵ_L2'][0] ):9.6f}",
+                file=file_id,
+            )
+
+        # --- Begin iterations
+        # Note: the surface exists wherever p is non-nan.  The nan structure of s
+        # and t is made to match that of p when the vertical solve step is done.
+        Δp_L2 = 0.0  # ensure this is defined; needed if OPTS.TOL_P_CHANGE_L2 == 0
+        for iter_ in range(1, ITER_MAX + 1):
+            iter_time = time()
+
+            # --- Remove the Mixed Layer
+            # But keep it for the first iteration; which may be initialized from a
+            # not very neutral surface
+            if iter_ > 1 and ML != None:
+                p[p < ML] = np.nan
+
+            # --- Determine the connected component containing the reference cast, via Breadth First Search
+            mytime = time()
+            if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
+                qu, qt, freshly_wet = bfs_conncomp1_wet(
+                    s, t, p, S, T, P, Sppc, Tppc, n_good, A4, I_ref, tol_p, eos
+                )
+            else:
+                qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, I_ref)
+                freshly_wet = 0
+            timer_bfs = time() - mytime
+            if qt < 0:
+                raise RuntimeError(
+                    "The surface is NaN at the reference cast. Probably the initial surface was NaN here."
                 )
 
-        # --- Check for convergence
-        if (ϕ_L1 < TOL_LRPD_L1 or Δp_L2 < TOL_P_CHANGE_L2) and iter_ + 1 >= ITER_MIN:
-            break
+            # --- Solve global matrix problem for the exactly determined Poisson equation
+            mytime = time()
+            ϕ, timer_matbuild = _omega_matsolve_poisson(
+                s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A5, qu, qt, ref_cast, eos_s_t
+            )
+            timer_solver = time() - mytime - timer_matbuild
 
-    if FILE_NAME != None:
+            # --- Update the surface
+            mytime = time()
+            p_old = p.copy()  # Record old surface for pinning & d
+            vertsolve(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p)  # mutates s, t, p
+
+            # DEV:  time seems indistinguishable from using factory function as above
+            # _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos)
+
+            # Force p to stay constant at the reference column, identically. This
+            # avoids any intolerance from the vertical solver.
+            p[ref_cast] = p0
+
+            timer_update = time() - mytime
+
+            # --- Closing Remarks
+            ϕ_L1 = np.nanmean(abs(ϕ))  # Actually MAV, not L1 norm!
+            if diags or TOL_P_CHANGE_L2 > 0:
+                Δp = p - p_old
+                Δp_L2 = np.sqrt(np.nanmean(Δp ** 2))  # Actually RMS, not L1 norm!
+
+            if diags:
+
+                d["timer"][iter_] = time() - iter_time
+
+                Δp_L1 = np.nanmean(abs(Δp))
+                Δp_Linf = np.nanmax(abs(Δp))
+
+                # Diagnostics about what THIS iteration did
+                d["ϕ_L1"][iter_] = ϕ_L1
+                d["Δp_L1"][iter_] = Δp_L1
+                d["Δp_L2"][iter_] = Δp_L2
+                d["Δp_Linf"][iter_] = Δp_Linf
+                d["freshly_wet"][iter_] = freshly_wet
+
+                d["timer_matbuild"][iter_] = timer_matbuild
+                d["timer_matsolve"][iter_] = timer_solver
+                d["timer_update"][iter_] = timer_update
+                d["timer_bfs"][iter_] = timer_bfs
+
+                # Diagnostics about the state AFTER this iteration
+                ϵ_L2, ϵ_L1 = ϵ_norms(
+                    s,
+                    t,
+                    p,
+                    eos_s_t,
+                    wrap,
+                    dist1_iJ,
+                    dist2_Ij,
+                    dist2_iJ,
+                    dist1_Ij,
+                    areaiJ,
+                    areaIj,
+                )
+
+                # mean_p = np.nanmean(p)
+                # mean_eos = np.nanmean(eos(s, t, p))
+                d["ϵ_L1"][iter_] = ϵ_L1
+                d["ϵ_L2"][iter_] = ϵ_L2
+                # d['mean_p'][iter_+1]    = mean_p
+                # d['mean_eos'][iter_+1]  = mean_eos
+
+                if verbose > 0:
+                    print(
+                        f"{ans_type} iter {iter_:02d} done"
+                        f" | {d['timer'][iter_]:5.2f} sec"
+                        f" | log_10(|ϵ|_2) = {np.log10(ϵ_L2):9.6f}"
+                        f" | |ϕ|_1 = {ϕ_L1:.6e}"
+                        f" | {freshly_wet:4} casts freshly wet"
+                        f" | |Δp|_2 = {Δp_L2:.6e}",
+                        file=file_id,
+                    )
+
+            # --- Check for convergence
+            if (ϕ_L1 < TOL_LRPD_L1 or Δp_L2 < TOL_P_CHANGE_L2) and iter_ >= ITER_MIN:
+                break
+
+    if file_name != None:
         file_id.close()
 
-    if DIAGS:
+    if diags and ans_type == "omega":
         # Trim diagnostic output
-        for k, v in diags.items():
-            diags[k] = v[0 : iter_ + 1 + (k in ("ϵ_L1", "ϵ_L2"))]
+        for k, v in d.items():
+            d[k] = v[0 : iter_ + (k in ("ϵ_L1", "ϵ_L2"))]
 
+    # Return xarrays if inputs were xarrays
     if S_is_xr:
         s_.data = s
         s = s_
@@ -515,21 +493,21 @@ def omega_surf(
         p_.data = p
         p = p_
 
-    return s, t, p, diags
+    return s, t, p, d
 
 
-def process_STP(S, T, P, vert_dim):
+def unpack_STP(S, T, P, vert_dim):
     # DEV:  if inputs are 2D (i.e. for a hydrographic section), expand them here
     # to be 3D?  Would want to modify s,t,p output though too...
 
     # Extract numpy arrays from xarrays
-    if type(S) == xr.core.dataarray.DataArray:
+    if isinstance(S, xr.core.dataarray.DataArray):
         # Assume S, T are all xarrays, with same dimension ordering
         if vert_dim in S.dims:
             vert_dim = S.dims.index(vert_dim)
         S = S.values
         T = T.values
-    if type(P) == xr.core.dataarray.DataArray:
+    if isinstance(P, xr.core.dataarray.DataArray):
         P = P.values
 
     if vert_dim not in (-1, S.ndim - 1):
@@ -551,54 +529,9 @@ def process_STP(S, T, P, vert_dim):
             f"found P.shape = {P.shape} but S.shape = {S.shape}"
         )
 
-    return S, T, P
+    vert_dim = -1  # Now vert_dim shows the last dimension of a numpy array
 
-
-def process_STPppc(
-    S,
-    T,
-    P,
-    pin=None,
-    vert_dim=-1,  # axis of the vertical dimension (integer for numpy arrays, string for xarrays)
-    n_good=None,
-    Sppc=None,
-    Tppc=None,
-    interp_fn=linear_coeffs,
-):
-
-    S, T, P = process_STP(S, T, P, vert_dim)
-
-    if n_good is None:
-        n_good = find_first_nan(S)
-
-    # Get size of 3D hydrography
-    ni, nj, nk = S.shape
-
-    # Compute interpolants for S and T casts (unless already provided)
-    if (
-        Sppc is None
-        or Sppc.shape[0:3] != (ni, nj, nk - 1)
-        or Tppc is None
-        or Tppc.shape[0:3] != (ni, nj, nk - 1)
-    ):
-        Sppc = interp_fn(P, S)
-        Tppc = interp_fn(P, T)
-
-    # check 'pin' argument of pot_dens_surf, delta_surf, omega_surf
-    # DEV: <<< maybe eliminate this?  >>>
-    if isinstance(pin, (tuple, list)):
-        if len(pin) in (2, 3):
-            if not all(isinstance(x, int) for x in pin[0:2]):
-                raise TypeError('First 2 elements of "pin" must be integers')
-            if pin[0] < 0 or pin[1] < 0 or pin[0] >= ni or pin[1] >= nj:
-                raise ValueError(
-                    '"pin" must index a cast within the domain;'
-                    f'found "pin" = {pin} outside the bounds (0,{ni-1}) x (0,{nj-1})'
-                )
-        else:
-            raise TypeError('If provided, "pin" must be a 2 or 3 element vector')
-
-    return S, T, P, Sppc, Tppc, n_good
+    return S, T, P, vert_dim
 
 
 @numba.njit
