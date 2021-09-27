@@ -1,8 +1,7 @@
 import numpy as np
 import numba
-import functools
 
-from neutral_surfaces.lib import ntp_bottle_to_cast
+from neutral_surfaces.lib import _ntp_bottle_to_cast
 
 
 @numba.njit
@@ -76,11 +75,8 @@ def bfs_conncomp1(G, A, r):
 @numba.njit
 def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     # Note! Mutates s, t, p
-
     ni, nj, nk = S.shape
     nij = ni * nj
-
-    freshly_wet = 0
 
     qu = np.empty(nij, dtype=np.int64)
 
@@ -95,6 +91,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     dry = (n_good > 1) & ~G
 
     # Flatten lateral dimension of inputs to be 1D.  Use reshape() to get a view.
+
     G = np.reshape(G, nij)
     dry = np.reshape(dry, nij)
     s = np.reshape(s, nij)
@@ -112,6 +109,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     qu[qt] = r
     G[r] = False  # mark r as discovered
 
+    n_wet = 0
     while qt > qh:
         qh += 1  # advance head of the queue
         m = qu[qh]  # me node; pop from head of queue
@@ -128,7 +126,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
                 elif dry[n]:
                     # n is "dry".  Try wetting.
 
-                    s[n], t[n], p[n] = ntp_bottle_to_cast(
+                    s[n], t[n], p[n] = _ntp_bottle_to_cast(
                         s[m],
                         t[m],
                         p[m],
@@ -154,14 +152,14 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
                         G[n] = False  # mark n as discovered
                         dry[n] = False
 
-                        freshly_wet += 1  # augment counter of freshly wet casts
+                        n_wet += 1  # augment counter of newly wet casts
 
     # Unflatten to 2D arrays
     # s[:] = np.reshape(ss, (ni,nj))
     # t[:] = np.reshape(tt, (ni,nj))
     # p[:] = np.reshape(pp, (ni,nj))
 
-    return qu, qt, freshly_wet
+    return qu, qt, n_wet
 
 
 # function grid_adjacency(dims::Tuple{Int,Int}, conn::Int, wrap::Tuple{Bool,Bool})
@@ -218,39 +216,6 @@ def grid_adjacency(dims, conn, wrap):
 
     wallval = ni * nj
 
-    def helper(ni, nj, order):
-
-        D = len(order)
-
-        # Prepare to circshift linear indices to some subset of its neighbours
-        # generally ordered as follows
-        # +------> j = 2'nd dim
-        # | 0 3 6
-        # | 1 4 7
-        # | 2 5 8
-        # v
-        #  i = 1'st dim
-        spin = (
-            (1, 1),
-            (0, 1),
-            (-1, 1),
-            (1, 0),
-            (0, 0),
-            (-1, 0),
-            (1, -1),
-            (0, -1),
-            (-1, -1),
-        )  # - sign included as prep for np.roll
-
-        # Build linear index to each grid point, and repeat them D times
-        adj = np.tile(np.reshape(range(ni * nj), (ni, nj, 1)), (1, 1, D))  # ni x nj x D
-
-        # Shift these linear indices so they refer to their neighbours.
-        for d in range(D):
-            adj[:, :, d] = np.roll(adj[:, :, d], spin[order[d]], (0, 1))
-
-        return adj
-
     # fmt: off
     # Build adjacency matrix and handle periodicity
     if conn == 4:
@@ -258,7 +223,7 @@ def grid_adjacency(dims, conn, wrap):
         # 0 . 3
         # . 2 .
         order = [1, 3, 5, 7]
-        adj = helper(ni, nj, order)
+        adj = _grid_adj_helper(ni, nj, order)
 
         if not wrap[0]:
             adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
@@ -277,7 +242,7 @@ def grid_adjacency(dims, conn, wrap):
         # 0 4 3
         # . 2 .
         order = [1, 3, 5, 7, 4]
-        adj = helper(ni, nj, order)
+        adj = _grid_adj_helper(ni, nj, order)
 
         if not wrap[0]:
             # adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
@@ -295,7 +260,7 @@ def grid_adjacency(dims, conn, wrap):
         # 0 . 3
         # 5 2 7
         order = [1, 3, 5, 7, 0, 2, 6, 8]
-        adj = helper(ni, nj, order)
+        adj = _grid_adj_helper(ni, nj, order)
 
         if not wrap[0]:
             adj[0   , :, [1, 4, 6]] = wallval # i-1 hits a wall when i = 0
@@ -309,7 +274,7 @@ def grid_adjacency(dims, conn, wrap):
         # 1 4 7
         # 2 5 8
         order = range(9)
-        adj = helper(ni, nj, order)
+        adj = _grid_adj_helper(ni, nj, order)
 
         if not wrap[0]:
             adj[0   , :, [0, 3, 6]] = wallval # i-1 hits a wall when i = 0
@@ -324,5 +289,39 @@ def grid_adjacency(dims, conn, wrap):
 
     # Reshape adj to a matrix of dimensions (conn, ni*nj)
     adj = adj.reshape((ni * nj, conn))
+
+    return adj
+
+
+def _grid_adj_helper(ni, nj, order):
+
+    D = len(order)
+
+    # Prepare to circshift linear indices to some subset of its neighbours
+    # generally ordered as follows
+    # +------> j = 2'nd dim
+    # | 0 3 6
+    # | 1 4 7
+    # | 2 5 8
+    # v
+    #  i = 1'st dim
+    spin = (
+        (1, 1),
+        (0, 1),
+        (-1, 1),
+        (1, 0),
+        (0, 0),
+        (-1, 0),
+        (1, -1),
+        (0, -1),
+        (-1, -1),
+    )  # - sign included as prep for np.roll
+
+    # Build linear index to each grid point, and repeat them D times
+    adj = np.tile(np.reshape(range(ni * nj), (ni, nj, 1)), (1, 1, D))  # ni x nj x D
+
+    # Shift these linear indices so they refer to their neighbours.
+    for d in range(D):
+        adj[:, :, d] = np.roll(adj[:, :, d], spin[order[d]], (0, 1))
 
     return adj
