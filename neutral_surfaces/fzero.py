@@ -10,22 +10,23 @@ eps = np.finfo(np.float64).eps
 
 
 @numba.njit
-def brent(f, args, a, b, t):
+def brent_guess(f, x, A, B, t, args=()):
     """
-    brent(f, args, a, b, t)
-
-    Find the zero of a function within a given range using Brent's method.
+    Find a zero of a function within a given range, starting from a guess
 
     Parameters
     ----------
     f : function
         Continuous function of a single variable.
-    args : tuple
-        Additional arguments beyond the optimization argument.
-    a, b : float
-        Range within which to search.
+    x : float
+        initial guess for a root
+    A, B : float
+        Range within which to search, satisfying A < B
     t : float
         Tolerance for convergence.
+    args : tuple
+        Additional arguments, beyond the optimization argument, to be passed to f.
+        Pass () when f is univariate.
 
     Returns
     -------
@@ -34,10 +35,51 @@ def brent(f, args, a, b, t):
 
     """
 
+    a, b = guess_to_bounds(f, x, A, B, args)
+    return brent(f, a, b, t, args)
+
+
+@numba.njit
+def brent(f, a, b, t, args=()):
+    """
+    Find a zero of a univariate function within a given range
+
+    This is a bracketed root-finding method, so f(a) and f(b) must differ in
+    sign.  If they do, a root is guaranteed to be found.
+
+    Parameters
+    ----------
+    f : function
+        Continuous function of a single variable.
+    a, b : float
+        Range within which to search, satisfying a < b and ideally f(a) * f(b) <= 0
+    t : float
+        Tolerance for convergence.
+    args : tuple
+        Additional arguments, beyond the optimization argument, to be passed to f.
+        Pass () when f is univariate.
+
+    Returns
+    -------
+    float
+        Value of x where f(x) ~ 0.
+
+    Notes
+    -----
+    f should be a @numba.njit'ed function (when this function is njit'ed).
+    """
+
+    # Protection against bad input search range
+    if np.isnan(a) or np.isnan(b) or a > b:
+        return np.nan
+
     fa = f(a, *args)
     fb = f(b, *args)
-    if not fa * fb <= 0:  # DEV note: check if this should be fa * fb < 0
-        return np.nan  # Protection against bad input search range.
+
+    # Protection against input range that doesn't have a sign change
+    if fa * fb > 0:  # DEV note: check if this should be fa * fb >= 0
+        return np.nan
+
     c = a
     fc = fa
     e = b - a
@@ -108,11 +150,10 @@ def brent(f, args, a, b, t):
 
 
 @numba.njit
-def guess_to_bounds(f, args, x, lb, ub):
+def guess_to_bounds(f, x, A, B, args=()):
     """
-    guess_to_bounds(f, args, x, lb, ub)
-
-    Search for a range containing a sign change.
+    Search for a range containing a sign change, expanding geometrically
+    outwards from the initial guess.
 
     This is used as a first step in zero-finding, providing a small search
     range for the Brent algorithm.
@@ -121,69 +162,77 @@ def guess_to_bounds(f, args, x, lb, ub):
     ----------
     f : function
         Continuous function of a single variable
-    args : tuple
-        Additional arguments beyond the optimization argument.
     x : float
         Central point for starting the search
-    lb, ub : float
-        Lower and upper bounds, containing x, within which to search.
+    A, B : float
+        Lower and upper bounds, containing x, within which to search for a zero.
+    args : tuple
+        Additional arguments beyond the optimization argument.
+        Pass () when f is univariate.
 
     Returns
     -------
-    lb, ub : float
+    a, b : float
         Lower and upper bounds within which f(x) changes sign.
-
-    Notes
-    -----
-    The search expands geometrically outwards from the guess *x*.
     """
 
     nan = np.nan
 
-    x = min(max(x, lb), ub)
+    # Check value of f at bounds
+    fa = f(A, *args)
+    if fa == 0.0:
+        return (A, A)
 
-    # bounds are given
-    dxp = (ub - x) / 50
-    dxm = (x - lb) / 50
+    fb = f(B, *args)
+    if fb == 0.0:
+        return (B, B)
 
-    # Set a = x; except when x is so close to lb that machine roundoff makes dxm identically 0
-    # which would lead to an infinite loop below.  In this case; set a = lb.
+    x = min(max(x, A), B)
+
+    # initial distance to expand outward from x, in positive and negative directions
+    dxp = (B - x) / 50
+    dxm = (x - A) / 50
+
+    # Set a = x, except when x is so close to A that machine roundoff makes dxm identically 0
+    # which would lead to an infinite loop below.  In this case, set a = A.
     if dxm == 0:
-        a = lb
+        a = A
     else:
         a = x
+        fapos = f(a, *args) > 0.0
 
-    # Similarly; set b = x; except for machine precision problems.
+    # Similarly, set b = x, except for machine precision problems.
     if dxp == 0:
-        b = ub
+        b = B
     else:
         b = x
-
-    fapos = f(a, *args) > 0.0
-    fbpos = f(b, *args) > 0.0
+        if dxm == 0.0:
+            fbpos = fapos  # since a = b = x
+        else:
+            fbpos = f(b, *args) > 0.0
 
     while True:
-        if a > lb:
-            # Move a left; & test for a sign change
+        if a > A:
+            # Move a left, and test for a sign change
             dxm *= 1.414213562373095
-            a = max(x - dxm, lb)
+            a = max(x - dxm, A)
             fapos = f(a, *args) > 0.0
-            if fapos != fbpos:  # fa & fb have different signs
+            if fapos != fbpos:  # fa and fb have different signs
                 return (a, b)
-        elif b == ub:  # also a .== lb; so cannot expand anymore
+        elif b == B:  # also a == A, so cannot expand anymore
             if fapos != fbpos:  # one last test for sign change
                 return (a, b)
             else:  # no sign change found
                 return (nan, nan)
 
-        if b < ub:
-            # Move b right; & test for a sign change
+        if b < B:
+            # Move b right, and test for a sign change
             dxp *= 1.414213562373095
-            b = min(x + dxp, ub)
+            b = min(x + dxp, B)
             fbpos = f(b, *args) > 0.0
-            if fapos != fbpos:  # fa & fb have different signs
+            if fapos != fbpos:  # fa and fb have different signs
                 return (a, b)
-        elif a == lb:  # also b .== ub; so cannot expand anymore
+        elif a == A:  # also b == B, so cannot expand anymore
             if fapos != fbpos:  # one last test for sign change
                 return (a, b)
             else:  # no sign change found
