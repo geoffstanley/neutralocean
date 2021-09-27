@@ -13,17 +13,17 @@ rho_gsw_ctypes.restype = ctypes.c_double
 rho_gsw_ctypes.argtypes = (ctypes.c_double, ctypes.c_double, ctypes.c_double)
 
 
-# Wrapping the ctypes function with a jit reduces call overhead and makes it
+# Wrapping the ctypes function with njit reduces call overhead and makes it
 # hashable, which is required for the caching we do via the lru_cache
 # decorator.
 @numba.njit
-def rho_gsw(s, t, p):
+def rho(s, t, p):
     return rho_gsw_ctypes(s, t, p)
 
 
 # For the S and T derivatives, we only call these on the entire surface,
 # so the Python ufunc wrappers are okay.
 # Would be nicer if we didn't have to compute the pressure derivative.
-def rho_s_t_gsw(s, t, p):
+def rho_s_t(s, t, p):
     rs, rt, _ = gsw.rho_first_derivatives(s, t, p)
     return rs, rt
