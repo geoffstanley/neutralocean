@@ -1,30 +1,254 @@
 """
-Functions for the particular usage of interpolation required by neutral
-surface calculations.
+Functions for linear or PCHIP interpolation of one or two dependent
+variables in terms of one independent variable, done serially over an
+arbitrary number of such interpolation problems.  In the Neutral
+Surfaces Toolbox, this is used to build interpolants for salinity and
+temperature in terms of either pressure or depth in each water
+column. 
 """
 
 """
-Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB File 
-Exchange at https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calculus
-This adaptation avoids (essentially) copying the Y array to a slice of Yppc,
-simply to save time and memory.  This does require that both Y and Yppc 
-together be passed around, as together they define the piecewise polynomial
-coefficients. 
+Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB
+File Exchange at
+https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calculus
+This adaptation avoids (essentially) copying the Y array to a slice of
+Yppc, simply to save time and memory.  This does require that both Y
+and Yppc together be passed around, as together they define the
+piecewise polynomial coefficients. 
 """
 
 import numpy as np
 import numba
 
-# from numba import float64, intc
-
 
 def linear_coeffs(X, Y):
+    """
+    Coefficients for a linear interpolant.
+
+    Parameters
+    ----------
+    X : ndarray
+
+        Independent variable. Must be same dimensions as `Y`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `Y`.
+
+        `X` should be monotonically increasing in its last dimension.
+        That is, `X[*i,:]` should be monotonically increasing for any
+        `i` tuple indexing all but the last dimension.  NaN's in `X`
+        are treated as +Inf.
+
+    Y : ndarray
+
+        Dependent variable.  Must be same dimensions as `X`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `X`.
+
+    Returns
+    -------
+    Yppc : ndarray
+
+        Degree 1 and higher coefficients for a linear interpolant of `Y`
+        to `X`.
+
+    Notes
+    -----
+    Evaluate the piecewise polynomial at `x` as
+
+    >>> y = val(X, Y, Yppc, x)
+
+    """
     Yppc = np.diff(Y, axis=-1) / np.diff(X, axis=-1)
     return np.reshape(Yppc, (*Yppc.shape, 1))  # add trailing singleton dim
 
 
+def pchip_coeffs(X, Y):
+    """
+    Coefficients for a Piecewise Cubic Hermite Interpolating Polynomial
+
+    Parameters
+    ----------
+    X : ndarray
+
+        Independent variable. Must be same dimensions as `Y`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `Y`.
+
+        `X` should be monotonically increasing in its last dimension.
+        That is, `X[*i,:]` should be monotonically increasing for any
+        `i` tuple indexing all but the last dimension.  NaN's in `X`
+        are treated as +Inf.
+
+    Y : ndarray
+
+        Dependent variable.  Must be same dimensions as `X`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `X`.
+
+    Returns
+    -------
+    Yppc : ndarray
+
+        Degree 1 and higher coefficients for a PCHIP interpolant of `Y`
+        to `X`.
+
+    Notes
+    -----
+
+    Evaluate the piecewise polynomial at `x` as
+
+    >>> y = val(X, Y, Yppc, x)
+
+    """
+    if X.ndim == 1 and X.size == Y.shape[-1]:
+        X = np.broadcast_to(X, Y.shape)
+    elif Y.ndim == 1 and Y.size == X.shape[-1]:
+        Y = np.broadcast_to(Y, X.shape)
+    elif X.shape != Y.shape:
+        raise ValueError(
+            "X and Y must have the same dimensions, or one "
+            "of them must be a vector matching the other's last dimension; "
+            f"found X's shape {X.shape} and Y's shape {Y.shape}."
+        )
+
+    return pchip_coeffs_nd(X, Y)
+
+
+def val(X, Y, Yppc, x, d=0):
+    """
+    Evaluate a given Piecewise Polynomial
+
+    Parameters
+    ----------
+    X : ndarray
+
+        Independent variable. Must be same dimensions as `Y`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `Y`.
+
+        `X` should be monotonically increasing in its last dimension.
+        That is, `X[*i,:]` should be monotonically increasing for any
+        `i` tuple indexing all but the last dimension.  NaN's in `X`
+        are treated as +Inf.
+
+    Y : ndarray
+
+        Dependent variable.  Must be same dimensions as `X`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `X`.
+
+    Yppc : ndarray
+
+        Degree 1 and higher Piecewise Polynomial Coefficients for the
+        interpolant, as returned by `linear_coeffs` or `pchip_coeffs`.
+
+    x : ndarray
+
+        Sites of the independent variable at which to evaluate.
+
+        Must be the same size as `X` or `Y` less their final dimension,
+        with any dimension possibly a singleton: that is, must be
+        broadcastable to the size of `X` and `Y` less their final
+        dimension.
+
+
+    d : int, Default 0
+
+        Evaluate the `d`'th derivative of the piecewise polynomial. Must
+        be non-negative.  The default of 0 evaluates the polynomial
+        rather than any of its derivatives.
+
+    Returns
+    -------
+    y : ndarray
+
+        Value of the piecewise polynomial interpolant (or its `d`'th
+        derivative) at `x`.  The size of `y` matches the largest of the
+        sizes of `x`, or `X` or `Y` less their last dimension.
+
+    Notes
+    -----
+    A binary search is performed to find the indices of `X` that `x`
+    lies between.  As such, nonsense results will arise if `X` is not
+    sorted along its last dimension.
+    """
+
+    nk = X.shape[-1]
+    # assert nk == Y.shape[-1], "X and Y must have same size last dimension"
+    # assert Y.shape[0:-1] == Yppc.shape[0:-1], "Y and Yppc must have same leading dimensions"
+    # assert Yppc.shape[-1] == nk - 1, "Last dimension of Yppc must be one less than that of Y"
+    if X.ndim > 1:
+        shape = X.shape[0:-1]
+        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match those of X"
+        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
+    elif Y.ndim > 1:
+        shape = Y.shape[0:-1]
+        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match those of Y"
+        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
+    else:
+        shape = x.shape
+        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match the shape of x"
+        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match the shape of x"
+
+    X = np.broadcast_to(X, (*shape, nk))
+    Y = np.broadcast_to(Y, (*shape, Y.shape[-1]))
+    x = np.broadcast_to(x, shape)
+    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
+
+    return val_nd(X, Y, Yppc, x, d)
+
+
+def val2(X, Y, Yppc, Z, Zppc, x, d=0):
+    """
+    Evaluate two given Piecewise Polynomials
+
+    The inputs and outputs are like for `val`, but a second pair of
+    inputs, `Z` and `Zppc`, give the second piecewise polynomial, for
+    which a second output `z` is given.
+
+    Notes
+    -----
+    Because `val2` only calls `np.searchsorted` once, it is faster than
+    calling `val` twice.
+    """
+
+    nk = X.shape[-1]
+    # assert nk == Y.shape[-1], "X and Y must have same size last dimension"
+    # assert Y.shape[0:-1] == Yppc.shape[0:-1], "Y and Yppc must have same leading dimensions"
+    # assert Yppc.shape[-1] == nk - 1, "Last dimension of Yppc must be one less than that of Y"
+    # assert Z.shape == Y.shape, "Y and Z must have the same shape"
+    # assert Zppc.shape == Yppc.shape, "Yppc and Zppc must have the same shape"
+    if X.ndim > 1:
+        shape = X.shape[0:-1]
+        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match those of X"
+        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
+    elif Y.ndim > 1:
+        shape = Y.shape[0:-1]
+        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match those of Y"
+        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
+    else:
+        shape = x.shape
+        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match the shape of x"
+        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match the shape of x"
+
+    X = np.broadcast_to(X, (*shape, nk))
+    Y = np.broadcast_to(Y, (*shape, Y.shape[-1]))
+    Z = np.broadcast_to(Z, (*shape, Z.shape[-1]))
+    x = np.broadcast_to(x, shape)
+    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
+    Zppc = np.broadcast_to(Zppc, (*shape, nk - 1, Zppc.shape[-1]))
+
+    return val2_nd(X, Y, Yppc, Z, Zppc, x, d)
+
+
 @numba.njit
 def diff_1d(x):
+    """
+    First difference in one dimension.
+
+    A simple version of `np.diff` that numba can work with.
+    """
+
     d = np.empty(x.size - 1, dtype=x.dtype)
     for i in range(d.size):
         d[i] = x[i + 1] - x[i]
@@ -33,7 +257,11 @@ def diff_1d(x):
 
 @numba.njit
 def pchip_coeffs_0d(X, Y):
-    # X and Y are vectors
+    """
+    Coefficients for a single PCHIP
+
+    Inputs `X` and `Y` are equal-length 1D arrays.
+    """
 
     # Note, np.diff does not work with numba.njit, here.
     # Also, using diff_1d is faster than np.ediff1d
@@ -107,6 +335,9 @@ def pchip_coeffs_0d(X, Y):
 
 @numba.njit
 def pchip_coeffs_nd(X, Y):
+    """
+    Coefficients for a PCHIP, assuming all inputs' dimensions are agreeable.
+    """
 
     C = np.full((*Y.shape[0:-1], Y.shape[-1] - 1, 3), np.nan)
     for n in np.ndindex(Y.shape[0:-1]):
@@ -115,61 +346,11 @@ def pchip_coeffs_nd(X, Y):
     return C
 
 
-def pchip_coeffs(X, Y):
-    if X.ndim == 1 and X.size == Y.shape[-1]:
-        X = np.broadcast_to(X, Y.shape)
-    elif Y.ndim == 1 and Y.size == X.shape[-1]:
-        Y = np.broadcast_to(Y, X.shape)
-    elif X.shape != Y.shape:
-        raise ValueError(
-            "X and Y must have the same dimensions, or one "
-            "of them must be a vector matching the other's last dimension; "
-            f"found X's shape {X.shape} and Y's shape {Y.shape}."
-        )
-
-    return pchip_coeffs_nd(X, Y)
-
-
-def val(X, Y, Yppc, x, d=0):
-    nk = X.shape[-1]
-    # assert nk == Y.shape[-1], "X and Y must have same size last dimension"
-    # assert Y.shape[0:-1] == Yppc.shape[0:-1], "Y and Yppc must have same leading dimensions"
-    # assert Yppc.shape[-1] == nk - 1, "Last dimension of Yppc must be one less than that of Y"
-    if X.ndim > 1:
-        shape = X.shape[0:-1]
-        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match those of X"
-        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
-    elif Y.ndim > 1:
-        shape = Y.shape[0:-1]
-        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match those of Y"
-        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
-    else:
-        shape = x.shape
-        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match the shape of x"
-        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match the shape of x"
-
-    X = np.broadcast_to(X, (*shape, nk))
-    Y = np.broadcast_to(Y, (*shape, Y.shape[-1]))
-    x = np.broadcast_to(x, shape)
-    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
-
-    return val_nd(X, Y, Yppc, x, d)
-
-
-@numba.njit
-def val_nd(X, Y, Yppc, x, d):
-    y = np.empty(x.shape, dtype=np.float64)
-    if d == 0:
-        for n in np.ndindex(x.shape):
-            y[n] = val_0d(X[n], Y[n], Yppc[n], x[n])
-    else:
-        for n in np.ndindex(x.shape):
-            y[n] = dval_0d(X[n], Y[n], Yppc[n], x[n], d)
-    return y
-
-
 @numba.njit
 def val_0d(X, Y, Yppc, x):
+    """
+    Evaluate a single interpolant.
+    """
     if np.isnan(x) or x < X[0] or X[-1] < x:
         return np.nan
 
@@ -189,8 +370,27 @@ def val_0d(X, Y, Yppc, x):
 
 
 @numba.njit
+def val_nd(X, Y, Yppc, x, d):
+    """
+    Evaluate interpolants with all inputs' dimensions agreeable
+    """
+    y = np.empty(x.shape, dtype=np.float64)
+    if d == 0:
+        for n in np.ndindex(x.shape):
+            y[n] = val_0d(X[n], Y[n], Yppc[n], x[n])
+    else:
+        for n in np.ndindex(x.shape):
+            y[n] = dval_0d(X[n], Y[n], Yppc[n], x[n], d)
+    return y
+
+
+@numba.njit
 def dval_0d(X, Y, Yppc, x, d):
-    # Assumes d is an integer greater than zero.
+    """
+    Evaluate a single interpolant's derivative.
+
+    Assumes `d` is an integer greater than zero.
+    """
 
     # if d == 0:
     #     return val_0d(X, Y, Yppc, x)
@@ -212,9 +412,12 @@ def dval_0d(X, Y, Yppc, x, d):
 
 @numba.njit
 def val_0d_i(X, Y, Yppc, x, i):
-    #  Like val_0d, but provide i such that  X[i] <= x <= X[i+1]
+    """
+    Evaluate a single interpolant, knowing where the evaluation site lies.
 
-    dx = x - X[i]
+    Provides `i` such that  `X[i] < x <= X[i+1]`
+    """
+    dx = x - X[i]  # dx > 0 guaranteed
 
     # Evaluate polynomial, using nested multiplication.
     # E.g. the cubic case is:
@@ -230,8 +433,12 @@ def val_0d_i(X, Y, Yppc, x, i):
 
 @numba.njit
 def dval_0d_i(X, Y, Yppc, x, d, i):
-    #  Like dval_0d, but provide i such that  X[i] <= x <= X[i+1]
-    # Assumes d is an integer greater than zero.
+    """
+    Evaluate a single interpolant's derivative, knowing where the evaluation site lies.
+
+    Provides `i` such that  `X[i] < x <= X[i+1]`.
+    Assumes `d` is an integer greater than zero.
+    """
 
     # if d == 0:
     #     return val_0d_i(X, Y, Yppc, x, i)
@@ -254,54 +461,11 @@ def dval_0d_i(X, Y, Yppc, x, d, i):
     return y
 
 
-# Similar routines to evaluate two piecewise polynomials.  These are faster
-# than calling the val routines twice, because these only call np.searchsorted
-# once.
-def val2(X, Y, Yppc, Z, Zppc, x, d=0):
-    nk = X.shape[-1]
-    # assert nk == Y.shape[-1], "X and Y must have same size last dimension"
-    # assert Y.shape[0:-1] == Yppc.shape[0:-1], "Y and Yppc must have same leading dimensions"
-    # assert Yppc.shape[-1] == nk - 1, "Last dimension of Yppc must be one less than that of Y"
-    # assert Z.shape == Y.shape, "Y and Z must have the same shape"
-    # assert Zppc.shape == Yppc.shape, "Yppc and Zppc must have the same shape"
-    if X.ndim > 1:
-        shape = X.shape[0:-1]
-        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match those of X"
-        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
-    elif Y.ndim > 1:
-        shape = Y.shape[0:-1]
-        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match those of Y"
-        # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
-    else:
-        shape = x.shape
-        # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match the shape of x"
-        # assert Y.ndim == 1 or Y.shape[0:-1] == shape, "Y must be 1D or its leading dimensions must match the shape of x"
-
-    X = np.broadcast_to(X, (*shape, nk))
-    Y = np.broadcast_to(Y, (*shape, Y.shape[-1]))
-    Z = np.broadcast_to(Z, (*shape, Z.shape[-1]))
-    x = np.broadcast_to(x, shape)
-    Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
-    Zppc = np.broadcast_to(Zppc, (*shape, nk - 1, Zppc.shape[-1]))
-
-    return val2_nd(X, Y, Yppc, Z, Zppc, x, d)
-
-
-@numba.njit
-def val2_nd(X, Y, Yppc, Z, Zppc, x, d):
-    y = np.empty(x.shape, dtype=np.float64)
-    z = np.empty(x.shape, dtype=np.float64)
-    if d == 0:
-        for n in np.ndindex(x.shape):
-            y[n], z[n] = val2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n])
-    else:
-        for n in np.ndindex(x.shape):
-            y[n], z[n] = dval2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n], d)
-    return y, z
-
-
 @numba.njit
 def val2_0d(X, Y, Yppc, Z, Zppc, x):
+    """
+    Evaluate two single interpolants
+    """
     if np.isnan(x) or x < X[0] or X[-1] < x:
         return np.nan, np.nan
 
@@ -315,7 +479,28 @@ def val2_0d(X, Y, Yppc, Z, Zppc, x):
 
 
 @numba.njit
+def val2_nd(X, Y, Yppc, Z, Zppc, x, d):
+    """
+    Evaluate two interpolants with all inputs' dimensions agreeable
+    """
+    y = np.empty(x.shape, dtype=np.float64)
+    z = np.empty(x.shape, dtype=np.float64)
+    if d == 0:
+        for n in np.ndindex(x.shape):
+            y[n], z[n] = val2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n])
+    else:
+        for n in np.ndindex(x.shape):
+            y[n], z[n] = dval2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n], d)
+    return y, z
+
+
+@numba.njit
 def dval2_0d(X, Y, Yppc, Z, Zppc, x, d):
+    """
+    Evaluate two single interpolants' derivatives
+
+    Assumes `d` is an integer greater than zero.
+    """
 
     # if d == 0:
     #     return val2_0d(X, Y, Yppc, Z, Zppc, x)
@@ -337,33 +522,51 @@ def dval2_0d(X, Y, Yppc, Z, Zppc, x, d):
 
 
 def deriv(X, Y, Yppc, d=1):
-    # Differentiate a piecewise polynomial.
-    #
-    #
-    # YX, YXppc = deriv(X, Y, Yppc, d)
-    # returns the coefficients (YX, YXppc) for the piecwise polynomial that is the d'th
-    # derivative of the piecewise polynomial whose coefficients are (Y, Yppc).  Both
-    # piecewise polynomials have knots given by X.
-    #
-    #
-    # --- Input:
-    # X [N, K] or [K], knots of the piecewise polynomials
-    # Y [N, K-1], values of the piecewise polynomial at the knots
-    # Yppc [N, K-1, o-1], first and higher order coefficients of the piecewise polynomial
-    # d,        degree of the derivatives
-    #
-    #
-    # --- Output:
-    # YX, [N, K-1],  values of the derivative's piecewise polynomial at the knots
-    # YXppc [N, K-1, o-1-d], first and higher order coefficients of the derivative's piecewise polynomial
-    #
-    #
-    # --- Notes:
-    # X[n,:] must be monotonically increasing for all n.
-    #
-    # NaN's in X are treated as +Inf (and as such must come at the end of each row).
-    #
-    # The dimension `N` can actually be higher-dimensional.
+    """
+    Differentiate a piecewise polynomial.
+
+    It is almost always preferable to use `val` (or `val2`) with `d` > 0
+    to evaluate the derivative of an input, rather than this function
+    to differentiate the entire piecewise polynomial and then `val` it.
+
+    Parameters
+    ----------
+    X : ndarray
+
+        Independent variable. Must be same dimensions as `Y`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `Y`.
+
+        `X` should be monotonically increasing in its last dimension.
+        That is, `X[*i,:]` should be monotonically increasing for any
+        `i` tuple indexing all but the last dimension.  NaN's in `X`
+        are treated as +Inf.
+
+    Y : ndarray
+
+        Dependent variable.  Must be same dimensions as `X`, with any
+        dimension possibly a singleton: that is, must be broadcastable
+        to the size of `X`.
+
+    Yppc : ndarray
+
+        Degree 1 and higher Piecewise Polynomial Coefficients for the
+        interpolant, as returned by `linear_coeffs` or `pchip_coeffs`.
+
+    d : int, Default 1
+        Number of derivatives to take
+
+    Returns
+    -------
+    YX : ndarray
+
+        Values of the derivative's piecewise polynomial at the knots
+
+    YXppc : ndarray
+
+        Degree 1 and higher coefficients of the derivative's piecewise
+        polynomial
+    """
 
     o = Yppc.shape[-1] + 1  # Order of the piecewise polynomial
 
