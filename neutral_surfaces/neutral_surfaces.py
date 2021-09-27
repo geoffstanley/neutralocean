@@ -14,7 +14,13 @@ from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 from neutral_surfaces.fzero import guess_to_bounds, brent
 from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val2
 from neutral_surfaces.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
-from neutral_surfaces.lib import ntp_ϵ_errors_norms, find_first_nan
+from neutral_surfaces.lib import (
+    ntp_ϵ_errors_norms,
+    find_first_nan,
+    _process_wrap,
+    _process_input,
+    _process_vert_dim,
+)
 from neutral_surfaces._omega import _omega_matsolve_poisson
 
 
@@ -70,8 +76,11 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
         reference S and T values.
 
         If `ans_type` == "omega" and `p_init` is None, the reference value
-        for the initial "sigma" surface (if `ref` is a float) or "delta"
-        surface (if `ref` is an tuple of two floats).
+        for the initial "sigma" surface (if `ref` is a scalar) or "delta"
+        surface (if `ref` is a tuple of length two).
+
+        Whenever `ref` is None or has a None element, the reference value(s)
+        are taken from the local ocean properties at `(pin_loc, pin_p)`.
 
         See Examples section.
 
@@ -155,7 +164,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
             Maximum absolute value (infinity norm) of the pressure or depth
             change from one iteration to the next.
 
-        ``"freshly_wet"`` : array of int
+        ``"n_wet"`` : array of int
 
             Number of casts that are newly wet, per iteration
 
@@ -217,7 +226,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
         vectorized, as it will be called many times with scalar inputs.
 
         If a str, can be either 'gsw' to use TEOS-10
-        or 'jmd' to use Jackett and McDougall (1995) [3]_.
+        or 'jmd95' to use Jackett and McDougall (1995) [3]_.
 
     eos_s_t : str or function, Default None
 
@@ -414,6 +423,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
         diags = True
 
     # Prepare xarray container for outputs if xarrays given for inputs
+    s_ = None
     S_is_xr = isinstance(S, xr.core.dataarray.DataArray)
     T_is_xr = isinstance(T, xr.core.dataarray.DataArray)
     P_is_xr = isinstance(P, xr.core.dataarray.DataArray)
@@ -424,20 +434,21 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
     if P_is_xr:
         p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
 
+    wrap = _process_wrap(wrap, s_)
+
     # Process 3D hydrography
-    S, T, P, vert_dim = unpack_STP(S, T, P, vert_dim)
-    ni, nj, nk = S.shape  # Get size of 3D hydrography
+    vert_dim = _process_vert_dim(vert_dim, S)
+    if P.ndim < S.ndim:
+        P = np.broadcast_to(P, S.shape)
+    S, T, P = (_process_input(x, vert_dim) for x in (S, T, P))
+    ni, nj, nk = S.shape
     if n_good is None:
         n_good = find_first_nan(S)
 
     # Compute interpolants for S and T casts (unless already provided)
-    if (
-        Sppc is None
-        or Sppc.shape[0:-1] != (ni, nj, nk - 1)
-        or Tppc is None
-        or Tppc.shape[0:-1] != (ni, nj, nk - 1)
-    ):
+    if Sppc is None or Sppc.shape[0:-1] != (ni, nj, nk - 1):
         Sppc = interp_fn(P, S)
+    if Tppc is None or Tppc.shape[0:-1] != (ni, nj, nk - 1):
         Tppc = interp_fn(P, T)
 
     # Process equation of state function and make cache functions
@@ -448,21 +459,6 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
     eos = make_eos(eos, grav, rho_c)
     eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
     vertsolve = _make_vertsolve(eos, ans_type)
-
-    # Error checking on wrap
-    if isinstance(wrap, str):
-        wrap = (wrap,)  # Convert single string to tuple
-    if not isinstance(wrap, (tuple, list)):
-        raise TypeError("wrap must be a tuple or list")
-    if S_is_xr and all(
-        isinstance(x, str) for x in wrap
-    ):  # Convert dim names to tuple of bool
-        wrap = tuple(x in wrap for x in s_.dims)
-    if not isinstance(wrap, (tuple, list)) or len(wrap) != 2:
-        raise TypeError(
-            "wrap must be a two element (logical) array"
-            " or an array of strings referring to dimensions in xarray S"
-        )
 
     # Error checking on ref / isoval / pin_loc / pin_p combinations.
     # The valid options are:
@@ -485,7 +481,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                     " must be provided"
                 )
     else:  # ref is not None
-        if isoval is None or (pin_loc is None and pin_p is None):
+        if isoval is None and (pin_loc is None or pin_p is None):
             raise TypeError(
                 'If "ref" is provided, either "isoval" must be provided or'
                 ' "pin_loc" and "pin_p" must be provided'
@@ -569,7 +565,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                 isoval = eos(s0, t0, ref)
 
             else:  # ans_type == 'delta'
-                if ref is None:
+                if ref is None or any(x is None for x in ref):
                     ref = (s0, t0)
                     isoval = 0.0
                 else:
@@ -646,7 +642,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                 "Δp_MAV": np.zeros(ITER_MAX + 1, dtype=np.float64),
                 "Δp_RMS": np.zeros(ITER_MAX + 1, dtype=np.float64),
                 "Δp_Linf": np.zeros(ITER_MAX + 1, dtype=np.float64),
-                "freshly_wet": np.zeros(ITER_MAX + 1, dtype=int),
+                "n_wet": np.zeros(ITER_MAX + 1, dtype=int),
                 "timer_bfs": np.zeros(ITER_MAX + 1, dtype=np.float64),
                 "timer_matbuild": np.zeros(ITER_MAX + 1, dtype=np.float64),
                 "timer_matsolve": np.zeros(ITER_MAX + 1, dtype=np.float64),
@@ -655,11 +651,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
 
         # Calculate an initial surface through `pin` if no initial surface given
         if p_init is None:
-            if (
-                isinstance(ref, (tuple, list))
-                and len(ref) == 2
-                and all(isinstance(x, float) for x in ref)
-            ):
+            if isinstance(ref, (tuple, list)) and len(ref) == 2:
                 ans_type_init = "delta"
             else:
                 ans_type_init = "sigma"
@@ -674,7 +666,6 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                 isoval=isoval,
                 pin_loc=pin_loc,
                 pin_p=pin_p,
-                vert_dim=vert_dim,
                 dist1_iJ=dist1_iJ,
                 dist2_Ij=dist2_Ij,
                 dist2_iJ=dist2_iJ,
@@ -765,12 +756,12 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
             # --- Determine the connected component containing the reference cast, via Breadth First Search
             timer_loc = time()
             if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
-                qu, qt, freshly_wet = bfs_conncomp1_wet(
+                qu, qt, n_wet = bfs_conncomp1_wet(
                     s, t, p, S, T, P, Sppc, Tppc, n_good, A4, pin_loc_1, tol_p, eos
                 )
             else:
                 qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, pin_loc_1)
-                freshly_wet = 0
+                n_wet = 0
             timer_bfs = time() - timer_loc
             if qt < 0:
                 raise RuntimeError(
@@ -816,7 +807,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                 d["Δp_MAV"][iter_] = Δp_MAV
                 d["Δp_RMS"][iter_] = Δp_RMS
                 d["Δp_Linf"][iter_] = Δp_Linf
-                d["freshly_wet"][iter_] = freshly_wet
+                d["n_wet"][iter_] = n_wet
 
                 d["timer_matbuild"][iter_] = timer_matbuild
                 d["timer_matsolve"][iter_] = timer_solver
@@ -844,7 +835,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                         f" | {d['timer'][iter_]:5.2f} sec"
                         f" | log_10(rms(ϵ)) = {np.log10(d['ϵ_RMS'][iter_]):9.6f}"
                         f" | ϕ MAV = {ϕ_MAV:.6e}"
-                        f" | {freshly_wet:4} casts freshly wet"
+                        f" | {n_wet:4} casts newly wet"
                         f" | Δp RMS = {Δp_RMS:.6e}",
                         file=file_id,
                     )
@@ -911,7 +902,9 @@ def unpack_STP(S, T, P, vert_dim):
 
     Returns
     -------
-    S, T : ndarray
+    S, T, P : ndarray
+
+    vertdim : int
 
     """
 
@@ -921,7 +914,7 @@ def unpack_STP(S, T, P, vert_dim):
     # Extract numpy arrays from xarrays
     if isinstance(S, xr.core.dataarray.DataArray):
         # Assume S, T are all xarrays, with same dimension ordering
-        if vert_dim in S.dims:
+        if isinstance(vert_dim, str) and vert_dim in S.dims:
             vert_dim = S.dims.index(vert_dim)
         S = S.values
         T = T.values

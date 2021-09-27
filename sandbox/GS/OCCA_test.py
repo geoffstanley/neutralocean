@@ -9,9 +9,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from neutral_surfaces._neutral_surfaces import approx_neutral_surf
+from neutral_surfaces import approx_neutral_surf
 from neutral_surfaces.load_data import load_OCCA
-from neutral_surfaces.lib import ϵ_norms
+from neutral_surfaces.lib import ntp_ϵ_errors_norms
 
 from neutral_surfaces.lib import veronis_density
 
@@ -19,7 +19,6 @@ from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 
 # %% Load OCCA data
 g, S, T, P, _ = load_OCCA("~/work/data/OCCA/")
-# DEV: currently ignoring distinction between Z and P, until Boussinesq equation of state is ready.
 Z = -g['RC']
 
 ni, nj, nk = S.shape
@@ -33,27 +32,47 @@ z0 = 1500.
 eos = make_eos('jmd95', g['grav'], g['ρ_c'])
 eos_s_t = make_eos_s_t('jmd95', g['grav'], g['ρ_c'])
 
+# %% Neutral Tangent Plane bottle to cast
+from neutral_surfaces.lib import ntp_bottle_to_cast, _ntp_bottle_to_cast, find_first_nan
+from neutral_surfaces.interp_ppc import linear_coeffs
+S1 = S.values[180,80,:]
+T1 = T.values[180,80,:]
+s0, t0, p0 = ntp_bottle_to_cast(35., 16., 500., S1, T1, Z)
+
+n_good = find_first_nan(S1)[()]
+S1ppc = linear_coeffs(Z, S1)
+T1ppc = linear_coeffs(Z, T1)
+s0, t0, p0 = _ntp_bottle_to_cast(35., 16., 500., S1, T1, Z, S1ppc, T1ppc, n_good, 1e-4, eos)
+
 
 # %% Veronis Density
 S_ref_cast = S.values[i0,j0]
 T_ref_cast = T.values[i0,j0]
-ρ_v = veronis_density(0, S_ref_cast, T_ref_cast, Z, 10., 1500., eos, eos_s_t)  # 1027.7700444990107
+ρ_v = veronis_density(S_ref_cast, T_ref_cast, Z, 1500., eos=eos, eos_s_t=eos_s_t)  # 1027.7700462375435
 
 
 # %% Potential Density surface
 
-s, t, z, d = approx_neutral_surf('sigma', S, T, Z, g['wrap'], vert_dim="Depth_c", pin=(i0, j0, z0),
-                        ref=1500., tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'])
-#s_sigma, t_sigma, z_sigma = pot_dens_surf(S, T, Z, 1500., (i0, j0, z0), axis=-1, tol=1e-4)
-# s, t, z, _ = approx_neutral_surf(
-#     'sigma', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
-#     ref=1500.0, pin=(i0, j0, z0)
-#     )
+# Provide reference pressure and  isovalue
+s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
+                                 eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
+                                 wrap="Longitude_t", vert_dim="Depth_c", 
+                                 ref=0., isoval=1027.9)
 
-s_sigma, t_sigma, z_sigma = s, t, z  # save alias
+# Provide reference pressure and location for the surface to intersect (pin_loc and pin_p)
+s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
+                                 eos=eos, eos_s_t=eos_s_t,
+                                 wrap="Longitude_t", vert_dim="Depth_c", 
+                                 ref=0., pin_loc=(i0, j0), pin_p=z0)
 
-# Need to update this to select EOS.
-ϵ_L2, ϵ_L1 = ϵ_norms(s_sigma.values, t_sigma.values, z_sigma, eos_s_t, g['wrap'])
+# Provide just the location to intersect (pin_loc, pin_p). 
+# This takes the reference pressure ref to match pin_p.
+s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
+                                 eos=eos, eos_s_t=eos_s_t,
+                                 wrap="Longitude_t", vert_dim="Depth_c", 
+                                 pin_loc=(i0, j0), pin_p=z0)
+
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g['wrap'])
 
 # %% Delta surface
 # s, t, z = delta_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
@@ -66,14 +85,15 @@ s_sigma, t_sigma, z_sigma = s, t, z  # save alias
 
 # %% Omega surface
 
-#z_in = z_sigma.copy()
-#z_in[i0,j0] = z0
+# Providing a point at which to pin the surface (pin_loc and pin_p).  Without
+# providing ref, the omega surface iterations will be initialized by a potential
+# density surface, referenced to the local pressure (pin_p). 
 s, t, z, d = approx_neutral_surf(
     'omega',
     S, T, Z,
-    wrap=g['wrap'], 
+    wrap="Longitude_t", 
     vert_dim="Depth_c",
-    pin=(i0, j0, z0), # p_init=z_in,
+    pin_loc=(i0, j0), pin_p = z0,
     eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
     ITER_MAX=10, ITER_START_WETTING=1,
     tol_p=1e-4,

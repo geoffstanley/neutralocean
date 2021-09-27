@@ -1,38 +1,141 @@
 import numpy as np
 import numba
+import xarray as xr
 
-from neutral_surfaces._zero import guess_to_bounds, brent
+from neutral_surfaces.fzero import guess_to_bounds, brent
 from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val_0d_i, dval_0d_i
+from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 
 
-def _ntp_error1(s, t, p, eos_s_t, wrap, shift):
+@numba.njit
+def find_first_nan(a):
+    """The index to the first NaN along the last axis
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array possibly containing some NaN elements
+
+    Returns
+    -------
+    k : ndarray of int
+        The index to the first NaN along each 1D array making up `a`, as in the
+        following example with `a` being 3D.
+        If all `a[i,j,:]` are not NaN, then `k[i,j] = a.shape[-1]`.
+        Otherwise, `a[i,j,k[i,j]-1]` is not NaN, but `a[i,j,k[i,j]]` is NaN.
+    """
+    nk = a.shape[-1]
+    k = np.full(a.shape[:-1], nk, dtype=np.int64)
+    for n in np.ndindex(a.shape[0:-1]):
+        for i in range(nk):
+            if np.isnan(a[n][i]):
+                k[n] = i
+                break
+    return k
+
+
+def _process_wrap(wrap, s=None):
+    """Convert to a tuple of `int`s specifying which horizontal dimensions are periodic"""
+    if isinstance(wrap, str):
+        wrap = (wrap,)  # Convert single string to tuple
+    if not isinstance(wrap, (tuple, list)):
+        raise TypeError("wrap must be a tuple or list or str")
+    if all(isinstance(x, str) for x in wrap):
+        try:
+            # Convert dim names to tuple of bool
+            wrap = tuple(x in wrap for x in s.dims)
+        except:
+            raise TypeError(
+                "With wrap provided as strings, S must have a .dims attribute"
+            )
+
+    # type checking on final value
+    if not isinstance(wrap, (tuple, list)) or len(wrap) != 2:
+        raise TypeError(
+            "wrap must be a two element (logical) array "
+            "or a string (or array of strings) referring to dimensions in xarray S"
+        )
+    return wrap
+
+
+def _process_vert_dim(vert_dim, S):
+    """Extract int of dimension in S named by vert_dim"""
+    if isinstance(vert_dim, str):
+        try:
+            vert_dim = S.dims.index(vert_dim)
+        except:
+            raise ValueError(f"vert_dim = {vert_dim} not found in S.dims")
+    return vert_dim
+
+
+def xr_to_np(S):
+    """Convert xarray into numpy array"""
+    try:
+        S = S.values
+    except:
+        pass
+    return S
+
+
+def _process_input(S, vert_dim):
+    """Make water columns contiguous in memory and extract numpy array from xarray
+
+    Parameters
+    ----------
+    S : ndarray or xarray.DataArray
+        ocean data such as salinity, temperature, or pressure
+
+    vert_dim : int or str, Default None
+        Specifies which dimension of `S` is vertical.
+        If `S` is an `ndarray`, then `vert_dim` is the `int` indexing
+        the vertical dimension of `S` (e.g. -1 indexes the last dimension).
+        If `S` is an `xarray.DataArray`, then `vert_dim` is a `str`
+        naming the vertical dimension of `S`.
+
+    Returns
+    -------
+    S : ndarray
+        input data, possibly re-arranged to have `vert_dim` the last dimension
+    """
+    S = xr_to_np(S)
+
+    if S.ndim > 1 and vert_dim not in (-1, S.ndim - 1):
+        S = np.moveaxis(S, vert_dim, -1)
+
+    S = np.require(S, dtype=np.float64, requirements="C")
+
+    return S
+
+
+def _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, shift):
     # Calculate neutrality error on a surface in one direction.
-    sa = avg(s, shift, wrap)
-    ta = avg(t, shift, wrap)
-    pa = avg(p, shift, wrap)
 
-    ds = dif(s, shift, wrap)
-    dt = dif(t, shift, wrap)
+    sa, ta, pa = (avg(x, shift, wrap) for x in (s, t, p))
+
+    ds, dt = (dif(x, shift, wrap) for x in (s, t))
 
     rsa, rta = eos_s_t(sa, ta, pa)
     return rsa * ds + rta * dt
 
 
-def ntp_errors(s, t, p, eos_s_t, wrap):
+def ntp_ϵ_errors(s, t, p, eos_s_t, wrap):
     # Calculate neutrality error on a surface.
     # Use backward differences; results are on the U, V grids.
 
-    ϵx = _ntp_error1(s, t, p, eos_s_t, wrap, im1)
-    ϵy = _ntp_error1(s, t, p, eos_s_t, wrap, jm1)
+    wrap = _process_wrap(wrap, s)
+    s, t, p = (xr_to_np(x) for x in (s, t, p))
+
+    ϵx = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, im1)
+    ϵy = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, jm1)
 
     return ϵx, ϵy
 
 
-def ϵ_norms(
+def ntp_ϵ_errors_norms(
     s, t, p, eos_s_t, wrap, DIST1_iJ=1, DIST2_Ij=1, DIST2_iJ=1, DIST1_Ij=1, *args
 ):
 
-    ϵ_iJ, ϵ_Ij = ntp_errors(s, t, p, eos_s_t, wrap)
+    ϵ_iJ, ϵ_Ij = ntp_ϵ_errors(s, t, p, eos_s_t, wrap)
 
     if len(args) == 2:
         AREA_iJ = args[0]  # Area [m^2] centred at (I-1/2, J)
@@ -48,7 +151,7 @@ def ϵ_norms(
     # Thus, the numerator of L2 norm needs to multiply epsilon^2 by
     #     AREA_iJ ./ DIST1_iJ.^2 = DIST2_iJ ./ DIST1_iJ ,
     # and AREA_Ij ./ DIST2_Ij.^2 = DIST1_Ij ./ DIST2_Ij .
-    ϵ_L2 = np.sqrt(
+    ϵ_RMS = np.sqrt(
         (np.nansum(DIST2_iJ / DIST1_iJ * ϵ_iJ ** 2) + np.nansum(DIST1_Ij / DIST2_Ij * ϵ_Ij ** 2)) /
         (   np.sum(AREA_iJ * np.isfinite(ϵ_iJ))     +    np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
     )
@@ -60,13 +163,13 @@ def ϵ_norms(
     # Thus, the numerator of L1 norm needs to multiply epsilon by
     #     AREA_iJ ./ DIST1_iJ = DIST2_iJ ,
     # and AREA_Ij ./ DIST2_Ij = DIST1_Ij .
-    ϵ_L1 = (
+    ϵ_MAV = (
         (np.nansum(DIST2_iJ        * abs(ϵ_iJ)) + np.nansum(DIST1_Ij         * abs(ϵ_Ij)))
         / ( np.sum(AREA_iJ * np.isfinite(ϵ_iJ)) +     np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
        )
     # fmt: on
 
-    return ϵ_L2, ϵ_L1
+    return ϵ_RMS, ϵ_MAV
 
 
 @numba.njit
@@ -80,75 +183,163 @@ def _func(p, sB, tB, pB, S, T, P, Sppc, Tppc, eos):
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
 
 
+def ntp_bottle_to_cast(
+    sB,
+    tB,
+    pB,
+    S,
+    T,
+    P,
+    tol_p=1e-4,
+    interp_fn=linear_coeffs,
+    eos="gsw",
+    grav=None,
+    rho_c=None,
+):
+    """Find the neutral tangent plane from a bottle to a cast
+
+    Finds a point on the cast salinity, temperature, and pressure `(S, T, P)`
+    where the salinity, temperature, and pressure `(s, t, p)` is neutrally
+    related to a bottle of salinity, temperature and pressure `(sB, tB, pB)`.
+    That is, the density of `(s, t, p_avg)` very nearly equals the density
+    of `(sB, tB, p_avg)`, where `p_avg = (p + pB) / 2`.  Within `tol_p` of this
+    point on the cast, there is a point where these two densities are exactly
+    equal.
+
+    Parameters
+    ----------
+    sB, tB, pB : float
+
+        practical / Absolute salinity, potential / Conservative temperature,
+        and pressure or depth of the bottle
+
+    S, T, P : 1D ndarray of float
+
+        practical / Absolute salinity, potential / Conservative temperature,
+        and pressure or depth of data points on the cast.  `P` must increase
+        monotonically along its last dimension.
+
+    Returns
+    -------
+    s, t, p : float
+
+        practical / Absolute salinity, potential / Conservative temperature,
+        and pressure or depth at a point on the cast that is very nearly
+        neutrally related to the bottle.
+
+    Other Parameters
+    ----------------
+    tol_p : float, Default 1e-4
+
+        Error tolerance in terms of pressure or depth when searching for a root
+        of the nonlinear equation.  Units are the same as `P`.
+
+    interp_fn : function, Default ``linear_coeffs``
+
+        Function that calculates coefficients of piecewise polynomial
+        interpolants of `S` and `T` as functions of `P`.  Options include
+        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+
+    Sppc, Tppc : ndarray, Default None
+
+        Pre-computed Piecewise Polynomial Coefficients for `S` and `T` as
+        functions of `P`. If None, these are computed as ``Sppc = interp_fn
+        (S, P)`` and ``Tppc = interp_fn(T,P)``.
+
+    n_good : int, Default None
+
+        Number of valid (non-NaN) data points on the cast.  That is,
+        ``S[0:n_good-1]``, ``T[0:n_good-1]``, and ``P[0:n_good-1]`` should all
+        be non-NaN.  If None, will be computed internally.
+
+    eos : str or function, Default 'gsw'
+
+        Equation of state for the density or specific volume as a function of
+        `S`, `T`, and pressure (not depth) inputs.
+
+        If a function, this should be @numba.njit decorated and need not be
+        vectorized, as it will be called many times with scalar inputs.
+
+        If a str, can be either 'gsw' to use TEOS-10
+        or 'jmd' to use Jackett and McDougall (1995) [1]_.
+
+    grav : float, Default None
+
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+
+    rho_c : float, Default None
+
+        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+
+    Notes
+    -----
+    .. [1] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+
+    """
+
+    eos = make_eos(eos, grav, rho_c)
+    Sppc = interp_fn(P, S)
+    Tppc = interp_fn(P, T)
+    n_good = find_first_nan(S)
+
+    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, tol_p, eos)
+
+
 @numba.njit
-def ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, k, tol_p, eos):
-    # Py dev:  removed "success" output
+def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, tol_p, eos):
+    """Find the neutral tangent plane from a bottle to a cast
 
-    # NTP_BOTTLE_TO_CAST  Find a bottle's level of neutral buoyancy in a water
-    #                    column, using the Neutral Tangent Plane relationship.
-    #
-    # [p, s, t] = ntp_bottle_to_cast(Sppc, Tppc, P, k, sB, tB, pB, tol_p)
-    # finds (s, t, p), with precision in p of tolp, that is at the level of
-    # neutral buoyancy for a fluid bottle of (sB, tB, pB) in a water column of
-    # with piecewise polynomial interpolants for S and T given by Sppc and Tppc
-    # with knots at P(1:k).  Specifically, s and t are given by
-    #   [s,t] = ppc_val(P, Sppc, Tppc, p)
-    # and p satisfies
-    #      eos(s, t, p') = eos(sB, tB, p')
-    # where eos is the equation of state given by eos.m in MATLAB's path,
-    # and   p' is in the range [p_avg - tol_p/2, p_avg + tol_p/2],
-    # and   p_avg = (pB + p) / 2 is the average of the fluid bottle's original
-    #                          and final pressure or depth.
-    #
-    # [p, s, t, success] = ntp_bottle_to_cast(...)
-    # returns a flag value success that is true if a valid solution was found,
-    # false otherwise.
-    #
-    # For a non-Boussinesq ocean, P, pB, and p are pressure.
-    # For a Boussinesq ocean, P, pB, and p are depth.
-    #
-    #
-    # --- Input:
-    # Sppc [O, K-1]: coefficients for piecewise polynomial for practical
-    #                   / Absolute Salinity in terms of P
-    # Tppc [O, K-1]: coefficients for piecewise polynomial for potential
-    #                   / Conservative Temperature in terms of P
-    # P [K, 1]: pressure or depth in water column
-    # k [1, 1]: number of valid (non-NaN) data points in the water column.
-    #          Specifically, Sppc(end,1:k) and Tppc(end,1:k) must all be valid.
-    # sB [1 , 1]: practical / Absolute salinity of current bottle
-    # tB [1 , 1]: potential / Conservative temperature of current bottle
-    # pB [1 , 1]: pressure or depth of current bottle
-    # tol_p [1, 1]: tolerance for solving the level of neutral buoyancy (same
-    #             units as P and pB)
-    #
-    # Note: physical units for Sppc, Tppc, P, sB, tB, pB, p, s, t  are
-    # determined by eos.m.
-    #
-    # Note: P must increase monotonically along its first dimension.
-    #
-    #
-    # --- Output:
-    # p [1, 1]: pressure or depth in water column at level of neutral buoyancy
-    # s [1, 1]: practical / Absolute salinity in water column at level of neutral buoyancy
-    # t [1, 1]: potential / Conservative temperature in water column at level of neutral buoyancy
-    # success [1,1]: true if a valid solution was found, false otherwise.
+    Fast version of `ntp_bottle_to_cast`, with all inputs supplied.  See
+    documentation for `ntp_bottle_to_cast`.
 
-    # Author(s) : Geoff Stanley
-    # Email     : g.stanley@unsw.edu.au
-    # Email     : geoffstanley@gmail.com
+    Parameters
+    ----------
+    sB, tB, pB : float
+        See ntp_bottle_to_cast
 
-    if k > 1:
+    S, T, P : ndarray
+        See ntp_bottle_to_cast
+
+    Sppc, Tppc : ndarray, Default None
+
+        Piecewise Polynomial Coefficients for `S` and `T` as functions of `P`.
+        These should be pre-computed as ``Sppc = interp_fn(P, S)`` and ``Tppc
+        = interp_fn(P, T)`` where `interp_fn` is ``linear_coeffs`` or
+        ``pchip_coeffs`` from ``interp_ppc.py``.
+
+    n_good : int, Default None
+
+        Number of valid (non-NaN) data points on the cast.  That is,
+        ``S[0:n_good-1]``, ``T[0:n_good-1]``, and ``P[0:n_good-1]`` should all
+        be non-NaN.  If None, will be computed internally.
+
+    tol_p : float, Default 1e-4
+        See ntp_bottle_to_cast
+
+    eos : function
+        Equation of state for the density or specific volume as a function of
+        `S`, `T`, and pressure (not depth) inputs.
+
+        This function should be @numba.njit decorated and need not be
+        vectorized, as it will be called many times with scalar inputs.
+
+    Returns
+    -------
+    s, t, p : float
+        See ntp_bottle_to_cast
+    """
+
+    if n_good > 1:
 
         args = (sB, tB, pB, S, T, P, Sppc, Tppc, eos)
 
         # Search for a sign-change, expanding outward from an initial guess
-        lb, ub = guess_to_bounds(_func, args, pB, P[0], P[k - 1])
+        lb, ub = guess_to_bounds(_func, pB, P[0], P[n_good - 1], args)
 
         if np.isfinite(lb):
             # A sign change was discovered, so a root exists in the interval.
             # Solve the nonlinear root-finding problem using Brent's method
-            p = brent(_func, args, lb, ub, tol_p)
+            p = brent(_func, lb, ub, tol_p, args)
 
             # Interpolate S and T onto the updated surface
             s, t = val2_0d(P, S, Sppc, T, Tppc, p)
@@ -198,55 +389,89 @@ def dif(F, shift, wrap):
     return F - shift(F, wrap)
 
 
-def neutral_trajectory(eos, S, T, P, p0, s0, t0, interpfn=linear_coeffs, tol_p=1e-6):
-    # NEUTRAL_TRAJECTORY  Calculate a neutral trajectory through a sequence of casts.
-    #
-    #
-    # [p,s,t] = neutral_trajectory(S, T, P, p0)
-    # calculates a discrete neutral trajectory through the consecutive casts
-    # (S(:,c), T(:,c), P(:,c)) for increasing c, beginning at depth or pressure
-    # p0 on cast c=1.  The output are 1D arrays p, s, and t, whose c'th
-    # elements provide the depth / pressure, salinity, and temperature values
-    # on the c'th cast along the neutral trajectory. The equation of state for
-    # density is given by eos.m in the PATH.
-    #
-    # [p,s,t] = neutral_trajectory(S, T, P, p0, s0, t0)
-    # as above, but the first step is a discrete neutral trajectory from the
-    # bottle (s0, t0, p0) to the cast (S(:,1), T(:,1), P(:,1)).
-    #
-    # ... = neutral_trajectory(..., interpfn)
-    # uses interpfn (a function handle) to interpolate S and T as piecewise
-    # polynomials of P. By default, interpfn = @ppc_linterp to use linear
-    # interpolation. Other functions from the PPC toolbox can be used, e.g.
-    # @ppc_pchip and @ppc_makima.
-    #
-    # ... = neutral_trajectory(..., tolp)
-    # evaluates the discrete neutral trajectory with an accuracy of tolp [m or dbar].
-    # By default, tolp = 1e-6 [m or dbar].
-    #
-    # Provide [] for any optional arguments that are required only to provide
-    # a value for an argument later in the list.
-    #
-    #
-    # --- Input:
-    #  S [nk, nc]: practical / Absolute Salinity values on a cast
-    #  T [nk, nc]: potential / Conservative Temperature values on a cast
-    #  P [nk, nc]: pressure / depth values on a cast
-    #  p0 [1, 1]: pressure / depth of starting bottle
-    #  s0 [1, 1]: practical / Absolute Salinity of starting bottle
-    #  t0 [1, 1]: potential / Conservative Temperature of starting bottle
-    #  interpfn [function handle]: function to calcualte piecewise polynomial coefficients
-    #  tolp [1, 1]: error tolerance in vertical for neutral trajectory calculations
-    #
-    #
-    # --- Output:
-    #  p [1, nc]: pressure / depth along the neutral trajectory
-    #  s [1, nc]: practical / Absolute Salinity along the neutral trajectory
-    #  t [1, nc]: potential / Conservative Temperature along the neutral trajectory
+# To do: add vert_dim argument
+def neutral_trajectory(
+    S,
+    T,
+    P,
+    p0,
+    s0=None,
+    t0=None,
+    tol_p=1e-4,
+    interp_fn=linear_coeffs,
+    eos="gsw",
+    grav=None,
+    rho_c=None,
+):
+    """Calculate a neutral trajectory through a sequence of casts.
 
-    # Author(s) : Geoff Stanley
-    # Email     : g.stanley@unsw.edu.au
-    # Email     : geoffstanley@gmail.com
+    Given a sequence of casts with hydrographic properties `(S, T, P)`, calculate
+    a neutral trajectory starting from the first cast at pressure `p0`, or
+    starting from a bottle prior to the first cast with hydrographic properties
+    `(s0, t0, p0)`.
+
+    Parameters
+    ----------
+    S, T, P : 2D ndarray
+
+        1D data specifying the practical / Absolute salinity, and potential /
+        Conservative temperature, and pressure down a 1D sequence of casts
+
+    p0 : float
+
+        The pressure at which to begin the neutral trajectory on the first cast
+
+    s0, t0 : float, optional
+
+        If provided, the first step of the neutral trajectory is a neutral
+        connection a bottle with salinity s0, temperature t0, and pressure p0
+        to the first cast.
+
+    Returns
+    -------
+    s, t, p : 1D ndarray
+
+        practical / Absolute Salinity, potential / Conservative Temperature,
+        and pressure / depth along the neutral trajectory.
+
+    Other Parameters
+    ----------------
+    tol_p : float, Default 1e-4
+
+        Error tolerance when root-finding to update the pressure or depth of
+        the surface in each water column. Units are the same as `P`.
+
+    interp_fn : function, Default ``linear_coeffs``
+
+        Function that calculates coefficients of piecewise polynomial
+        interpolants of `S` and `T` as functions of `P`.  Options include
+        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+
+    eos : str or function, Default 'gsw'
+
+        Equation of state for the density or specific volume as a function of
+        `S`, `T`, and pressure (not depth) inputs.
+
+        If a function, this should be @numba.njit decorated and need not be
+        vectorized, as it will be called many times with scalar inputs.
+
+        If a str, can be either 'gsw' to use TEOS-10
+        or 'jmd' to use Jackett and McDougall (1995) [1]_.
+
+    grav : float, Default None
+
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+
+    rho_c : float, Default None
+
+        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+
+    Notes
+    -----
+    .. [1] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+    """
+
+    eos = make_eos(eos, grav, rho_c)
 
     nk, nc = S.shape
     # assert(all(size(T) == size(S)), 'T must be same size as S')
@@ -260,8 +485,8 @@ def neutral_trajectory(eos, S, T, P, p0, s0, t0, interpfn=linear_coeffs, tol_p=1
     Sc = S[:, 0]
     Tc = T[:, 0]
     Pc = P[:, 0]
-    Sppc = interpfn(Pc, Sc)
-    Tppc = interpfn(Pc, Tc)
+    Sppc = interp_fn(Pc, Sc)
+    Tppc = interp_fn(Pc, Tc)
     s[0], t[0] = val2_0d(Pc, Sppc, Tppc, p0)
     p[0] = p0
 
@@ -273,8 +498,8 @@ def neutral_trajectory(eos, S, T, P, p0, s0, t0, interpfn=linear_coeffs, tol_p=1
         Pc = P[:, c]
 
         # Interpolate Sc and Tc as piecewise polynomials of P
-        Sppc = interpfn(Pc, Sc)
-        Tppc = interpfn(Pc, Tc)
+        Sppc = interp_fn(Pc, Sc)
+        Tppc = interp_fn(Pc, Tc)
 
         # Make a neutral connection from previous bottle (s0,t0,p0) to the cast (S[:,c], T[:,c], P[:,c])
         K = np.sum(np.isfinite(Sc))
@@ -292,79 +517,125 @@ def neutral_trajectory(eos, S, T, P, p0, s0, t0, interpfn=linear_coeffs, tol_p=1
 # CHECK VALUE from MATLAB:
 # >> veronis_density(0, S(:,i0,j0), T(:,i0,j0), Z, 10, 1500, 1, @ppc_linterp)
 # 1027.770044499011
+# def veronis_density(S, T, P, p1, **kwargs):
+def veronis_density(
+    S,
+    T,
+    P,
+    p1,
+    p_ref=0.0,
+    p0=None,
+    dp=1.0,
+    interp_fn=linear_coeffs,
+    eos="gsw",
+    eos_s_t=None,
+    grav=None,
+    rho_c=None,
+):
+    """The surface density plus the integrated vertical gradient of Locally
+    Referenced Potential Density
 
+    Determines the Veronis density [1]_ [2]_ at vertical position `p1` on a
+    cast with hydrographic properties `(S, T, P)`.  The Veronis density is
+    the potential density (referenced to `p_ref`) evaluated at `p0` on the
+    cast, plus the integral (dP) of the vertical (d/dP) derivative of Locally
+    Referenced Potential Density (LRPD) from `P = p0` to `P = p1`.  The
+    vertical (d/dP) derivative of LRPD is `rho_S dS/dP + rho_T dT/dP` where
+    `rho_S` and `rho_T` are the partial derivatives of density with respect
+    to `S` and `T`, and `dS/dP` and `dT/dP` are the derivatives of `S` and
+    `T` with respect to `P` in the water column.  If `p0` or `p1` are outside
+    the range of `P`, NaN is returned.
 
-def veronis_density(p_ref, S, T, P, p0, p1, eos, eos_s_t, dp=1, interpfn=linear_coeffs):
-    # VERONIS_DENSITY  The surface density plus the integrated vertical
-    #                  gradient of Locally Referenced Potential Density.
-    #
-    #
-    # d1 = veronis_density(p_ref, S, T, P, p0, p1)
-    # determines the Veronis density d1 at vertical position p1 on a cast with
-    # practical / Absolute salinity S and potential / Conservative temperature
-    # T values at depth or pressure values P.  The Veronis density is given by
-    # the potential density (with reference pressure / depth p_ref) evaluated
-    # at p0 on the cast, plus the integral of the vertical (d/dX) derivative of
-    # Locally Referenced Potential Density (LRPD) from P = p0 to P = p1. The
-    # vertical (d/dP) derivative of LRPD is rho_S dS/dP + rho_T dT/dP where
-    # rho_S and rho_T are the partial derivatives of density with respect to S
-    # and T, and dS/dP and dT/dP are the derivatives of S and T with respect to
-    # P.  The equation of state for density is given by eos.m in the PATH, and
-    # its partial derivatives with respect to S and T are given by eos_s_t.m in
-    # the PATH.  If p0 or p1 are outside the range of P, d1 is returned as NaN.
-    #
-    # d1 = veronis_density(..., dp)
-    # specifies the maximum interval size used in the trapezoidal numerical
-    # integration.  If omitted, the default size is 1 unit of P (1m or 1 dbar).
+    Parameters
+    ----------
+    S, T, P : 1D ndarray of float
 
-    # d1 = veronis_density(..., interpfn)
-    # uses interpfn (a function handle) to interpolate S and T as piecewise polynomials of P.
-    # If interpfn = @ppc_linterp, the result is the same as if interpfn were omitted
-    # and linear interpolation were performed native to this code.  Other functions
-    # from the PPC toolbox can be used, e.g. ppc_pchip and ppc_makima.
-    #
-    # Provide [] for any optional arguments that are required only to provide
-    # a value for an argument later in the list.
-    #
-    #
-    # --- Input:
-    # p_ref [1,1]: reference pressure / depth to evaluate potential density at p0
-    # S [nk, nt] : practical / Absolute Salinity values on a cast
-    # T [nk, nt] : potential / Conservative Temperature values on a cast
-    # P [nk, nt] : pressure / depth values on a cast
-    # p0 [1, 1]  : pressure / depth that starts the integral
-    # p1 [1, 1]  : pressure / depth that ends the integral
-    # dp [1, 1]  : maximum interval of pressure / depth in numerical integration
-    # interpfn [function handle]: function to calcualte piecewise polynomial coefficients
-    #
-    #
-    # --- Output:
-    #  d1 [1, 1]: Veronis density
-    #
-    #
-    # --- Discussion:
-    # The result of this function can serve as a density label for an
-    # approximately neutral surface. However, this is NOT the same as a value
-    # of the Jackett and McDougall (1997) Neutral Density variable. This is
-    # true even if you were to provide this function with the same cast that
-    # Jackett and McDougall (1997) used to initially label their Neutral
-    # Density variable, namely the cast at 188 deg E, 4 deg S, from the Levitus
-    # (1982) ocean atlas. Some difference would remain, because of differences
-    # in numerics, and because of a subsequent smoothing step in the Jackett
-    # and McDougall (1997) algorithm. This function merely allows one to label
-    # an approximately neutral surface with a density value that is INTERNALLY
-    # consistent within the dataset where one's surface lives. This function is
-    # NOT to compare density values against those from any other dataset, such
-    # as 1997 Neutral Density.
-    #
-    #
-    # --- References:
-    # Veronis, G. (1972). On properties of seawater defined by temperature,
-    # salinity, and pressure. Journal of Marine Research, 30(2), 227.
-    #
-    # Stanley, G. J., McDougall, T. J., & Barker, P. M. (2021). Algorithmic
-    # improvements to finding approximately neutral surfaces. Journal of
-    # Advances in Modeling Earth Systems, submitted.
+        practical / Absolute salinity, potential / Conservative temperature,
+        and pressure or depth of data points on the cast.  `P` must increase
+        monotonically along its last dimension.
+
+    p1 : float
+
+        Pressure or depth at which the Veronis density is evaluated
+
+    Returns
+    -------
+    d : float
+
+        Veronis density
+
+    Other Parameters
+    ----------------
+    p_ref : float, Default 0.
+
+        reference pressure or depth for potential density
+
+    p0 : float, Default `P[0]`
+
+        Pressure or depth at which the potential density is evaluated
+
+    dp : float, Default 1.
+
+        Maximum interval of pressure or depth in trapezoidal numerical
+        integration
+
+    interp_fn : function, Default ``linear_coeffs``
+
+        Function that calculates coefficients of piecewise polynomial
+        interpolants of `S` and `T` as functions of `P`.  Options include
+        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+
+    eos : str or function, Default 'gsw'
+
+        Equation of state for the density or specific volume as a function of
+        `S`, `T`, and pressure (not depth) inputs.
+
+        If a str, can be either 'gsw' to use TEOS-10 or 'jmd' to use Jackett
+        and McDougall (1995) [1]_.
+
+    eos_s_t : str or function, Default None
+
+        Equation of state for the partial derivatives of density or specific
+        volume with respect to `S` and `T` as a function of `S`, `T`, and
+        pressure (not depth) inputs.
+
+        If a function, this need not be @numba.njit decorated but should be
+        vectorized, as it will be called a few times with ndarray inputs.
+
+        If a str, the same options apply as for `eos`. If None and `eos` is a
+        str, then this defaults to the same str as `eos`.
+
+    grav : float, Default None
+
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+
+    rho_c : float, Default None
+
+        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+
+    Notes
+    -----
+    The result of this function can serve as a density label for an
+    approximately neutral surface. However, this is NOT the same as a value
+    of the Jackett and McDougall (1997) Neutral Density variable. This is
+    true even if you were to provide this function with the same cast that
+    Jackett and McDougall (1997) used to initially label their Neutral
+    Density variable, namely the cast at 188 deg E, 4 deg S, from the Levitus
+    (1982) ocean atlas. Some difference would remain, because of differences
+    in numerics, and because of a subsequent smoothing step in the Jackett
+    and McDougall (1997) algorithm. This function merely allows one to label
+    an approximately neutral surface with a density value that is INTERNALLY
+    consistent within the dataset where one's surface lives. This function is
+    NOT to compare density values against those from any other dataset, such
+    as 1997 Neutral Density.
+
+    .. [1] Veronis, G. (1972). On properties of seawater defined by temperature,
+    salinity, and pressure. Journal of Marine Research, 30(2), 227.
+
+    .. [2] Stanley, McDougall, Barker 2021, Algorithmic improvements to finding
+     approximately neutral surfaces, Journal of Advances in Earth System
+     Modelling, 13(5).
+    """
 
     # assert(all(size(T) == size(S)), 'T must be same size as S')
     # assert(all(size(P) == size(S)), 'P must be same size as S')
@@ -372,15 +643,21 @@ def veronis_density(p_ref, S, T, P, p0, p1, eos, eos_s_t, dp=1, interpfn=linear_
     # assert(isscalar(p0), 'p0 must be a scalar')
     # assert(isscalar(p1), 'p1 must be a scalar')
 
+    if p0 is None:
+        p0 = P[0]
+
+    if eos_s_t is None and isinstance(eos, str):
+        eos_s_t = eos
+    elif isinstance(eos, str) and isinstance(eos_s_t, str) and eos != eos_s_t:
+        raise ValueError("eos and eos_s_t, if strings, must be the same string")
+    eos = make_eos(eos, grav, rho_c)
+    eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
+
     # Interpolate S and T as piecewise polynomials of P
-    Sppc = interpfn(P, S)
-    Tppc = interpfn(P, T)
+    Sppc = interp_fn(P, S)
+    Tppc = interp_fn(P, T)
 
-    # Calculate potential density, referenced to p_ref, at p0
-    s0, t0 = val2_0d(P, S, Sppc, T, Tppc, p0)
-    d0 = eos(s0, t0, p_ref)
-
-    # i = searchsorted(X,x) is such that:
+    # i = np.searchsorted(X,x) is such that:
     #   i = 0                   if x <= X[0]
     #   i = len(X)              if X[-1] < x or np.isnan(x)
     #   X[i-1] < x <= X[i]      otherwise
@@ -407,17 +684,21 @@ def veronis_density(p_ref, S, T, P, p0, p1, eos, eos_s_t, dp=1, interpfn=linear_
         k1 = np.searchsorted(P, p1)
 
     # Integrate from p0 to P[k0]
-    d1 = d0 + _int_x_k(p0, k0, dp, P, S, T, Sppc, Tppc, eos_s_t)
+    d1 = _int_x_k(p0, k0, dp, P, S, T, Sppc, Tppc, eos_s_t)
 
     # Integrate from P[k0] to P[k1]
     for k in range(k0, k1):
         # Integrate from P[k] to P[k+1]
-        d1 = d1 + _int_x_k(P[k], k + 1, dp, P, S, T, Sppc, Tppc, eos_s_t)
+        d1 += _int_x_k(P[k], k + 1, dp, P, S, T, Sppc, Tppc, eos_s_t)
 
     # Integrate from p1 to P[k1], and subtract this
-    d1 = d1 - _int_x_k(p1, k1, dp, P, S, T, Sppc, Tppc, eos_s_t)
+    d1 -= _int_x_k(p1, k1, dp, P, S, T, Sppc, Tppc, eos_s_t)
 
-    return d1
+    # Calculate potential density, referenced to p_ref, at p0
+    s0, t0 = val2_0d(P, S, Sppc, T, Tppc, p0)
+    d0 = eos(s0, t0, p_ref)
+
+    return d0 + d1
 
 
 def _int_x_k(p, k, dp, P, S, T, Sppc, Tppc, eos_s_t):
