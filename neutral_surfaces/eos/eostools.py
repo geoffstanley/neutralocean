@@ -16,7 +16,7 @@ def _make_eos(eos, eos_dict, grav=None, rho_c=None):
 
     if not callable(eos):
         raise TypeError(
-            f'`eos` must be a function, "gsw", or "jmd95"; found eos = {eos}'
+            f'First input must be a function, "gsw", or "jmd95"; found {eos}'
         )
 
     if grav != None and rho_c != None:
