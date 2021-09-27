@@ -14,7 +14,6 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-
 # -- Project information -----------------------------------------------------
 
 project = 'Neutral surfaces'
@@ -32,12 +31,14 @@ release = '0.1'
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "numpydoc",
 ]
+#    "sphinx.ext.intersphinx",
+#    "sphinx.ext.autosectionlabel",
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -54,8 +55,15 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # a list of builtin themes.
 #
 html_theme = 'alabaster'
+html_theme_options = {
+    'page_width': 'auto',
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+# html_static_path = ['_static']
+
+
+import numpydoc
+numpydoc_xref_param_type = True

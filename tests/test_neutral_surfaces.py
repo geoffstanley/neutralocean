@@ -4,7 +4,7 @@ import numpy as np
 import gsw
 from neutral_surfaces._densjmd95 import rho_ufunc
 from neutral_surfaces.interp_ppc import linear_coefficients
-from neutral_surfaces._neutral_surfaces import (
+from neutral_surfaces.neutral_surfaces import (
     pot_dens_surf,
     process_arrays,
     # sigma_vertsolve,
