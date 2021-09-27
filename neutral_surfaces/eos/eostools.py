@@ -1,10 +1,11 @@
 import functools
 import numba
 
-from ._densjmd95 import rho as rho_jmd95
-from ._densjmd95 import rho_s_t as rho_s_t_jmd95
+from .densjmd95 import rho as rho_jmd95
+from .densjmd95 import rho_s_t as rho_s_t_jmd95
 
-from ._gsw import rho_gsw, rho_s_t_gsw
+from .gsw import rho as rho_gsw
+from .gsw import rho_s_t as rho_s_t_gsw
 
 
 def _make_eos(eos, eos_dict, grav=None, rho_c=None):
