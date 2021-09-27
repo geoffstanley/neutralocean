@@ -49,7 +49,7 @@ def _omega_matsolve_poisson(
     # Email     : g.stanley@unsw.edu.au
     # Email     : geoffstanley@gmail.com
 
-    mytime = time()
+    timer_loc = time()
 
     ni, nj = p.shape
 
@@ -227,7 +227,7 @@ def _omega_matsolve_poisson(
     # that one ourselves)
     # return r[good], c[good], v[good], N, rhs, m
 
-    timer_build = time() - mytime
+    timer_build = time() - timer_loc
 
     # Build the sparse matrix; with N rows & N columns
     mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
