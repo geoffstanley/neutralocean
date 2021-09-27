@@ -4,10 +4,16 @@ Density of Sea Water using Jackett and McDougall 1995 [1]_ polynomial
 Functions:
 
 rho :: computes in-situ density from salinity, potential temperature and
-             pressure
+    pressure
 
-rho_s_t :: compute the partial derivatives of in-situ density with respect
-                 to salinity and potential temperature
+rho_ufunc :: vectorized version of `rho`
+
+rho_s_t :: compute the partial derivatives of in-situ density with
+    respect to salinity and potential temperature
+
+Notes:
+To make Boussinesq versions of these functions, see 
+`eostools.make_eos_bsq`.
 
 .. [1] Jackett and McDougall, 1995, JAOT 12[4], pp. 381-388
 """
@@ -73,12 +79,6 @@ def rho_ufunc(s, t, p):
     """
 
     return rho(s, t, p)
-
-
-@numba.njit(float64(float64, float64, float64))
-def rho_bsq(s, t, z):
-    # Hardcoded conversion from input depth into pressure
-    return rho(s, t, z * (1e-4 * 9.81 * 1027.5))
 
 
 # @numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
@@ -275,10 +275,3 @@ def rho_s_t(s, t, p):
     # fmt: on
 
     return rho_s, rho_t
-
-
-# @numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))
-@numba.njit
-def rho_s_t_bsq(s, t, z):
-    # Hardcoded conversion from input depth into pressure
-    return rho_s_t(s, t, z * (1e-4 * 9.81 * 1027.5))
