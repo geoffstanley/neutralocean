@@ -132,39 +132,44 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap):
 
 
 def ntp_ϵ_errors_norms(
-    s, t, p, eos_s_t, wrap, DIST1_iJ=1, DIST2_Ij=1, DIST2_iJ=1, DIST1_Ij=1, *args
+    s, t, p, eos_s_t, wrap, dist1_iJ=1, dist2_Ij=1, dist2_iJ=1, dist1_Ij=1, *args
 ):
 
     ϵ_iJ, ϵ_Ij = ntp_ϵ_errors(s, t, p, eos_s_t, wrap)
 
+    ni, nj = s.shape
+    dist1_iJ = np.broadcast_to(dist1_iJ, (ni, nj))
+    dist1_Ij = np.broadcast_to(dist1_Ij, (ni, nj))
+    dist2_Ij = np.broadcast_to(dist2_Ij, (ni, nj))
+    dist2_iJ = np.broadcast_to(dist2_iJ, (ni, nj))
     if len(args) == 2:
         AREA_iJ = args[0]  # Area [m^2] centred at (I-1/2, J)
         AREA_Ij = args[1]  # Area [m^2] centred at (I, J-1/2)
     else:
-        AREA_iJ = DIST1_iJ * DIST2_iJ  # Area [m^2] centred at (I-1/2, J)
-        AREA_Ij = DIST1_Ij * DIST2_Ij  # Area [m^2] centred at (I, J-1/2)
+        AREA_iJ = dist1_iJ * dist2_iJ  # Area [m^2] centred at (I-1/2, J)
+        AREA_Ij = dist1_Ij * dist2_Ij  # Area [m^2] centred at (I, J-1/2)
 
     # fmt: off
     # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
     # Here, weights are AREA_iJ and AREA_Ij.
-    # But also need to divide epsilon by grid distances DIST1_iJ and DIST2_Ij.
+    # But also need to divide epsilon by grid distances dist1_iJ and dist2_Ij.
     # Thus, the numerator of L2 norm needs to multiply epsilon^2 by
-    #     AREA_iJ ./ DIST1_iJ.^2 = DIST2_iJ ./ DIST1_iJ ,
-    # and AREA_Ij ./ DIST2_Ij.^2 = DIST1_Ij ./ DIST2_Ij .
+    #     AREA_iJ ./ dist1_iJ.^2 = dist2_iJ ./ dist1_iJ ,
+    # and AREA_Ij ./ dist2_Ij.^2 = dist1_Ij ./ dist2_Ij .
     ϵ_RMS = np.sqrt(
-        (np.nansum(DIST2_iJ / DIST1_iJ * ϵ_iJ ** 2) + np.nansum(DIST1_Ij / DIST2_Ij * ϵ_Ij ** 2)) /
+        (np.nansum(dist2_iJ / dist1_iJ * ϵ_iJ ** 2) + np.nansum(dist1_Ij / dist2_Ij * ϵ_Ij ** 2)) /
         (   np.sum(AREA_iJ * np.isfinite(ϵ_iJ))     +    np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
     )
 
 
     # L1 norm of vector [a_i], weighted by vector [w_i], is sum( w_i * |a_i| ) / sum( w_i )
     # Here, weights are AREA_iJ and AREA_Ij.
-    # But also need to divide epsilon by grid distances DIST1_iJ and DIST2_Ij.
+    # But also need to divide epsilon by grid distances dist1_iJ and dist2_Ij.
     # Thus, the numerator of L1 norm needs to multiply epsilon by
-    #     AREA_iJ ./ DIST1_iJ = DIST2_iJ ,
-    # and AREA_Ij ./ DIST2_Ij = DIST1_Ij .
+    #     AREA_iJ ./ dist1_iJ = dist2_iJ ,
+    # and AREA_Ij ./ dist2_Ij = dist1_Ij .
     ϵ_MAV = (
-        (np.nansum(DIST2_iJ        * abs(ϵ_iJ)) + np.nansum(DIST1_Ij         * abs(ϵ_Ij)))
+        (np.nansum(dist2_iJ        * abs(ϵ_iJ)) + np.nansum(dist1_Ij         * abs(ϵ_Ij)))
         / ( np.sum(AREA_iJ * np.isfinite(ϵ_iJ)) +     np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
        )
     # fmt: on
