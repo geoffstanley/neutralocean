@@ -24,7 +24,7 @@ from neutral_surfaces.lib import (
 from neutral_surfaces._omega import _omega_matsolve_poisson
 
 
-def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
+def approx_neutral_surf(ans_type, S, T, P, **kwargs):
     """Calculate approximately neutral surface from structured 3D ocean data.
 
     Given 3D salinity, temperature, and pressure or depth data arranged on a
@@ -55,17 +55,6 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
         In the Boussinesq case, `P` is the depth and can be 3D with the same
         structure as `S` and `T`, or can be 1D with as many elements as there
         are in the vertical dimension of `S` and `T`.
-
-    wrap : tuple of bool, or tuple of str
-
-        Specifies which dimensions are periodic.
-
-        As a tuple of bool, this must be length two.  The first or second
-        non-vertical dimension of `S` and `T` is periodic iff ``wrap[0]`` or
-        ``wrap[1]`` is True, respectively.
-
-        As a tuple of str, simply name the periodic dimensions of `S` and
-        `T`.
 
     ref : float, or tuple of float of length 2
 
@@ -180,11 +169,21 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
 
             Time spent solving the matrix problem, per iteration.
 
-
-    .. _ans-other:
-
     Other Parameters
     ----------------
+    wrap : tuple of bool, or tuple of str
+
+        Specifies which dimensions are periodic.
+
+        As a tuple of bool, this must be length two.  The first or second
+        non-vertical dimension of `S` and `T` is periodic iff ``wrap[0]`` or
+        ``wrap[1]`` is True, respectively.
+
+        As a tuple of str, simply name the periodic dimensions of `S` and
+        `T`.
+
+        Required if `ans_type` is "omega" or diags is True
+
     vert_dim : int or str, Default -1
 
         Specifies which dimension of `S`, `T` (and `P` if 3D) is vertical.
@@ -335,7 +334,9 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
     --------
     The surface to be calculated must be specified by some combination of
     reference value(s) `ref`, isovalue `isoval`, pinning water column
-    `pin_loc` and pinning pressure `pin_p`.  The valid options are as follows.
+    `pin_loc` and pinning pressure `pin_p`.  The following methods are valid.
+    They are listed in order of precedence, e.g. `pin_loc` and `pin_p` are not
+    used if both `ref` and `isoval` are given.
 
     >>> approx_neutral_surf(ans_type, S, T, P, wrap, ref, isoval)
 
@@ -400,6 +401,7 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
     dist2_iJ = kwargs.get('dist2_iJ', 1) # Distance [m] in 1st dim centred at (I-1/2, J)
     dist1_Ij = kwargs.get('dist1_Ij', 1) # Distance [m] in 2nd dim centred at (I, J-1/2)
 
+    wrap = kwargs.get('wrap')
     vert_dim = kwargs.get('vert_dim', -1)
 
     eos = kwargs.get('eos', 'gsw')
@@ -419,6 +421,9 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
     diags = kwargs.get('diags', True)
     # fmt: on
 
+    if diags is False:
+        verbose = 0
+
     if verbose > 0:
         diags = True
 
@@ -434,7 +439,13 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
     if P_is_xr:
         p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
 
-    wrap = _process_wrap(wrap, s_)
+    if wrap is None:
+        if diags or ans_type == "omega":
+            raise ValueError(
+                'wrap must be given if diags is True or ans_type is "omega"'
+            )
+    else:
+        wrap = _process_wrap(wrap, s_)
 
     # Process 3D hydrography
     vert_dim = _process_vert_dim(vert_dim, S)
@@ -487,20 +498,6 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                 ' "pin_loc" and "pin_p" must be provided'
             )
 
-    # Error checking on ref
-    if not (
-        ref is None
-        or isinstance(ref, float)
-        or (
-            isinstance(ref, (tuple, list))
-            and len(ref) == 2
-            and all(isinstance(x, float) for x in ref)
-        )
-    ):
-        raise TypeError(
-            'If provided, "ref" must be a float, or a tuple or list of 2 floats'
-        )
-
     # Error checking on pin_loc
     if pin_loc is not None:
         if (
@@ -551,45 +548,45 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
 
     if ans_type in ("sigma", "delta"):
 
-        if pin_loc is not None and pin_p is not None:
-            # pin surface at this pressure at this water column
-            n0 = pin_loc
-
-            # evaluate S and T on the surface at the chosen location
+        # Handle the three valid calls in the following order of precedence:
+        # >>> approx_neutral_surf(ans_type, S, T, P, ref, isoval)
+        # >>> approx_neutral_surf(ans_type, S, T, P, ref, pin_loc, pin_p)
+        # >>> approx_neutral_surf(ans_type, S, T, P, pin_loc, pin_p)
+        if isoval is None:  # => pin_loc and pin_p are both not None
+            n0 = pin_loc  # evaluate S and T on the surface at the chosen location
             s0, t0 = val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], pin_p)
 
-            # Choose reference value(s) and isovalue that will intersect cast n0 at pin_p
             if ans_type == "sigma":
                 if ref is None:
                     ref = pin_p
+                elif not isinstance(ref, float):
+                    raise TypeError(
+                        '"ref" must be None or float when "ans_type" is "sigma"'
+                    )
                 isoval = eos(s0, t0, ref)
-
-            else:  # ans_type == 'delta'
-                if ref is None or any(x is None for x in ref):
+            else:
+                if ref is None:
                     ref = (s0, t0)
-                    isoval = 0.0
-                else:
-                    isoval = eos(s0, t0, pin_p) - eos(ref[0], ref[1], pin_p)
-
-        elif ref is None or isoval is None:
-            if ans_type == "sigma":
-                raise TypeError(
-                    'Without "pin_loc" and "pin_p", must provide'
-                    ' "ref" (scalar) and "isoval" (scalar)'
-                )
-            else:  # ans_type == 'delta'
-                raise TypeError(
-                    'Without "pin_loc" and "pin_p", must provide'
-                    ' "ref" (2 element vector) and "isoval" (scalar)'
-                )
+                elif not (
+                    isinstance(ref, (tuple, list))
+                    and len(ref) == 2
+                    and all(isinstance(x, float) for x in ref)
+                ):
+                    raise TypeError(
+                        '"ref" must be None or tuple/list of 2 floats when "ans_type" is "delta"'
+                    )
+                isoval = eos(s0, t0, pin_p) - eos(
+                    ref[0], ref[1], pin_p
+                )  # == 0. when ref = (s0,t0)
 
         # Solve non-linear root finding problem in each cast
         timer_loc = time()
         s, t, p = vertsolve(S, T, P, Sppc, Tppc, n_good, ref, isoval, tol_p)
-        d["timer_update"] = time() - timer_loc
+        timer_update = time() - timer_loc
 
         # Diagnostics
         if diags:
+            d["timer_update"] = timer_update
             d["timer"] = time() - timer
             d["ϵ_RMS"], d["ϵ_MAV"] = ntp_ϵ_errors_norms(
                 s,
@@ -653,6 +650,8 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
         if p_init is None:
             if isinstance(ref, (tuple, list)) and len(ref) == 2:
                 ans_type_init = "delta"
+                if any(x is None for x in ref):
+                    ref = None  # reset (None, None) or similar trigger
             else:
                 ans_type_init = "sigma"
 
@@ -661,11 +660,12 @@ def approx_neutral_surf(ans_type, S, T, P, wrap, **kwargs):
                 S,
                 T,
                 P,
-                wrap,
                 ref=ref,
                 isoval=isoval,
                 pin_loc=pin_loc,
                 pin_p=pin_p,
+                wrap=wrap,
+                vert_dim=-1,
                 dist1_iJ=dist1_iJ,
                 dist2_Ij=dist2_Ij,
                 dist2_iJ=dist2_iJ,

@@ -75,24 +75,32 @@ s, t, z, d = approx_neutral_surf('sigma', S, T, Z,
 ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g['wrap'])
 
 # %% Delta surface
-# s, t, z = delta_surf(S, T, Z, axis=-1, pin=(i0, j0, z0),
-#                      tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'])
-# # s, t, z, _ = approx_neutral_surf(
-# #     'delta', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
-# #     pin=(i0, j0, z0)
-# #     )
-# s_delta, t_delta, z_delta = s, t, z  # save alias
+# Provide reference pressure and  isovalue
+s, t, z, d = approx_neutral_surf('delta', S, T, Z, 
+                                 eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
+                                 wrap="Longitude_t", vert_dim="Depth_c", 
+                                 ref=(34.5,4.), isoval=0.)
+
+# Provide reference pressure and location for the surface to intersect (pin_loc and pin_p)
+s, t, z, _ = approx_neutral_surf('delta', S, T, Z, 
+                                 eos=eos, eos_s_t=eos_s_t,
+                                 diags=False, vert_dim="Depth_c", 
+                                 ref=(34.5,4.), pin_loc=(i0, j0), pin_p=z0)
+
+# Provide just the location to intersect (pin_loc, pin_p). 
+# This takes the reference pressure ref to match pin_p.
+s, t, z, d = approx_neutral_surf('delta', S, T, Z, 
+                                 eos=eos, eos_s_t=eos_s_t,
+                                 wrap="Longitude_t", vert_dim="Depth_c", 
+                                 pin_loc=(i0, j0), pin_p=z0)
 
 # %% Omega surface
 
-# Providing a point at which to pin the surface (pin_loc and pin_p).  Without
-# providing ref, the omega surface iterations will be initialized by a potential
-# density surface, referenced to the local pressure (pin_p). 
+# Initialize omega surface with sigma surface
 s, t, z, d = approx_neutral_surf(
     'omega',
     S, T, Z,
-    wrap="Longitude_t", 
-    vert_dim="Depth_c",
+    wrap="Longitude_t", vert_dim="Depth_c",
     pin_loc=(i0, j0), pin_p = z0,
     eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
     ITER_MAX=10, ITER_START_WETTING=1,
@@ -109,6 +117,17 @@ print(f' matbuild time: {np.sum(d["timer_matbuild"]) : .4f} sec')
 print(f' matsolve time: {np.sum(d["timer_matsolve"]) : .4f} sec')
 print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
+# Initialize omega surface with delta surface:
+s, t, z, d = approx_neutral_surf(
+    'omega',
+    S, T, Z,
+    ref = (None, None),
+    wrap="Longitude_t", vert_dim="Depth_c",
+    pin_loc=(i0, j0), pin_p = z0,
+    eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
+    ITER_MAX=10, ITER_START_WETTING=1,
+    tol_p=1e-4,
+)
 # old tests below:
 
 # Initial surface has log_10(|ϵ|_2) = -2.342477 ..................
@@ -138,9 +157,9 @@ print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
 # %% Show figure
 
-# fig, ax = plt.subplots()
-# cs = ax.imshow(z.T, origin="lower")
-# # cs = ax.contourf(lon, lat, z_sigma.T)
-# cbar = fig.colorbar(cs, ax=ax)
-# cbar.set_label("Depth [m]")
-# ax.set_title(r"Depth of surface in OCCA")
+fig, ax = plt.subplots()
+cs = ax.imshow(z.T, origin="lower")
+# cs = ax.contourf(lon, lat, z_sigma.T)
+cbar = fig.colorbar(cs, ax=ax)
+cbar.set_label("Depth [m]")
+ax.set_title(r"Depth of surface in OCCA")
