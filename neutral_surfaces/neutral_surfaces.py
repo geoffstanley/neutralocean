@@ -332,35 +332,37 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
 
     Examples
     --------
-    The surface to be calculated must be specified by some combination of
-    reference value(s) `ref`, isovalue `isoval`, pinning water column
-    `pin_loc` and pinning pressure `pin_p`.  The following methods are valid.
-    They are listed in order of precedence, e.g. `pin_loc` and `pin_p` are not
-    used if both `ref` and `isoval` are given.
+    If `ans_type` is "sigma" or "delta", the surface to be calculated must be 
+    specified by some combination of reference value(s) `ref`, isovalue `isoval`,
+    pinning cast `pin_loc` and pinning pressure `pin_p`.  The following methods 
+    are valid, and listed in order of precedence, e.g. `pin_loc` and `pin_p` are 
+    not used if both `ref` and `isoval` are given.
 
-    >>> approx_neutral_surf(ans_type, S, T, P, wrap, ref, isoval)
+    >>> approx_neutral_surf(ans_type, S, T, P, ref, isoval, ...)
 
     This finds the surface with given reference value(s) and the given
     isovalue.
 
-    >>> approx_neutral_surf(ans_type, S, T, P, wrap, ref, pin_loc, pin_p)
+    >>> approx_neutral_surf(ans_type, S, T, P, ref, pin_loc, pin_p, ...)
 
     This finds the surface with given reference value(s) that intersects
-    the given water column at the given pressure or depth.
+    the given cast at the given pressure or depth.
 
-    >>> approx_neutral_surf(ans_type, S, T, P, wrap, pin_loc, pin_p)
+    >>> approx_neutral_surf(ans_type, S, T, P, pin_loc, pin_p, ...)
 
     This is as for the previous method, but selects the reference value(s)
-    from the ocean data at the given water column's given pressure or depth.
+    from the ocean data at the given cast's given pressure or depth.
 
-    If `ans_type` == "omega", the above 3 methods are applied to find the
-    initial surface, which is iteratively improved upon.  A 4th method is
+    If `ans_type` == "omega", a pinning cast and initial surface must be
+    given.  This can be done by using the above three methods to initialize
+    the "omega" algorithm with a "sigma" or "delta" surface, but note the
+    first method must also specify `pin_loc`, as the "omega" algorithm
+    iteratively adjusts the surface while always intersecing the pinning cast
+    at a fixed pressure.  Note if `ref` is unspecified (as in the third case
+    above), the initial surface will be a "delta" surface.  Alternatively,
+    the initial surface can be specified directly, as follows:
 
-    >>> approx_neutral_surf("omega", S, T, P, wrap, pin_loc, p_init)
-
-    This specifies the initial surface by its pressure or depth throughout the
-    ocean.  The "omega" surface will be pinned to intersect the given water
-    column at the same pressure or depth as the initial surface.
+    >>> approx_neutral_surf("omega", S, T, P, pin_loc, p_init, ...)
 
     Notes
     -----
@@ -499,6 +501,8 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
             )
 
     # Error checking on pin_loc
+    if ans_type and pin_loc is None:
+        raise TypeError('If "ans_type" is "omega", then "pin_loc" must be given.')
     if pin_loc is not None:
         if (
             isinstance(pin_loc, (tuple, list))
@@ -648,10 +652,8 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
 
         # Calculate an initial surface through `pin` if no initial surface given
         if p_init is None:
-            if isinstance(ref, (tuple, list)) and len(ref) == 2:
+            if ref is None or isinstance(ref, (tuple, list)) and len(ref) == 2:
                 ans_type_init = "delta"
-                if any(x is None for x in ref):
-                    ref = None  # reset (None, None) or similar trigger
             else:
                 ans_type_init = "sigma"
 
