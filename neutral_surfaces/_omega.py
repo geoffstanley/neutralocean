@@ -75,9 +75,9 @@ def _omega_matsolve_poisson(
 
     # If both gridding variables are 1, then grid is uniform
     UNIFORM_GRID = (
-        DIST2on1_iJ.size == 1
+        isinstance(DIST2on1_iJ, float)
         and DIST2on1_iJ == 1
-        and DIST1on2_Ij.size == 1
+        and isinstance(DIST1on2_Ij, float)
         and DIST1on2_Ij == 1
     )
 
