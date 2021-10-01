@@ -57,22 +57,34 @@ T_ref_cast = T.values[i0,j0]
 s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
                                  eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
                                  wrap="Longitude_t", vert_dim="Depth_c", 
-                                 ref=0., isoval=1027.9)
+                                 ref=0., isoval=1027.5)
 
-# Provide reference pressure and location for the surface to intersect (pin_loc and pin_p)
+# Provide reference pressure and location for the surface to intersect (pin_cast and pin_p)
 s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
                                  eos=eos, eos_s_t=eos_s_t,
                                  wrap="Longitude_t", vert_dim="Depth_c", 
-                                 ref=0., pin_loc=(i0, j0), pin_p=z0)
+                                 ref=0., pin_cast=(i0, j0), pin_p=z0)
 
-# Provide just the location to intersect (pin_loc, pin_p). 
+# Provide just the location to intersect (pin_cast, pin_p). 
 # This takes the reference pressure ref to match pin_p.
 s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
                                  eos=eos, eos_s_t=eos_s_t,
                                  wrap="Longitude_t", vert_dim="Depth_c", 
-                                 pin_loc=(i0, j0), pin_p=z0)
+                                 pin_cast=(i0, j0), pin_p=z0)
 
+# DIST1_iJ=1, DIST2_Ij=1, DIST2_iJ=1, DIST1_Ij=1
 ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g['wrap'])
+
+dist1_iJ = g['DXCvec']
+dist1_Ij = g['DXGvec']
+dist2_Ij = g['DYGsc']
+dist2_iJ = g['DYCsc']
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g['wrap'], 
+                                  dist1_iJ = g['DXCvec'], 
+                                  dist1_Ij = g['DXGvec'],
+                                  dist2_Ij = g['DYGsc'],
+                                  dist2_iJ = g['DYCsc'])
+ϵ_RMS
 
 # %% Delta surface
 # Provide reference pressure and  isovalue
@@ -81,18 +93,18 @@ s, t, z, d = approx_neutral_surf('delta', S, T, Z,
                                  wrap="Longitude_t", vert_dim="Depth_c", 
                                  ref=(34.5,4.), isoval=0.)
 
-# Provide reference pressure and location for the surface to intersect (pin_loc and pin_p)
+# Provide reference pressure and location for the surface to intersect (pin_cast and pin_p)
 s, t, z, _ = approx_neutral_surf('delta', S, T, Z, 
                                  eos=eos, eos_s_t=eos_s_t,
                                  diags=False, vert_dim="Depth_c", 
-                                 ref=(34.5,4.), pin_loc=(i0, j0), pin_p=z0)
+                                 ref=(34.5,4.), pin_cast=(i0, j0), pin_p=z0)
 
-# Provide just the location to intersect (pin_loc, pin_p). 
+# Provide just the location to intersect (pin_cast, pin_p). 
 # This takes the reference pressure ref to match pin_p.
 s, t, z, d = approx_neutral_surf('delta', S, T, Z, 
                                  eos=eos, eos_s_t=eos_s_t,
                                  wrap="Longitude_t", vert_dim="Depth_c", 
-                                 pin_loc=(i0, j0), pin_p=z0)
+                                 pin_cast=(i0, j0), pin_p=z0)
 
 # %% Omega surface
 
@@ -101,10 +113,9 @@ s, t, z, d = approx_neutral_surf(
     'omega',
     S, T, Z,
     wrap="Longitude_t", vert_dim="Depth_c",
-    pin_loc=(i0, j0), pin_p = z0,
+    pin_cast=(i0, j0), pin_p = z0,
     eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
     ITER_MAX=10, ITER_START_WETTING=1,
-    tol_p=1e-4,
 )
 # s, t, z, diags = approx_neutral_surf(
 #     'omega', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
@@ -123,10 +134,10 @@ s, t, z, d = approx_neutral_surf(
     S, T, Z,
     ref = (None, None),
     wrap="Longitude_t", vert_dim="Depth_c",
-    pin_loc=(i0, j0), pin_p = z0,
+    pin_cast=(i0, j0), pin_p = z0,
     eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
     ITER_MAX=10, ITER_START_WETTING=1,
-    tol_p=1e-4,
+    TOL_P_SOLVER=1e-5,
 )
 # old tests below:
 
@@ -141,10 +152,10 @@ s, t, z, d = approx_neutral_surf(
 
 # z_omega, s, t, diags = omega_surf(
 #     S, T, Z, z_delta, (i0, j0), g['wrap'], axis=-1, ITER_MAX=10, ITER_START_WETTING=np.inf,
-#     DIST1_iJ=g['DXCvec'],  # Distance [m] in 1st dimension centred at (I-1/2, J)
-#     DIST2_Ij=g['DYCsc'],  # Distance [m] in 2nd dimension centred at (I, J-1/2)
-#     DIST2_iJ=g['DYGsc'],  # Distance [m] in 2nd dimension centred at (I-1/2, J)
-#     DIST1_Ij=g['DXGvec'],  # Distance [m] in 1st dimension centred at (I, J-1/2)
+#     dist1_iJ=g['DXCvec'],  # Distance [m] in 1st dimension centred at (I-1/2, J)
+#     dist2_Ij=g['DYCsc'],  # Distance [m] in 2nd dimension centred at (I, J-1/2)
+#     dist2_iJ=g['DYGsc'],  # Distance [m] in 2nd dimension centred at (I-1/2, J)
+#     dist1_Ij=g['DXGvec'],  # Distance [m] in 1st dimension centred at (I, J-1/2)
 #     )
 # Initial surface has log_10(|ϵ|_2) = -7.723916 ..................
 # Iter  1 [  0.20 sec] log_10(|ϵ|_2) = -8.726053 by |ϕ|_1 = 1.040064e-02;    0 casts freshly wet; |Δp|_2 = 2.167515e+01

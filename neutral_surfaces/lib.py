@@ -1,6 +1,5 @@
 import numpy as np
 import numba
-import xarray as xr
 
 from neutral_surfaces.fzero import guess_to_bounds, brent
 from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val_0d_i, dval_0d_i
@@ -70,15 +69,13 @@ def _process_vert_dim(vert_dim, S):
 
 def xr_to_np(S):
     """Convert xarray into numpy array"""
-    try:
+    if hasattr(S, "values"):
         S = S.values
-    except:
-        pass
     return S
 
 
-def _process_input(S, vert_dim):
-    """Make water columns contiguous in memory and extract numpy array from xarray
+def _process_casts(S, vert_dim):
+    """Make individual casts contiguous in memory and extract numpy array from xarray
 
     Parameters
     ----------
@@ -132,24 +129,22 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap):
 
 
 def ntp_ϵ_errors_norms(
-    s, t, p, eos_s_t, wrap, dist1_iJ=1, dist2_Ij=1, dist2_iJ=1, dist1_Ij=1, *args
+    s, t, p, eos_s_t, wrap, dist1_iJ=1., dist1_Ij=1., dist2_Ij=1., dist2_iJ=1.
 ):
 
     ϵ_iJ, ϵ_Ij = ntp_ϵ_errors(s, t, p, eos_s_t, wrap)
 
     ni, nj = s.shape
-    dist1_iJ = np.broadcast_to(dist1_iJ, (ni, nj))
-    dist1_Ij = np.broadcast_to(dist1_Ij, (ni, nj))
-    dist2_Ij = np.broadcast_to(dist2_Ij, (ni, nj))
-    dist2_iJ = np.broadcast_to(dist2_iJ, (ni, nj))
-    if len(args) == 2:
-        AREA_iJ = args[0]  # Area [m^2] centred at (I-1/2, J)
-        AREA_Ij = args[1]  # Area [m^2] centred at (I, J-1/2)
-    else:
-        AREA_iJ = dist1_iJ * dist2_iJ  # Area [m^2] centred at (I-1/2, J)
-        AREA_Ij = dist1_Ij * dist2_Ij  # Area [m^2] centred at (I, J-1/2)
 
     # fmt: off
+    # Expand grid distances.  Soft notation: i = I-1/2; j = J-1/2
+    dist1_iJ = np.broadcast_to(dist1_iJ, (ni, nj))  # Distance [m] in 1st dim centred at (I-1/2, J)
+    dist1_Ij = np.broadcast_to(dist1_Ij, (ni, nj))  # Distance [m] in 1st dim centred at (I, J-1/2)
+    dist2_Ij = np.broadcast_to(dist2_Ij, (ni, nj))  # Distance [m] in 2nd dim centred at (I, J-1/2)
+    dist2_iJ = np.broadcast_to(dist2_iJ, (ni, nj))  # Distance [m] in 2nd dim centred at (I-1/2, J)
+    AREA_iJ = dist1_iJ * dist2_iJ  # Area [m^2] centred at (I-1/2, J)
+    AREA_Ij = dist1_Ij * dist2_Ij  # Area [m^2] centred at (I, J-1/2)
+
     # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
     # Here, weights are AREA_iJ and AREA_Ij.
     # But also need to divide epsilon by grid distances dist1_iJ and dist2_Ij.
@@ -245,22 +240,12 @@ def ntp_bottle_to_cast(
         interpolants of `S` and `T` as functions of `P`.  Options include
         ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
 
-    Sppc, Tppc : ndarray, Default None
-
-        Pre-computed Piecewise Polynomial Coefficients for `S` and `T` as
-        functions of `P`. If None, these are computed as ``Sppc = interp_fn
-        (S, P)`` and ``Tppc = interp_fn(T,P)``.
-
-    n_good : int, Default None
-
-        Number of valid (non-NaN) data points on the cast.  That is,
-        ``S[0:n_good-1]``, ``T[0:n_good-1]``, and ``P[0:n_good-1]`` should all
-        be non-NaN.  If None, will be computed internally.
-
     eos : str or function, Default 'gsw'
 
         Equation of state for the density or specific volume as a function of
-        `S`, `T`, and pressure (not depth) inputs.
+        `S`, `T`, and pressure inputs.  For Boussinesq models, provide `grav`
+        and `rho_c`, so this function with third input pressure will be
+        converted to a function with third input depth. 
 
         If a function, this should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
@@ -287,11 +272,11 @@ def ntp_bottle_to_cast(
     Tppc = interp_fn(P, T)
     n_good = find_first_nan(S)
 
-    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, tol_p, eos)
+    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p)
 
 
 @numba.njit
-def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, tol_p, eos):
+def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p):
     """Find the neutral tangent plane from a bottle to a cast
 
     Fast version of `ntp_bottle_to_cast`, with all inputs supplied.  See
@@ -305,28 +290,28 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, tol_p, eos):
     S, T, P : ndarray
         See ntp_bottle_to_cast
 
-    Sppc, Tppc : ndarray, Default None
+    Sppc, Tppc : ndarray
 
         Piecewise Polynomial Coefficients for `S` and `T` as functions of `P`.
-        These should be pre-computed as ``Sppc = interp_fn(P, S)`` and ``Tppc
+        Computed these as ``Sppc = interp_fn(P, S)`` and ``Tppc
         = interp_fn(P, T)`` where `interp_fn` is ``linear_coeffs`` or
         ``pchip_coeffs`` from ``interp_ppc.py``.
 
-    n_good : int, Default None
+    n_good : int
 
         Number of valid (non-NaN) data points on the cast.  That is,
         ``S[0:n_good-1]``, ``T[0:n_good-1]``, and ``P[0:n_good-1]`` should all
-        be non-NaN.  If None, will be computed internally.
-
-    tol_p : float, Default 1e-4
-        See ntp_bottle_to_cast
+        be non-NaN.  Compute this as ``n_good = find_first_nan(S)``
 
     eos : function
         Equation of state for the density or specific volume as a function of
-        `S`, `T`, and pressure (not depth) inputs.
+        `S`, `T`, and pressure or depth inputs.
 
         This function should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
+
+    tol_p : float, Default 1e-4
+        See ntp_bottle_to_cast
 
     Returns
     -------
@@ -508,8 +493,8 @@ def neutral_trajectory(
 
         # Make a neutral connection from previous bottle (s0,t0,p0) to the cast (S[:,c], T[:,c], P[:,c])
         K = np.sum(np.isfinite(Sc))
-        s[c], t[c], p[c] = ntp_bottle_to_cast(
-            s[c - 1], t[c - 1], p[c - 1], Sc, Tc, Pc, Sppc, Tppc, K, tol_p, eos
+        s[c], t[c], p[c] = _ntp_bottle_to_cast(
+            s[c - 1], t[c - 1], p[c - 1], Sc, Tc, Pc, Sppc, Tppc, K, eos, tol_p
         )
 
         if np.isnan(p[c]):
