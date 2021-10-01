@@ -8,7 +8,7 @@ from time import time
 
 
 def _omega_matsolve_poisson(
-    s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A5, qu, qt, mr, eos_s_t
+    s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A4, qu, qt, mr, eos_s_t
 ):
     # Doco from MATLAB, needs updating.
 
@@ -191,14 +191,14 @@ def _omega_matsolve_poisson(
     # which we do here by setting the appropriate links in L to 0. This
     # maintains symmetry of the matrix, enabling the use of a Cholesky solver.
     mrI = np.ravel_multi_index(mr, (ni, nj))  # get linear index for mr
-    if A5[mrI, IP] != nij:
-        L[A5[mrI, IP], IM] = 0
-    if A5[mrI, PJ] != nij:
-        L[A5[mrI, PJ], MJ] = 0
-    if A5[mrI, MJ] != nij:
-        L[A5[mrI, MJ], PJ] = 0
-    if A5[mrI, IM] != nij:
-        L[A5[mrI, IM], IP] = 0
+    if A4[mrI, IP] != nij:
+        L[A4[mrI, IP], IM] = 0
+    if A4[mrI, PJ] != nij:
+        L[A4[mrI, PJ], MJ] = 0
+    if A4[mrI, MJ] != nij:
+        L[A4[mrI, MJ], PJ] = 0
+    if A4[mrI, IM] != nij:
+        L[A4[mrI, IM], IP] = 0
 
     # Build the RHS of the matrix problem
     rhs = D[m]
@@ -209,7 +209,8 @@ def _omega_matsolve_poisson(
 
     # Build indices for the columns of the sparse matrix
     # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
-    c = remap[A5[m]]
+    #c = remap[A5[m]]
+    c = np.column_stack((remap[A4[m]], np.arange(N)))
 
     # Build the values of the sparse matrix
     v = L[m]

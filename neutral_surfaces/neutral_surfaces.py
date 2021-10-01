@@ -614,8 +614,9 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
 
     # Pre-calculate grid adjacency needed for Breadth First Search:
     # all grid points that are adjacent to all grid points
-    A5 = grid_adjacency((ni, nj), 5, wrap)  # using 5-connectivity
-    A4 = A5[:, 0:-1]  # using 4-connectivity
+    #A5 = grid_adjacency((ni, nj), 5, wrap)  # using 5-connectivity
+    #A4 = A5[:, 0:-1]  # using 4-connectivity
+    A4 = grid_adjacency((ni, nj), 4, wrap)  # using 4-connectivity
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
@@ -731,7 +732,7 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
         ϕ, timer_matbuild = _omega_matsolve_poisson(
-            s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A5, qu, qt, pin_cast, eos_s_t
+            s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A4, qu, qt, pin_cast, eos_s_t
         )
         timer_solver = time() - timer_loc - timer_matbuild
 
