@@ -6,39 +6,52 @@ from neutral_surfaces.lib import _ntp_bottle_to_cast
 
 @numba.njit
 def bfs_conncomp1(G, A, r):
-    # Note!  Mutates G.   Needs G to be a 1D array.
+    """
+    Find the Connected Component containing 1 reference location using
+    Breadth-first Search
 
-    # BFS_CONNCOMP1  Find one connected component using Breadth First Search
-    #
-    #
-    # qu, qt = bfs_conncomp(G, A, r)
-    # performs a breadth first search (BFS) through nodes of a graph, starting
-    # from the root node r.  The graph is best thought of as laid out on a
-    # grid, with nodes at the true locations of the multi-dimensional array G
-    # and numbered by their linear index in G.   Node m is adjacent to node n =
-    # A[m,j] provided (n < G.size and G[n]), for each j in 0 to D-1, where D =
-    # A.shape[-1] is the maximal degree in the graph. The outputs are: (1) the search
-    # queue for the BFS, qu; (2) the tail index of qu for the BFS, qt.
-    # Specifically, qu[0 : qt+1] are the linear indices to True locations of G
-    # searched by the BFS.  Note that G is mutated by this function.
-    #
-    #
-    # --- Input:
-    # G [array with N elements]: True where there are nodes, False elsewhere
-    # A [N,D]: adjacency, where D is the most neighbours possible
-    # r [1,1]: perform one BFS from this root node
-    #
-    #
-    # --- Output:
-    # qu [N]: the nodes visited by the BFS's in order from 0 to qt
-    # qt [1]: the queue tail index
-    #
-    #
-    # See also GRID_ADJACENCY
+    Parameters
+    ----------
+    G : ndarray of bool
+        
+        A 1D array of logicals.  `G[m]` is True iff element `m` is a valid node.
+        Note, this function mutates `G`!
+        
+    A : ndarray of int
+        
+        A 2D array of integers specifying (directional) edges in the graph.
+        Consider some valid node `m` (`G[m] == True).  Node `m` is connected
+        to node `n = A[m,j]` provided `n < N` and `G[n] == True`, for each
+        `j` in `0` to `D-1`.  Here, `N = G.size` is the maximum possible
+        number of nodes (if all of `G` is True), and `D = A.shape[-1]` is the
+        maximal degree in the graph.  Hence, if node `m` has less than the
+        maximal degree (e.g. to handle non-periodic boundaries in regular
+        grids, or for more general graphs), some elements of `A[m,:]` should
+        be `N`.
 
-    # Author[s] : Geoff Stanley
-    # Email     : g.stanley@unsw.edu.au
-    # Email     : geoffstanley@gmail.com
+    r : int
+        
+        Index to the chosen root node, where the BFS begins. 
+
+    Returns
+    -------
+    qu : ndarray of int
+    
+        The BFS search queue: a 1D array with as many elements as in `G`.  
+        `qu[0:qt]` are the indices to the True elements of `G` that are in the
+        connected component containing the root node `r`, given in the order
+        that the BFS discovered them. For instance, `qu[0] == r`, provided
+        the root node is valid (`G[r] == True`). Elements after `qt`, i.e.
+        `qu[qt+1 : -1]`, are meaningless.
+        
+    qt : int
+        
+        The queue tail, i.e. the index to the last meaningful entry in `qu`.
+        Hence, `qt+1` is the number of valid nodes in the connected region
+        containing the root node. If the root node is invalid (`G[r] ==
+        False`) then `qt == -1`.
+
+    """
 
     N = len(G)
     qu = np.empty(N, dtype=np.int64)
@@ -74,11 +87,78 @@ def bfs_conncomp1(G, A, r):
 
 @numba.njit
 def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
-    # Note! Mutates s, t, p
-    ni, nj, nk = S.shape
-    nij = ni * nj
+    """
+    As in bfs_conncomp1 but extending the perimeter via wetting
+    
+    A breadth-first search begins from the root node `r`, extending through
+    wet surface points, i.e. points where `p` is finite.  When an invalid
+    node is reached (a dry water column), a neutral tangent plane calculation
+    is performed from the surface to this water column.  If successful, this
+    water column is made "wet": the surface is extended to the location on
+    this water column at which NTP intersected, and it is added to the BFS so
+    that wetting can proceed as far as possible.
 
-    qu = np.empty(nij, dtype=np.int64)
+    Parameters
+    ----------
+    s, t, p : ndarray
+
+        2D practical / Absolute salinity and potential / Conservative
+        temperature and pressure / depth on the surface.  
+
+        Note, this function mutates `s`, `t`, and `p`!
+
+    S, T, P : ndarray
+
+        3D practical / Absolute salinity and potential / Conservative
+        temperature and pressure / depth in the ocean
+
+    Sppc, Tppc : ndarray
+      
+        Pre-computed Piecewise Polynomial Coefficients for `S` and `T` as
+        functions of `P`. These should be computed as ``Sppc = interp_fn
+        (S, P)`` and ``Tppc = interp_fn(T,P)`` where `interp_fn` is an
+        interpolation function from ``interp_ppc.py``, e.g. ``linear_coeffs``
+        or ``pchip_coeffs``
+
+    n_good : ndarray
+
+        Pre-computed number of ocean data points in each water column.
+        This should be computed as ``n_good = lib.find_first_nan(S)``.
+
+    A : ndarray of int
+         As in `bfs_conncomp1`
+    
+    r : int
+        As in `bfs_conncomp1`
+
+    tol_p : float
+
+        Error tolerance when root-finding to update the pressure or depth of
+        the surface in each water column. Units are the same as `P`.
+    
+    eos : function
+
+        The equation of state, giving the density or specific volume as a
+        function of `S`, `T`, and `P` inputs. 
+
+        This should be @numba.njit decorated and need not be
+        vectorized, as it will be called many times with scalar inputs.
+
+    Returns
+    -------
+    qu : ndarray
+        As in `bfs_conncomp1`
+    qt : int
+        As in `bfs_conncomp1`.
+    newly_wet : int
+        Number of newly wet water columns.
+
+    """
+
+    ni, nj, nk = S.shape
+    N = ni * nj
+
+    qu = np.empty(N, dtype=np.int64)
 
     qt = -1  # Queue Tail
     qh = -1  # Queue Head
@@ -91,17 +171,16 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     dry = (n_good > 1) & ~G
 
     # Flatten lateral dimension of inputs to be 1D.  Use reshape() to get a view.
-
-    G = np.reshape(G, nij)
-    dry = np.reshape(dry, nij)
-    s = np.reshape(s, nij)
-    t = np.reshape(t, nij)
-    p = np.reshape(p, nij)
-    S = np.reshape(S, (nij, nk))
-    T = np.reshape(T, (nij, nk))
-    P = np.reshape(P, (nij, nk))
-    Sppc = np.reshape(Sppc, (nij, nk - 1, -1))
-    Tppc = np.reshape(Tppc, (nij, nk - 1, -1))
+    G = np.reshape(G, N)
+    dry = np.reshape(dry, N)
+    s = np.reshape(s, N)
+    t = np.reshape(t, N)
+    p = np.reshape(p, N)
+    S = np.reshape(S, (N, nk))
+    T = np.reshape(T, (N, nk))
+    P = np.reshape(P, (N, nk))
+    Sppc = np.reshape(Sppc, (N, nk - 1, -1))
+    Tppc = np.reshape(Tppc, (N, nk - 1, -1))
     n_good = np.reshape(n_good, -1)
 
     # Initialize BFS from root node
@@ -109,13 +188,13 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     qu[qt] = r
     G[r] = False  # mark r as discovered
 
-    n_wet = 0
+    newly_wet = 0
     while qt > qh:
         qh += 1  # advance head of the queue
         m = qu[qh]  # me node; pop from head of queue
         for d in range(D):
             n = A[m, d]  # neighbour node
-            if n < nij:  # check n is not a neighbour across a non-periodic boundary
+            if n < N:  # check n is not a neighbour across a non-periodic boundary
                 if G[n]:
                     # n is good and undiscovered
 
@@ -142,70 +221,66 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
 
                     if np.isfinite(p[n]):
                         # The NTP connection was successful
-
-                        # s[np.unravel_index(n, (ni,nj))] = s1[n]
-                        # t[np.unravel_index(n, (ni,nj))] = t1[n]
-                        # p[np.unravel_index(n, (ni,nj))] = p1[n]
-
                         qt += 1  # Add n to queue
                         qu[qt] = n
                         G[n] = False  # mark n as discovered
                         dry[n] = False
+                        newly_wet += 1  # augment counter of newly wet casts
 
-                        n_wet += 1  # augment counter of newly wet casts
-
-    # Unflatten to 2D arrays
-    # s[:] = np.reshape(ss, (ni,nj))
-    # t[:] = np.reshape(tt, (ni,nj))
-    # p[:] = np.reshape(pp, (ni,nj))
-
-    return qu, qt, n_wet
+    return qu, qt, newly_wet
 
 
-# function grid_adjacency(dims::Tuple{Int,Int}, conn::Int, wrap::Tuple{Bool,Bool})
 def grid_adjacency(dims, conn, wrap):
+    """
+    Linear indices to each neighbour of each grid point on a regular grid
 
-    # GRID_ADJACENCY  Linear indices to each neighbour of each grid point on a grid
-    #
-    #
-    # adj = grid_adjacency(dims, conn, wrap)
-    # builds a matrix adj giving linear indices to each of conn neighbours of
-    # each grid point in a grid of size specified by dims.  The grid is periodic
-    # in the i'th dimension if and only if wrap[i] is true. The n'th column of
-    # adj is a vector of linear indices to grid points that are adjacent to the
-    # grid point whose linear index is n.  The maximum number of neighbours of
-    # any grid point is conn, which is the number of rows of adj.  If grid
-    # point n has fewer neighbours than conn; due to being near a non-periodic
-    # boundary, adj[n,:] will contain some flag values.  The flag value is
-    # ni*nj, which can be used to index some special value.
-    #
-    # The connectivity conn specifies the number of neighbours to a central grid
-    # point, possibly including itself.  For i between 1 and conn; the i'th
-    # neighbour is located relative to the central grid point according to the
-    # following diagram:
-    #  conn==4        conn==5   conn==8   conn==9
-    # +---------> j
-    # |   . 1 .       . 1 .     4 1 6     0 3 6
-    # |   0 . 3       0 2 4     0 . 3     1 4 7
-    # v   . 2 .       . 3 .     5 2 7     2 5 8
-    # i
-    # Here, i increases downward and j increases right.  For example, if conn
-    # == 4, the 2'nd neighbour (indexed by 1) of the central grid point at (i,j) is located at
-    # (i-1,j).
-    #
-    #
-    # --- Input:
-    # dims: tuple specifying dimensions of the grid
-    # conn: the connectivity: 4, 5, 8, or 9.
-    # wrap: tuple specifying periodicity of the grid.
-    #
-    #
-    # --- Output:
-    # adj [dims, conn]: the adjacency matrix
+    This builds a 2D array `adj` giving linear indices to each of `conn`
+    neighbours of each grid point in a regular grid.  
 
-    # Author[s] : Geoff Stanley
-    # Email     : g.stanley@unsw.edu.au
-    # Email     : geoffstanley@gmail.com
+    Parameters
+    ----------
+    dims : tuple of int
+
+        The number of grid points in each dimension of the grid.  Currently
+        this must be of length 2, i.e. only 2D grids are supported. 
+
+    conn : int
+        The grid connectivity: for a 2D grid, this must be 4, 5, 8, or 9.
+    
+    wrap : tuple of bool
+        The periodicity of the grid.  Dimension `i` is periodic iff 
+        `wrap[i] == True`.
+
+
+    Returns
+    -------
+    adj : ndarray
+        
+        Linear indices to up to `conn` neighbours of each grid point.  
+        When a grid point `m` is adjacent to a non-periodic boundary, some of
+        `adj[m,:]` will be `N`, where `N = np.prod(dims)` is the total number
+        of grid points.
+
+    Notes
+    -----
+    The connectivity `conn` specifies the number of neighbours to a central
+    grid point, possibly including itself.  For `n` between 1 and conn; the
+    `n`'th neighbour is located relative to the central grid point according
+    to the following diagram:
+
+    conn==4      conn==5    conn==8   conn==9
+    +------> j
+    | . 1 .       . 1 .     4 1 6     0 3 6
+    | 0 . 3       0 2 4     0 . 3     1 4 7
+    v . 2 .       . 3 .     5 2 7     2 5 8
+    i
+
+    Here, the first dimension (i) increases downward and the second dimension
+    (j) increases right.  For example, with `conn == 4`, if `m` is the linear
+    index to grid point `(i,j)`, then `n = adj[m,1]` is the linear index to
+    grid point `(i-1,j)`.
+
+    """
 
     ndim = len(dims)  # Number of dimensions in the grid
     assert ndim == 2, "grid_adjacency currently only works for 2D grids."
