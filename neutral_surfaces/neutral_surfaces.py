@@ -106,12 +106,13 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
 
     d : dict
 
-        Diagnostics for the algorithm.  The first three are given for all
-        surface types.  For "omega" surfaces, all diagnostics are given, and
-        give information about or after each iteration (hence their 0'th
-        element is zero).
-
-        ``"ϵ_MAV"`` : array of float
+        Diagnostics.  The first four are given for all surface types. 
+        For "omega" surfaces, all diagnostics are given.  The first four
+        give information going into the `i`'th iteration, i.e. the 0'th element
+        is about the initial surface.  The others give information about what
+        the `i`'th iteration did, and hence their 0'th elements are meaningless.
+        
+        ``"ϵ_MAV"`` : float or array of float
 
             Mean Absolute Value of the ϵ neutrality error on the surface,
             area-weighted.  Units are those of `eos` return values divided by
@@ -119,11 +120,15 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
             is this value for the initial surface, and ``d["ϵ_MAV"][i]`` is
             this value after the `i`'th iteration.
 
-        ``"ϵ_RMS"`` : array of float
+        ``"ϵ_RMS"`` : float or array of float
 
             As ``"ϵ_MAV"`` but for the Root Mean Square.
+            
+        ``"n_wet"``: float or array of float
+        
+            Number of wet casts (surface points).
 
-        ``"timer"`` : array of float
+        ``"timer"`` : float or array of float
 
             Time spent on the whole algorithm, excluding set-up and diagnostics.
 
@@ -564,10 +569,14 @@ def sigma_delta_surf(ans_type, S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, 
         d["timer"] = time() - timer
         ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
         d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
+        
+        n_wet = np.sum(np.isfinite(p))
+        d["n_wet"] = n_wet
         if output:
             print(
                 f"{ans_type} done"
                 f" | {d['timer']:5.2f} sec"
+                f" | {d['n_wet']:4} wet casts"
                 f" | log_10(rms(ϵ)) = {np.log10(ϵ_RMS) : 9.6f}",
             )
 
@@ -632,6 +641,7 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
             "Δp_MAV": np.zeros(ITER_MAX + 1, dtype=np.float64),
             "Δp_RMS": np.zeros(ITER_MAX + 1, dtype=np.float64),
             "Δp_Linf": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "n_wet": np.zeros(ITER_MAX + 1, dtype=int),
             "n_newly_wet": np.zeros(ITER_MAX + 1, dtype=int),
             "timer_bfs": np.zeros(ITER_MAX + 1, dtype=np.float64),
             "timer_matbuild": np.zeros(ITER_MAX + 1, dtype=np.float64),
@@ -679,6 +689,9 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
     if diags:
         ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
         d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
+        
+        n_wet = np.sum(np.isfinite(p))
+        d["n_wet"][0] = n_wet
 
     if np.isnan(p[pin_cast]):
         raise RuntimeError("The initial surface is NaN at the reference cast.")
@@ -700,9 +713,19 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
         d["timer"][0] = time() - timer
         if output:
             print(
-                f"omega initialized "
-                f" | {d['timer'][0]:5.2f} sec"
-                f" | log_10(rms(ϵ)) = {np.log10(ϵ_RMS):9.6f}"
+                "iter |"
+                "    MAV(ϕ)     |"
+                "    RMS(Δp)      |"
+                " # wet casts (# new) |"
+                "     RMS(ϵ)     |"
+                " time (s)"
+            )
+            print(
+                f"{0:4d} |"
+                f"                                 |"
+                f" {d['n_wet'][0]:11}         |"
+                f" {ϵ_RMS:.8e} |"
+                f" {d['timer'][0]:.3f}"
             )
 
     # --- Begin iterations
@@ -780,15 +803,18 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
             # Diagnostics about the state AFTER this iteration
             ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
             d["ϵ_RMS"][iter_], d["ϵ_MAV"][iter_] = ϵ_RMS, ϵ_MAV
+            
+            n_wet = np.sum(np.isfinite(p))
+            d["n_wet"][iter_] = n_wet
 
             if output:
                 print(
-                    f"omega iter {iter_:02d} done"
-                    f" | {d['timer'][iter_]:5.2f} sec"
-                    f" | log_10(rms(ϵ)) = {np.log10(ϵ_RMS):9.6f}"
-                    f" | ϕ MAV = {ϕ_MAV:.6e}"
-                    f" | {n_newly_wet:4} casts newly wet"
-                    f" | Δp RMS = {Δp_RMS:.6e}"
+                    f"{iter_:4d} |"
+                    f" {ϕ_MAV:.8e} |"
+                    f" {Δp_RMS:.8e} |"
+                    f" {n_wet:11} ({n_newly_wet:5}) |"
+                    f" {ϵ_RMS:.8e} |"
+                    f" {d['timer'][iter_]:.3f}"
                 )
 
         # --- Check for convergence
