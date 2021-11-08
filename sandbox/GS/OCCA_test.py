@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 # %% Imports
 
 # %matplotlib notebook
@@ -9,114 +6,148 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from neutral_surfaces import approx_neutral_surf
-from neutral_surfaces.load_data import load_OCCA
-from neutral_surfaces.lib import ntp_ϵ_errors_norms
-
-from neutral_surfaces.lib import veronis_density
+from neutral_surfaces import sigma_surf, delta_surf, omega_surf
+from neutral_surfaces.data import load_OCCA
+from neutral_surfaces.ntp import ntp_ϵ_errors_norms
+from neutral_surfaces.ntp import veronis_density
 
 from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 
 # %% Load OCCA data
 g, S, T, P, _ = load_OCCA("~/work/data/OCCA/")
-Z = -g['RC']
+Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
 ni, nj, nk = S.shape
-nij = ni * nj
 
 # Select pinning cast
 i0 = int(ni / 2)
 j0 = int(nj / 2)
-z0 = 1500.
+z0 = 1500.0
 
-eos = make_eos('jmd95', g['grav'], g['ρ_c'])
-eos_s_t = make_eos_s_t('jmd95', g['grav'], g['ρ_c'])
-
-# %% Neutral Tangent Plane bottle to cast
-from neutral_surfaces.lib import ntp_bottle_to_cast, _ntp_bottle_to_cast, find_first_nan
-from neutral_surfaces.interp_ppc import linear_coeffs
-S1 = S.values[180,80,:]
-T1 = T.values[180,80,:]
-s0, t0, p0 = ntp_bottle_to_cast(35., 16., 500., S1, T1, Z)
-
-n_good = find_first_nan(S1)[()]
-S1ppc = linear_coeffs(Z, S1)
-T1ppc = linear_coeffs(Z, T1)
-s0, t0, p0 = _ntp_bottle_to_cast(35., 16., 500., S1, T1, Z, S1ppc, T1ppc, n_good, 1e-4, eos)
-
-
-# %% Veronis Density
-S_ref_cast = S.values[i0,j0]
-T_ref_cast = T.values[i0,j0]
-ρ_v = veronis_density(S_ref_cast, T_ref_cast, Z, 1500., eos=eos, eos_s_t=eos_s_t)  # 1027.7700462375435
-
+# Prepare equation of state functions
+eos = make_eos("jmd95", g["grav"], g["ρ_c"])
+eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
 
 # %% Potential Density surface
 
-# Provide reference pressure and  isovalue
-s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
-                                 eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
-                                 wrap="Longitude_t", vert_dim="Depth_c", 
-                                 ref=0., isoval=1027.5)
+# Provide reference pressure and isovalue
+s, t, z, d = sigma_surf(
+    S,
+    T,
+    Z,
+    eos="jmd95",
+    grav=g["grav"],
+    rho_c=g["ρ_c"],
+    wrap="Longitude_t",
+    vert_dim="Depth_c",
+    ref=0.0,
+    isoval=1027.5,
+)
 
 # Provide reference pressure and location for the surface to intersect (pin_cast and pin_p)
-s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
-                                 eos=eos, eos_s_t=eos_s_t,
-                                 wrap="Longitude_t", vert_dim="Depth_c", 
-                                 ref=0., pin_cast=(i0, j0), pin_p=z0)
+s, t, z, d = sigma_surf(
+    S,
+    T,
+    Z,
+    eos=eos,
+    eos_s_t=eos_s_t,
+    wrap="Longitude_t",
+    vert_dim="Depth_c",
+    ref=0.0,
+    pin_cast=(i0, j0),
+    pin_p=z0,
+)
 
-# Provide just the location to intersect (pin_cast, pin_p). 
+# Provide just the location to intersect (pin_cast, pin_p).
 # This takes the reference pressure ref to match pin_p.
-s, t, z, d = approx_neutral_surf('sigma', S, T, Z, 
-                                 eos=eos, eos_s_t=eos_s_t,
-                                 wrap="Longitude_t", vert_dim="Depth_c", 
-                                 pin_cast=(i0, j0), pin_p=z0)
+s, t, z, d = sigma_surf(
+    S,
+    T,
+    Z,
+    eos=eos,
+    eos_s_t=eos_s_t,
+    wrap="Longitude_t",
+    vert_dim="Depth_c",
+    pin_cast=(i0, j0),
+    pin_p=z0,
+)
 
-# DIST1_iJ=1, DIST2_Ij=1, DIST2_iJ=1, DIST1_Ij=1
-ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g['wrap'])
+# Calculate epsilon neutrality errors on the surface (these are also given in diagnostics `d`)
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g["wrap"])
 
-dist1_iJ = g['DXCvec']
-dist1_Ij = g['DXGvec']
-dist2_Ij = g['DYGsc']
-dist2_iJ = g['DYCsc']
-ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g['wrap'], 
-                                  dist1_iJ = g['DXCvec'], 
-                                  dist1_Ij = g['DXGvec'],
-                                  dist2_Ij = g['DYGsc'],
-                                  dist2_iJ = g['DYCsc'])
-ϵ_RMS
+
+# Calculate area-weighted epsilon neutrality errors on the surface
+dist1_iJ = g["DXCvec"]
+dist1_Ij = g["DXGvec"]
+dist2_Ij = g["DYGsc"]
+dist2_iJ = g["DYCsc"]
+geom = [dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ]
+
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g["wrap"], *geom)
+print(ϵ_RMS)
 
 # %% Delta surface
-# Provide reference pressure and  isovalue
-s, t, z, d = approx_neutral_surf('delta', S, T, Z, 
-                                 eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
-                                 wrap="Longitude_t", vert_dim="Depth_c", 
-                                 ref=(34.5,4.), isoval=0.)
+# Provide reference pressure and isovalue
+s, t, z, d = delta_surf(
+    S,
+    T,
+    Z,
+    eos="jmd95",
+    grav=g["grav"],
+    rho_c=g["ρ_c"],
+    wrap="Longitude_t",
+    vert_dim="Depth_c",
+    ref=(34.5, 4.0),
+    isoval=0.0,
+)
 
 # Provide reference pressure and location for the surface to intersect (pin_cast and pin_p)
-s, t, z, _ = approx_neutral_surf('delta', S, T, Z, 
-                                 eos=eos, eos_s_t=eos_s_t,
-                                 diags=False, vert_dim="Depth_c", 
-                                 ref=(34.5,4.), pin_cast=(i0, j0), pin_p=z0)
+# and don't ask for diagnostics
+s, t, z, _ = delta_surf(
+    S,
+    T,
+    Z,
+    eos=eos,
+    eos_s_t=eos_s_t,
+    diags=False,
+    vert_dim="Depth_c",
+    ref=(34.5, 4.0),
+    pin_cast=(i0, j0),
+    pin_p=z0,
+)
 
-# Provide just the location to intersect (pin_cast, pin_p). 
+# Provide just the location to intersect (pin_cast, pin_p).
 # This takes the reference pressure ref to match pin_p.
-s, t, z, d = approx_neutral_surf('delta', S, T, Z, 
-                                 eos=eos, eos_s_t=eos_s_t,
-                                 wrap="Longitude_t", vert_dim="Depth_c", 
-                                 pin_cast=(i0, j0), pin_p=z0)
+s, t, z, d = delta_surf(
+    S,
+    T,
+    Z,
+    eos=eos,
+    eos_s_t=eos_s_t,
+    wrap="Longitude_t",
+    vert_dim="Depth_c",
+    pin_cast=(i0, j0),
+    pin_p=z0,
+)
 
 # %% Omega surface
 
-# Initialize omega surface with sigma surface
-s, t, z, d = approx_neutral_surf(
-    'omega',
-    S, T, Z,
-    wrap="Longitude_t", vert_dim="Depth_c",
-    pin_cast=(i0, j0), pin_p = z0,
-    eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
-    ITER_MAX=10, ITER_START_WETTING=1,
+# Initialize omega surface with a (locally referenced) sigma surface
+s, t, z, d = omega_surf(
+    S,
+    T,
+    Z,
+    wrap="Longitude_t",
+    vert_dim="Depth_c",
+    pin_cast=(i0, j0),
+    pin_p=z0,
+    eos="jmd95",
+    grav=g["grav"],
+    rho_c=g["ρ_c"],
+    ITER_MAX=10,
+    ITER_START_WETTING=1,
 )
+# %%
 # s, t, z, diags = approx_neutral_surf(
 #     'omega', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
 #     pin=(i0, j0, z0), wrap=g['wrap'],
@@ -128,15 +159,21 @@ print(f' matbuild time: {np.sum(d["timer_matbuild"]) : .4f} sec')
 print(f' matsolve time: {np.sum(d["timer_matsolve"]) : .4f} sec')
 print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
-# Initialize omega surface with delta surface:
-s, t, z, d = approx_neutral_surf(
-    'omega',
-    S, T, Z,
-    ref = (None, None),
-    wrap="Longitude_t", vert_dim="Depth_c",
-    pin_cast=(i0, j0), pin_p = z0,
-    eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
-    ITER_MAX=10, ITER_START_WETTING=1,
+# Initialize omega surface with a (locally referenced) delta surface:
+s, t, z, d = omega_surf(
+    S,
+    T,
+    Z,
+    ref=(None, None),
+    wrap="Longitude_t",
+    vert_dim="Depth_c",
+    pin_cast=(i0, j0),
+    pin_p=z0,
+    eos="jmd95",
+    grav=g["grav"],
+    rho_c=g["ρ_c"],
+    ITER_MAX=10,
+    ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
 )
 # old tests below:
@@ -174,3 +211,31 @@ cs = ax.imshow(z.T, origin="lower")
 cbar = fig.colorbar(cs, ax=ax)
 cbar.set_label("Depth [m]")
 ax.set_title(r"Depth of surface in OCCA")
+
+
+# %% Neutral Tangent Plane bottle to cast
+from neutral_surfaces.ntp import ntp_bottle_to_cast
+from neutral_surfaces.interp_ppc import linear_coeffs
+
+S1 = S.values[180, 80, :]
+T1 = T.values[180, 80, :]
+s0, t0, p0 = ntp_bottle_to_cast(35.0, 16.0, 500.0, S1, T1, Z)
+
+# Or the more manual version:
+from neutral_surfaces.ntp import _ntp_bottle_to_cast
+from neutral_surfaces.lib import find_first_nan
+
+n_good = find_first_nan(S1)[()]
+S1ppc = linear_coeffs(Z, S1)
+T1ppc = linear_coeffs(Z, T1)
+s0, t0, p0 = _ntp_bottle_to_cast(
+    35.0, 16.0, 500.0, S1, T1, Z, S1ppc, T1ppc, n_good, eos, 1e-4
+)
+
+
+# %% Veronis Density, used to label an approx neutral surface
+S_ref_cast = S.values[i0, j0]
+T_ref_cast = T.values[i0, j0]
+ρ_v = veronis_density(
+    S_ref_cast, T_ref_cast, Z, 1500.0, eos=eos, eos_s_t=eos_s_t
+)  # 1027.7700462375435

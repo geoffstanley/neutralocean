@@ -209,7 +209,7 @@ def _omega_matsolve_poisson(
 
     # Build indices for the columns of the sparse matrix
     # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
-    #c = remap[A5[m]]
+    # c = remap[A5[m]]
     c = np.column_stack((remap[A4[m]], np.arange(N)))
 
     # Build the values of the sparse matrix

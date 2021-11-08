@@ -31,7 +31,7 @@ rho
 .. autofunction:: neutral_surfaces.eos.densjmd95.rho
 
 rho_s_t
-~~~
+~~~~~~~
 .. autofunction:: neutral_surfaces.eos.densjmd95.rho_s_t
 
 rho_ufunc
@@ -52,3 +52,5 @@ ntp_bottle_to_cast
 neutral_trajectory
 ~~~~~~~~~~~~~~~~~~
 .. autofunction:: neutral_surfaces.lib.neutral_trajectory
+
+

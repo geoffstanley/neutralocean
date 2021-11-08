@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 
-from neutral_surfaces.lib import _ntp_bottle_to_cast
+from neutral_surfaces.ntp import _ntp_bottle_to_cast
 
 
 @numba.njit
@@ -13,12 +13,12 @@ def bfs_conncomp1(G, A, r):
     Parameters
     ----------
     G : ndarray of bool
-        
+
         A 1D array of logicals.  `G[m]` is True iff element `m` is a valid node.
         Note, this function mutates `G`!
-        
+
     A : ndarray of int
-        
+
         A 2D array of integers specifying (directional) edges in the graph.
         Consider some valid node `m` (`G[m] == True).  Node `m` is connected
         to node `n = A[m,j]` provided `n < N` and `G[n] == True`, for each
@@ -30,22 +30,22 @@ def bfs_conncomp1(G, A, r):
         be `N`.
 
     r : int
-        
-        Index to the chosen root node, where the BFS begins. 
+
+        Index to the chosen root node, where the BFS begins.
 
     Returns
     -------
     qu : ndarray of int
-    
-        The BFS search queue: a 1D array with as many elements as in `G`.  
+
+        The BFS search queue: a 1D array with as many elements as in `G`.
         `qu[0:qt]` are the indices to the True elements of `G` that are in the
         connected component containing the root node `r`, given in the order
         that the BFS discovered them. For instance, `qu[0] == r`, provided
         the root node is valid (`G[r] == True`). Elements after `qt`, i.e.
         `qu[qt+1 : -1]`, are meaningless.
-        
+
     qt : int
-        
+
         The queue tail, i.e. the index to the last meaningful entry in `qu`.
         Hence, `qt+1` is the number of valid nodes in the connected region
         containing the root node. If the root node is invalid (`G[r] ==
@@ -89,7 +89,7 @@ def bfs_conncomp1(G, A, r):
 def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting
-    
+
     A breadth-first search begins from the root node `r`, extending through
     wet surface points, i.e. points where `p` is finite.  When an invalid
     node is reached (a dry water column), a neutral tangent plane calculation
@@ -103,7 +103,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
     s, t, p : ndarray
 
         2D practical / Absolute salinity and potential / Conservative
-        temperature and pressure / depth on the surface.  
+        temperature and pressure / depth on the surface.
 
         Note, this function mutates `s`, `t`, and `p`!
 
@@ -113,7 +113,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
         temperature and pressure / depth in the ocean
 
     Sppc, Tppc : ndarray
-      
+
         Pre-computed Piecewise Polynomial Coefficients for `S` and `T` as
         functions of `P`. These should be computed as ``Sppc = interp_fn
         (S, P)`` and ``Tppc = interp_fn(T,P)`` where `interp_fn` is an
@@ -127,7 +127,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
 
     A : ndarray of int
          As in `bfs_conncomp1`
-    
+
     r : int
         As in `bfs_conncomp1`
 
@@ -135,11 +135,11 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos):
 
         Error tolerance when root-finding to update the pressure or depth of
         the surface in each water column. Units are the same as `P`.
-    
+
     eos : function
 
         The equation of state, giving the density or specific volume as a
-        function of `S`, `T`, and `P` inputs. 
+        function of `S`, `T`, and `P` inputs.
 
         This should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
@@ -235,28 +235,28 @@ def grid_adjacency(dims, conn, wrap):
     Linear indices to each neighbour of each grid point on a regular grid
 
     This builds a 2D array `adj` giving linear indices to each of `conn`
-    neighbours of each grid point in a regular grid.  
+    neighbours of each grid point in a regular grid.
 
     Parameters
     ----------
     dims : tuple of int
 
         The number of grid points in each dimension of the grid.  Currently
-        this must be of length 2, i.e. only 2D grids are supported. 
+        this must be of length 2, i.e. only 2D grids are supported.
 
     conn : int
         The grid connectivity: for a 2D grid, this must be 4, 5, 8, or 9.
-    
+
     wrap : tuple of bool
-        The periodicity of the grid.  Dimension `i` is periodic iff 
+        The periodicity of the grid.  Dimension `i` is periodic iff
         `wrap[i] == True`.
 
 
     Returns
     -------
     adj : ndarray
-        
-        Linear indices to up to `conn` neighbours of each grid point.  
+
+        Linear indices to up to `conn` neighbours of each grid point.
         When a grid point `m` is adjacent to a non-periodic boundary, some of
         `adj[m,:]` will be `N`, where `N = np.prod(dims)` is the total number
         of grid points.

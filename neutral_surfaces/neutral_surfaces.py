@@ -1,48 +1,38 @@
 """
-Calculate approximately neutral surface from 3D ocean data. 
+Calculate approximately neutral surfaces from structured ocean data. 
 """
 
 import numpy as np
-import xarray as xr
 from time import time
 
-from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 from neutral_surfaces._vertsolve import _make_vertsolve
 from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val2
 from neutral_surfaces.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
+from neutral_surfaces.ntp import ntp_ϵ_errors_norms
 from neutral_surfaces.lib import (
-    ntp_ϵ_errors_norms,
-    find_first_nan,
     xr_to_np,
-    _process_wrap,
-    _process_casts,
-    _process_vert_dim,
+    _xr_in,
+    _xr_out,
+    _process_args,
 )
 from neutral_surfaces._omega import _omega_matsolve_poisson
 
 
-def approx_neutral_surf(ans_type, S, T, P, **kwargs):
-    """Calculate approximately neutral surface from structured 3D ocean data.
+def sigma_surf(S, T, P, **kwargs):
+    """Calculate a potential density surface from structured ocean data.
 
-    Given 3D salinity, temperature, and pressure or depth data arranged on a
-    rectilinear grid, calculate a 2D potential density surface, specific
-    volume (or in-situ density) anomaly surface, or an omega surface.
+    Given practical / Absolute salinity `S`, potential / Conservative
+    temperature `T`, and pressure (when non-Boussinesq) or depth
+    (when Boussinesq) `P` arranged on a rectilinear grid, and given a
+    reference pressure `ref`, calculate an isosurface of `eos(S, T, ref)`
+    where `eos` is the equation of state.
 
     Parameters
     ----------
-    ans_type : str
-
-        'sigma', to compute a potential density surface,
-
-        'delta', to compute an in-situ density anomaly or specific volume
-        anomaly surface, or
-
-        'omega', to compute an omega-surface [1]_ [2]_.
-
     S, T : ndarray or xarray.DataArray
 
         3D practical / Absolute salinity and potential / Conservative
-        temperature
+        temperature --- that is, a 2D array of 1D water columns or "casts"
 
     P : ndarray or xarray.DataArray
 
@@ -53,84 +43,420 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
         structure as `S` and `T`, or can be 1D with as many elements as there
         are in the vertical dimension of `S` and `T`.
 
-    ref : float, or tuple of float of length 2
+    ref : float
 
-        If `ans_type` == "sigma", a float giving the reference pressure or 
-        depth, in the same units as P.
+        The reference pressure or depth, in the same units as P.
 
-        If `ans_type` == "delta", a tuple or list of two floats, giving the
-        reference S and T values.
-
-        If `ans_type` == "omega" and `p_init` is None, the reference value(s)
-        for the initial "sigma" surface (if `ref` is a scalar) or "delta"
-        surface (if `ref` is a tuple of length two).  To use local reference
-        values (advised), pass `ref` as None or (None, None).
-
-        Whenever `ref` is None or has a None element, the reference value(s)
-        are taken from the local ocean properties at `(pin_cast, pin_p)`.
+        If `ref` is None, the reference value is taken as `pin_p`.
 
         See Examples section.
 
     isoval : float
 
-        Isovalue for "sigma" or "delta" surface.
+        Isovalue of the potential density surface.
         Units are same as returned by `eos`.
 
         See Examples section.
 
     pin_p : float
 
-        Pressure or depth at which the surface is fixed in cast `pin_cast`.
+        Pressure or depth at which the surface intersects the cast `pin_cast`.
 
         See Examples section.
 
     pin_cast : tuple or list of int of length 2
 
-        Index for cast where surface is fixed at pressure or depth `pin_p`.
+        Index for cast where surface is at pressure or depth `pin_p`.
 
         See Examples section.
 
     Returns
     -------
-    s : ndarray or xarray.DataArray
+    s, t, p : ndarray or xarray.DataArray
 
-        practical / Absolute salinity on surface
-
-    t : ndarray or xarray.DataArray
-
-        potential / Conservative temperature on surface
-
-    p : ndarray or xarray.DataArray
-
-        pressure or depth on surface
+        practical / Absolute salinity, potential / Conservative temperature,
+        and pressure / depth on the surface
 
     d : dict
 
-        Diagnostics.  The first four are given for all surface types. 
-        For "omega" surfaces, all diagnostics are given.  The first four
-        give information going into the `i`'th iteration, i.e. the 0'th element
-        is about the initial surface.  The others give information about what
-        the `i`'th iteration did, and hence their 0'th elements are meaningless.
-        
-        ``"ϵ_MAV"`` : float or array of float
+        Diagnostics.
+
+        ``"ϵ_MAV"`` : float
 
             Mean Absolute Value of the ϵ neutrality error on the surface,
             area-weighted.  Units are those of `eos` return values divided by
-            those of `dist*` inputs.  When `ans_type` == "omega", ``d["ϵ_MAV"][0]``
-            is this value for the initial surface, and ``d["ϵ_MAV"][i]`` is
-            this value after the `i`'th iteration.
+            those of `dist*` inputs.
 
-        ``"ϵ_RMS"`` : float or array of float
+        ``"ϵ_RMS"`` : float
 
             As ``"ϵ_MAV"`` but for the Root Mean Square.
-            
-        ``"n_wet"``: float or array of float
-        
+
+        ``"n_wet"``: float
+
             Number of wet casts (surface points).
 
-        ``"timer"`` : float or array of float
+        ``"timer"`` : float
 
             Time spent on the whole algorithm, excluding set-up and diagnostics.
+
+
+    Other Parameters
+    ----------------
+    wrap : tuple of bool, or tuple of str
+
+        Specifies which dimensions are periodic.
+
+        As a tuple of bool, this must be length two.  The first or second
+        non-vertical dimension of `S` and `T` is periodic iff ``wrap[0]`` or
+        ``wrap[1]`` is True, respectively.
+
+        As a tuple of str, simply name the periodic dimensions of `S` and
+        `T`.
+
+        Required if diags is True
+
+    vert_dim : int or str, Default -1
+
+        Specifies which dimension of `S`, `T` (and `P` if 3D) is vertical.
+
+        If `S` and `T` are `ndarray`, then `vert_dim` is the `int` indexing
+        the vertical dimension of `S` and `T` (e.g. -1 indexes the last
+        dimension).
+
+        If `S` and `T` are `xarray.DataArray`, then `vert_dim` is a `str`
+        naming the vertical dimension of `S` and `T`.
+
+        Ideally, `vert_dim` is -1.  See `Notes`.
+
+    dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ : float or ndarray, Default 1.0
+
+        Grid distances [m] in either the 1st or 2nd lateral dimension, and
+        centred at the location specified.  The naming uses a soft notation:
+        the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
+        `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
+        `dist2_iJ[5,3]` is the distance of the face between cells (5,3) and
+        (4,3). Similarly, `dist2_Ij[5,3]` is the distance between cells
+        (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
+        between cells (5,3) and (5,2).
+
+    eos : str or function, Default 'gsw'
+
+        Equation of state for the density or specific volume as a function of
+        `S`, `T`, and pressure inputs.  For Boussinesq models, provide `grav`
+        and `rho_c`, so this function with third input pressure will be
+        converted to a function with third input depth.
+
+        If a function, this should be @numba.njit decorated and need not be
+        vectorized, as it will be called many times with scalar inputs.
+
+        If a str, can be either 'gsw' to use the TEOS-10 specific volume
+        or 'jmd95' to use the Jackett and McDougall (1995) in-situ density
+        [1]_.
+
+    eos_s_t : str or function, Default None
+
+        Equation of state for the partial derivatives of density or specific
+        volume with respect to `S` and `T` as a function of `S`, `T`, and
+        pressure (not depth) inputs.
+
+        If a function, this need not be @numba.njit decorated but should be
+        vectorized, as it will be called a few times with ndarray inputs.
+
+        If a str, the same options apply as for `eos`. If None and `eos` is a
+        str, then this defaults to the same str as `eos`.
+
+    grav : float, Default None
+
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+
+    rho_c : float, Default None
+
+        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+
+    interp_fn : function, Default ``linear_coeffs``
+
+        Function that calculates coefficients of piecewise polynomial
+        interpolants of `S` and `T` as functions of `P`.  Options include
+        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+
+    Sppc, Tppc : ndarray, Default None
+
+        Pre-computed Piecewise Polynomial Coefficients for `S` and `T` as
+        functions of `P`. If None, these are computed as ``Sppc = interp_fn
+        (S, P)`` and ``Tppc = interp_fn(T,P)``.
+
+    n_good : ndarray, Default None
+
+        Pre-computed number of ocean data points in each water column.
+        If None, this is computed as ``n_good = lib.find_first_nan(S)``.
+
+    diags : bool, Default True
+
+        If True, calculate diagnostics (4th output).  If False, 4th output is
+        an empty dict.
+
+    output : bool, Default True
+
+        If True, prints diagnostic output during computation.
+        `diags` must be True for this to have any effect.
+        To redirect this output to a file, do the following
+        >>> import sys
+        >>> tmp = sys.stdout
+        >>> sys.stdout = file_id = open('myfile.txt', 'w')
+        >>> # Now call this function ...
+        >>> sys.stdout = tmp
+        >>> file_id.close()
+
+    TOL_P_SOLVER : float, Default 1e-4
+
+        Error tolerance when root-finding to update the pressure or depth of
+        the surface in each water column. Units are the same as `P`.
+
+    Examples
+    --------
+    The output surface must be specified by some combination of reference
+    pressure / depth `ref`, isovalue `isoval`, pinning cast `pin_cast` and
+    pinning pressure `pin_p`.  The following methods are valid, and listed in
+    order of precedence (e.g. `pin_cast` and `pin_p` are not used if both
+    `ref` and `isoval` are given).
+
+    >>> sigma_surf(S, T, P, ref=___, isoval=___, ...)
+
+    This finds the surface with given reference pressure / depth and the given
+    isovalue.
+
+    >>> sigma_surf(S, T, P, ref=___, pin_p=___, pin_cast=___, ...)
+
+    This finds the surface with given reference pressure / depth that intersects
+    the given cast at the given pressure or depth.
+
+    >>> sigma_surf(S, T, P, pin_p=___, pin_cast=___, ...)
+
+    This is as for the previous method, but selects the reference pressure /
+    depth as `pin_p` (i.e. the local `P` value at the given cast's given
+    pressure or depth).
+
+    Notes
+    -----
+    This code will internally re-arrange `S`, `T`, `P` to have the vertical
+    dimension last, so that the data for an individual water column is
+    contiguous in memory.  If you call this function many times, consider
+    using ``neutral_surfaces._process_casts`` to pre-process your `S`, `T`,
+    `P` inputs to have the vertical dimension last.  Also consider
+    pre-computing `Sppc`, `Tppc`, and `n_good` (see the documentation for
+    these inputs).
+
+    .. [1] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+    """
+
+    return _sigma_delta_surf("sigma", S, T, P, **kwargs)
+
+
+def delta_surf(S, T, P, **kwargs):
+    """Calculate a specific volume (or in-situ density) anomaly surface from structured ocean data.
+
+    Given practical / Absolute salinity `S`, potential / Conservative
+    temperature `T`, and pressure / depth `P` arranged on a rectilinear grid,
+    and given a reference values `S0` and `T0`, calculate an isosurface of
+    `eos(S, T, P) - eos(S0, T0, P)` where `eos` is the equation of state.
+
+    In a non-Boussinesq ocean, `P` is pressure.  Also, if one is computing
+    geostrophic streamfunctions, it is most convenient if `eos` provides the
+    specific volume.
+
+    In a Boussinesq ocean, `P` is depth.  Also, if one is computing
+    geostrophic streamfunctions, it is most convenient if `eos` provides the
+    in-situ density.
+
+    Parameters
+    ----------
+    S, T, P : ndarray or xarray.DataArray
+        See `sigma_surf`
+
+    ref : tuple of float of length 2
+
+        The reference S and T values.
+
+        If `ref` is None or has a None element, the reference values are taken
+        from the local `S` and `T` at the pressure or depth `pin_p` on the
+        pinning cast `pin_cast`.
+
+    isoval, pin_p, pin_cast :
+        See `sigma_surf`
+
+    Returns
+    -------
+    s, t, p, d :
+        See `sigma_surf`
+
+    Examples
+    --------
+    The output surface must be specified by some combination of reference
+    salinity and temperature `ref`, isovalue `isoval`, pinning cast `pin_cast` and
+    pinning pressure `pin_p`.  The following methods are valid, and listed in
+    order of precedence (e.g. `pin_cast` and `pin_p` are not used if both
+    `ref` and `isoval` are given).
+
+    >>> delta_surf(S, T, P, ref=___, isoval=___, ...)
+
+    This finds the surface with given reference salinity and temperature and
+    the given isovalue.
+
+    >>> delta_surf(S, T, P, ref=___, pin_p=___, pin_cast=___, ...)
+
+    This finds the surface with given reference salinity and temperature that
+    intersects the given cast at the given pressure or depth.
+
+    >>> delta_surf(S, T, P, pin_p=___, pin_cast=___, ...)
+
+    This is as for the previous method, but selects the reference salinity and
+    temperature from the local `S` and `T` values at the given cast's given
+    pressure or depth.
+
+    Notes
+    -----
+    See `sigma_surf`.
+    """
+
+    return _sigma_delta_surf("delta", S, T, P, **kwargs)
+
+
+def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
+    """Core function to calculate "sigma" or "delta" surfaces.
+    Inputs are as in `sigma_surf` and `delta_surf`, but first input is a string
+    specifying "sigma" or "delta" """
+
+    ref = kwargs.get("ref")
+    isoval = kwargs.get("isoval")
+    pin_cast = kwargs.get("pin_cast")
+    pin_p = kwargs.get("pin_p")
+    vert_dim = kwargs.get("vert_dim", -1)
+    TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
+    eos = kwargs.get("eos", "gsw")
+    eos_s_t = kwargs.get("eos_s_t")
+    wrap = kwargs.get("wrap")
+    diags = kwargs.get("diags", True)
+    output = kwargs.get("output", True)
+    geom = (
+        kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
+    )
+
+    n_good = kwargs.get("n_good")
+    Sppc = kwargs.get("Sppc")
+    Tppc = kwargs.get("Tppc")
+    interp_fn = kwargs.get("interp_fn", linear_coeffs)
+
+    d = dict()
+    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
+    S, T, P, Sppc, Tppc, n_good, wrap, eos, eos_s_t = _process_args(
+        S, T, P, vert_dim, wrap, diags, eos, eos_s_t, interp_fn, Sppc, Tppc, n_good
+    )
+    ni, nj = n_good.shape
+
+    # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
+    # selection to (ref, isoval) pair
+    _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj)
+    ref, isoval = _choose_ref_isoval(
+        ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, Sppc, Tppc
+    )
+
+    # Solve non-linear root finding problem in each cast
+    vertsolve = _make_vertsolve(eos, ans_type)
+    timer = time()
+    s, t, p = vertsolve(S, T, P, Sppc, Tppc, n_good, ref, isoval, TOL_P_SOLVER)
+
+    if diags:
+        d["timer"] = time() - timer
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+        d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
+
+        n_wet = np.sum(np.isfinite(p))
+        d["n_wet"] = n_wet
+        if output:
+            print(
+                f"{ans_type} done"
+                f" | {n_wet:11d} wet casts"
+                f" | RMS(ϵ) = {ϵ_RMS:.8e}",
+                f" | {d['timer']:.3f} sec",
+            )
+
+    s, t, p = _xr_out(s, t, p, sxr, txr, pxr)
+    return s, t, p, d
+
+
+def omega_surf(S, T, P, **kwargs):
+    """Calculate an omega surface from structured ocean data.
+
+    Given 3D salinity, temperature, and pressure or depth data arranged on a
+    rectilinear grid, calculate a 2D omega surface [1]_ [2]_, which is a
+    highly accurate approximately neutral surface.
+
+    Parameters
+    ----------
+    S, T, P : ndarray or xarray.DataArray
+        See `sigma_surf`
+
+    p_init : ndarray, Default None
+
+        Pressure or depth on the initial approximately neutral surface.
+        Omit to initialize with a "sigma" or "delta" surface.
+
+        See Examples section.
+
+    ref : float, or tuple of float of length 2
+
+        If `p_init` is None, the reference value(s) for the initial "sigma"
+        surface or "delta" surface that begins the iterations. If `ref` is a
+        scalar, a "sigma" surface is used, and if `ref` is None, the
+        reference pressure is `pin_p` (i.e. taken local to the pinning
+        location). If `ref` is a tuple of length two, a "delta" surface is
+        used, and if `ref` is(None, None), then the reference `S` and `T`
+        values are taken local to the pinning location (pressure or depth
+        `pin_p` on the pinning cast `pin_cast`).
+
+        See Examples section.
+
+    isoval : float
+
+        Isovalue for the initial "sigma" or "delta" surface if `p_init` is not
+        given.  Units are same as returned by `eos`.
+
+        See Examples section.
+
+    pin_p, pin_cast :
+        See `sigma_surf`
+
+    Returns
+    -------
+    s, t, p : ndarray or xarray.DataArray
+
+        practical / Absolute salinity, potential / Conservative temperature,
+        and pressure / depth on surface
+
+    d : dict
+
+        Diagnostics.  The first four give information going into the `i`'th
+        iteration (e.g. the 0'th element is about the initial surface).  The
+        others give information about what the `i`'th iteration did (and hence
+        their 0'th elements are irrelevant).
+
+        ``"ϵ_MAV"`` : array of float
+
+            Mean Absolute Value of the ϵ neutrality error on the surface,
+            area-weighted.  Units are those of `eos` return values divided by
+            those of `dist*` inputs.
+
+        ``"ϵ_RMS"`` : array of float
+
+            As ``"ϵ_MAV"`` but for the Root Mean Square.
+
+        ``"n_wet"``: array of float
+
+            Number of wet casts (surface points).
+
+        ``"timer"`` : array of float
+
+            Time spent on each iteration, excluding set-up (approximately) and diagnostics.
 
         ``"ϕ_MAV"`` : array of float
 
@@ -174,149 +500,20 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap : tuple of bool, or tuple of str
-
-        Specifies which dimensions are periodic.
-
-        As a tuple of bool, this must be length two.  The first or second
-        non-vertical dimension of `S` and `T` is periodic iff ``wrap[0]`` or
-        ``wrap[1]`` is True, respectively.
-
-        As a tuple of str, simply name the periodic dimensions of `S` and
-        `T`.
-
-        Required if `ans_type` is "omega" or diags is True
-
-    vert_dim : int or str, Default -1
-
-        Specifies which dimension of `S`, `T` (and `P` if 3D) is vertical.
-
-        If `S` and `T` are `ndarray`, then `vert_dim` is the `int` indexing
-        the vertical dimension of `S` and `T` (e.g. -1 indexes the last
-        dimension).
-
-        If `S` and `T` are `xarray.DataArray`, then `vert_dim` is a `str`
-        naming the vertical dimension of `S` and `T`.
-
-        Ideally, `vert_dim` is -1.  See `Notes`.
-
-
-    dist1_iJ : float or ndarray, Default 1.
-
-        Distance [m] in 1st lateral dimension centred at (I-1/2, J).
-        The naming uses a soft notation, where i = I-1/2.
-
-    dist2_Ij : float or ndarray, Default 1.
-
-        Distance [m] in 2nd lateral dimension centred at (I, J-1/2).
-        The naming uses a soft notation, where j = J-1/2.
-
-    dist2_iJ : float or ndarray, Default 1.
-
-        Distance [m] in 2nd lateral dimension centred at (I-1/2, J).
-
-    dist1_Ij : float or nndarray, Default 1.
-
-        Distance [m] in 1st lateral dimension centred at (I, J-1/2).
-
-    eos : str or function, Default 'gsw'
-
-        Equation of state for the density or specific volume as a function of
-        `S`, `T`, and pressure inputs.  For Boussinesq models, provide `grav`
-        and `rho_c`, so this function with third input pressure will be
-        converted to a function with third input depth. 
-
-        If a function, this should be @numba.njit decorated and need not be
-        vectorized, as it will be called many times with scalar inputs.
-
-        If a str, can be either 'gsw' to use TEOS-10
-        or 'jmd95' to use Jackett and McDougall (1995) [3]_.
-
-    eos_s_t : str or function, Default None
-
-        Equation of state for the partial derivatives of density or specific
-        volume with respect to `S` and `T` as a function of `S`, `T`, and
-        pressure (not depth) inputs.
-
-        If a function, this need not be @numba.njit decorated but should be
-        vectorized, as it will be called a few times with ndarray inputs.
-
-        If a str, the same options apply as for `eos`. If None and `eos` is a
-        str, then this defaults to the same str as `eos`.
-
-    grav : float, Default None
-
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
-
-    rho_c : float, Default None
-
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
-
-    TOL_P_SOLVER : float, Default 1e-4
-
-        Error tolerance when root-finding to update the pressure or depth of
-        the surface in each water column. Units are the same as `P`.
-
-    interp_fn : function, Default ``linear_coeffs``
-
-        Function that calculates coefficients of piecewise polynomial
-        interpolants of `S` and `T` as functions of `P`.  Options include
-        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
-
-    Sppc, Tppc : ndarray, Default None
-
-        Pre-computed Piecewise Polynomial Coefficients for `S` and `T` as
-        functions of `P`. If None, these are computed as ``Sppc = interp_fn
-        (S, P)`` and ``Tppc = interp_fn(T,P)``.
-
-    n_good : ndarray, Default None
-
-        Pre-computed number of ocean data points in each water column.
-        If None, this is computed as ``n_good = lib.find_first_nan(S)``.
-
-    diags : bool, Default True
-
-        If True, calculate diagnostics (4th output) for each iteration.
-
-        If False, 4th output is an empty dict.
-
-    output : bool, Default True
-
-        If True, prints diagnostic output during computation.
-        `diags` must be True for this to have any effect.
-        To redirect this output to a file, do the following
-        >>> import sys
-        >>> tmp = sys.stdout
-        >>> sys.stdout = file_id = open('myfile.txt', 'w')
-        >>> approx_neutral_surf(...)
-        >>> sys.stdout = tmp
-        >>> file_id.close()
-        
-    **Other Parameters specific to "omega" surfaces**
-
-    p_init : ndarray, Default None
-
-        Pressure or depth on the initial approximately neutral surface.  Pass
-        None to initialize with a "sigma" or "delta" surface.
-        See Examples section.
-
-    p_ml : ndarray, Default None
-
-        Mixed Layer pressure or depth, which is removed from the surface on
-        each iteration after the first. Pass None to not remove the mixed
-        layer.
+    See `sigma_surf`.
 
     ITER_MIN : int, Default 1
 
-        Minimum number of "omega" iterations.
+        Minimum number of iterations.
 
     ITER_MAX : int, Default 10
 
-        Maximum number of "omega" iterations.
+        Maximum number of iterations.
 
     ITER_START_WETTING : int, Default 1
 
-        Iteration on which wetting begins.  Set to `ITER_MAX` + 1 to deactivate.
+        Iteration on which wetting begins.  Set to `np.inf` (`ITER_MAX` + 1
+        would also do) to deactivate.
 
     ITER_STOP_WETTING : int, Default 5
 
@@ -330,56 +527,42 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
         iteration to the next is less than this value.  Units are [kg m-3],
         even if `eos` returns a specific volume.  Set to 0 to deactivate.
 
-    TOL_P_CHANGE_RMS : float, Default 0.
+    TOL_P_CHANGE_RMS : float, Default 0.0
 
         Exit iterations when the root mean square of the pressure or depth
         change on the surface from one iteration to the next is less than this
         value. Set to 0 to deactivate. Units are the same as `P` [dbar or m].
 
+    p_ml : ndarray, Default None
+
+        Mixed Layer pressure or depth, which is removed from the surface on
+        each iteration after the first. Pass None to not remove the mixed
+        layer.
 
     Examples
     --------
-    If `ans_type` is "sigma" or "delta", the surface to be calculated must be
-    specified by some combination of reference value(s) `ref`, isovalue `isoval`,
-    pinning cast `pin_cast` and pinning pressure `pin_p`.  The following methods
-    are valid, and listed in order of precedence, e.g. `pin_cast` and `pin_p` are
-    not used if both `ref` and `isoval` are given.
+    omega surfaces require a pinning cast and initial surface.  The surface is
+    iteratively updated while remaining fixed at the pinning cast.  The
+    initial surface can be provided directly, as the surface with pressure or
+    depth given by `p_init`, in the following method:
 
-    >>> approx_neutral_surf(ans_type, S, T, P, ref, isoval, ...)
+    >>> omega_surf(S, T, P, pin_cast, p_init, ...)
 
-    This finds the surface with given reference value(s) and the given
-    isovalue.
+    Alternatively, a "sigma" or "delta" surface can be used as the initial
+    surface.  To do this, use one of the following two methods
 
-    >>> approx_neutral_surf(ans_type, S, T, P, ref, pin_p, pin_cast, ...)
+    >>> omega_surf(S, T, P, ref, isoval, pin_cast, ...)
 
-    This finds the surface with given reference value(s) that intersects
-    the given cast at the given pressure or depth.
+    >>> omega_surf(S, T, P, ref, pin_p, pin_cast, ...)
 
-    >>> approx_neutral_surf(ans_type, S, T, P, pin_p, pin_cast, ...)
-
-    This is as for the previous method, but selects the reference value(s)
-    from the ocean data at the given cast's given pressure or depth.
-
-    If `ans_type` == "omega", a pinning cast and initial surface must be
-    given.  This can be done by using the above three methods to initialize
-    the "omega" algorithm with a "sigma" or "delta" surface, but note the
-    first method must also specify `pin_cast`, as the "omega" algorithm
-    iteratively adjusts the surface while always intersecing the pinning cast
-    at a fixed pressure.  Note if `ref` is unspecified (as in the third case
-    above), the initial surface will be a "delta" surface.  Alternatively,
-    the initial surface can be specified directly, as follows:
-
-    >>> approx_neutral_surf("omega", S, T, P, pin_cast, p_init, ...)
+    For more info on these methods, see the Examples section of "sigma_surf".
+    Note that `pin_cast` is always a required input.  Note that `ref` is
+    needed to distinguish if the initial surface will be a "sigma" or "delta"
+    surface.
 
     Notes
     -----
-    This code will internally re-arrange `S`, `T`, `P` to have the vertical
-    dimension last, so that the data for an individual water column is
-    contiguous in memory.  If you call this function many times, consider
-    using ``neutral_surfaces.unpack_STP`` to pre-processing your `S`, `T`,
-    `P` inputs to have the vertical dimension last.  Also consider
-    pre-computing `Sppc`, `Tppc`, and `n_good` (see the documentation for
-    these inputs).
+    See `sigma_surf` Notes.
 
     .. [1] Stanley, McDougall, Barker 2021, Algorithmic improvements to finding
      approximately neutral surfaces, Journal of Advances in Earth System
@@ -387,222 +570,26 @@ def approx_neutral_surf(ans_type, S, T, P, **kwargs):
 
     .. [2] Klocker, McDougall, Jackett 2009, A new method of forming approximately
      neutral surfaces, Ocean Science, 5, 155-172.
-
-    .. [3] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
     """
 
-    # Get extra arguments
-    # fmt: off
-    ref = kwargs.get('ref')
-    isoval = kwargs.get('isoval')
-    pin_cast = kwargs.get('pin_cast')
-    pin_p = kwargs.get('pin_p')
-    p_init = kwargs.get('p_init')
-
-    # grid distances.  (soft notation: i = I-1/2; j = J-1/2)
-    # dist1_iJ = kwargs.get('dist1_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
-    # dist1_Ij = kwargs.get('dist1_Ij', 1.) # Distance [m] in 2nd dim centred at (I, J-1/2)
-    # dist2_Ij = kwargs.get('dist2_Ij', 1.) # Distance [m] in 2nd dim centred at (I, J-1/2)
-    # dist2_iJ = kwargs.get('dist2_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
-
-    wrap = kwargs.get('wrap')
-    vert_dim = kwargs.get('vert_dim', -1)
-
-    eos = kwargs.get('eos', 'gsw')
-    eos_s_t = kwargs.get('eos_s_t')
-    grav = kwargs.get('grav')
-    rho_c = kwargs.get('rho_c')
-
-    interp_fn = kwargs.get('interp_fn', linear_coeffs)
-    n_good = kwargs.get('n_good')
-    Sppc = kwargs.get('Sppc')
-    Tppc = kwargs.get('Tppc')
-
-    # output = kwargs.get('output', True)
-    diags = kwargs.get('diags', True)
-    # fmt: on
-
-    if ans_type not in ("sigma", "delta", "omega"):
-        raise ValueError('"ans_type" must be one of ("sigma", "delta", "omega")')
-
-    # Prepare xarray container for outputs if xarrays given for inputs
-    s_ = None
-    S_is_xr = isinstance(S, xr.core.dataarray.DataArray)
-    T_is_xr = isinstance(T, xr.core.dataarray.DataArray)
-    P_is_xr = isinstance(P, xr.core.dataarray.DataArray)
-    if S_is_xr:
-        s_ = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if T_is_xr:
-        t_ = xr.full_like(T.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if P_is_xr:
-        p_ = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-
-    if wrap is None:
-        if diags or ans_type == "omega":
-            raise ValueError(
-                'wrap must be given if diags is True or ans_type is "omega"'
-            )
-    else:
-        wrap = _process_wrap(wrap, s_)
-
-    # Process 3D hydrography
-    vert_dim = _process_vert_dim(vert_dim, S)
-    if P.ndim < S.ndim:
-        P = np.broadcast_to(P, S.shape)
-    S, T, P = (_process_casts(x, vert_dim) for x in (S, T, P))
-    ni, nj, nk = S.shape
-    if n_good is None:
-        n_good = find_first_nan(S)
-
-    # Compute interpolants for S and T casts (unless already provided)
-    if Sppc is None or Sppc.shape[0:-1] != (ni, nj, nk - 1):
-        Sppc = interp_fn(P, S)
-    if Tppc is None or Tppc.shape[0:-1] != (ni, nj, nk - 1):
-        Tppc = interp_fn(P, T)
-    # Error checking on ref, isoval, pin_cast, pin_p
-    _check_ref(ref, isoval, pin_cast, pin_p, ans_type, ni, nj)
-
-    # Handling and error checking on p_init
-    if p_init is not None and ans_type == "omega":
-        p_init = xr_to_np(p_init)
-        if not isinstance(p_init, np.ndarray):
-            raise TypeError(
-                'If provided, "p_init" or "p_init.values" must be an ndarray'
-            )
-        if p_init.shape != (ni, nj):
-            raise ValueError(
-                f'"p_init" should contain a 2D array of size ({ni}, {nj});'
-                f" found size {p_init.shape}"
-            )
-
-    # Process equation of state function and make cache functions
-    if eos_s_t is None and isinstance(eos, str):
-        eos_s_t = eos
-    elif isinstance(eos, str) and isinstance(eos_s_t, str) and eos != eos_s_t:
-        raise ValueError("eos and eos_s_t, if strings, must be the same string")
-    eos = make_eos(eos, grav, rho_c)
-    eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
-
-    args = (S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap)
-
-    if ans_type == "omega":
-
-        # Check omega args: must have pin_cast.
-        # Checks on ref, isoval, pin_p will be done later, if needed.
-        if pin_cast is None:
-            raise TypeError('`pin_cast` must be given when `ans_type` is "omega"')
-
-        # fmt: off
-        opts = {k: kwargs[k] for k in kwargs.keys()
-            if k in (
-                "diags", "output",
-                "ref", "isoval", "pin_p", "pin_cast", "p_init",
-                "p_ml",
-            ) or k[0:4] in ("ITER", "TOL_", "dist")
-        }
-        # fmt: on
-        s, t, p, d = omega_surf(*args, **opts)
-        # s, t, p, d = omega_surf(*args, kwargs)  # DEV: alternate strat: pass all kwargs as a single argument
-
-        # DEV: A third strat is to include (Sppc, Tppc, n_good, tol_p, eos,
-        # eos_s_t, wrap) as named arguments in approx_neutral_surf argument
-        # list, so they don't go into kwargs and then **kwargs can be passed
-        # straight through without worrying about having two "Sppc" vars, e.g.
-
-    else:  # ans_type in ("sigma", "delta")
-
-        # fmt: off
-        opts = {k: kwargs[k] for k in kwargs.keys()
-            if k in ("diags", "output",
-                "ref", "isoval", "pin_p", "pin_cast"
-            )
-        }
-        # fmt: on
-        s, t, p, d = sigma_delta_surf(ans_type, *args, **opts)
-
-    # Return xarrays if inputs were xarrays
-    if S_is_xr:
-        s_.data = s
-        s = s_
-    if T_is_xr:
-        t_.data = t
-        t = t_
-    if P_is_xr:
-        p_.data = p
-        p = p_
-
-    return s, t, p, d
-
-
-def _sigma_delta_surf(ans_type, S, T, P, Sppc, Tppc, n_good, eos, **opts):
-    """Efficient function for computing "sigma" or "delta" surfaces
-    Inputs are as in `approx_neutral_surface`"""
-    ref = opts.get("ref")
-    isoval = opts.get("isoval")
-    pin_cast = opts.get("pin_cast")
-    pin_p = opts.get("pin_p")
-
-    TOL_P_SOLVER = opts.get("TOL_P_SOLVER", 1e-4)
-
-    ref, isoval = _choose_ref_isoval(
-        ref, isoval, pin_cast, pin_p, ans_type, eos, S, T, P, Sppc, Tppc
-    )
-
-    # Solve non-linear root finding problem in each cast
-    vertsolve = _make_vertsolve(eos, ans_type)
-    s, t, p = vertsolve(S, T, P, Sppc, Tppc, n_good, ref, isoval, TOL_P_SOLVER)
-    return s, t, p
-
-
-def sigma_delta_surf(ans_type, S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
-
-    timer = time()
-
-    diags = opts.get("diags", True)
-    output = opts.get("output", True)
-    geom = (opts.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ"))
-
-    s, t, p = _sigma_delta_surf(ans_type, S, T, P, Sppc, Tppc, n_good, eos, **opts)
-
-    d = dict()
-    if diags:
-        d["timer"] = time() - timer
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
-        d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
-        
-        n_wet = np.sum(np.isfinite(p))
-        d["n_wet"] = n_wet
-        if output:
-            print(
-                f"{ans_type} done"
-                f" | {d['timer']:5.2f} sec"
-                f" | {d['n_wet']:4} wet casts"
-                f" | log_10(rms(ϵ)) = {np.log10(ϵ_RMS) : 9.6f}",
-            )
-
-    return s, t, p, d
-
-
-def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
-    """Efficient function for computing "omega" surfaces, given initial surface
-    Inputs are as in `approx_neutral_surface`"""
-
-    timer = time()
-
-    ref = opts.get("ref")
-    pin_p = opts.get("pin_p")
-    pin_cast = opts.get("pin_cast")
-    p_init = opts.get("p_init")
-    p_ml = opts.get("p_ml")
-    diags = opts.get("diags", True)
-    output = opts.get("output", True)
-    ITER_MIN = opts.get("ITER_MIN", 1)
-    ITER_MAX = opts.get("ITER_MAX", 10)
-    ITER_START_WETTING = opts.get("ITER_START_WETTING", 1)
-    ITER_STOP_WETTING = opts.get("ITER_STOP_WETTING", 5)
-    TOL_P_SOLVER = opts.get("TOL_P_SOLVER", 1e-4)
-    TOL_LRPD_MAV = opts.get("TOL_LRPD_MAV", 1e-7)
-    TOL_P_CHANGE_RMS = opts.get("TOL_P_CHANGE_RMS", 0.0)
+    ref = kwargs.get("ref")
+    pin_p = kwargs.get("pin_p")
+    pin_cast = kwargs.get("pin_cast")
+    p_init = kwargs.get("p_init")
+    vert_dim = kwargs.get("vert_dim", -1)
+    p_ml = kwargs.get("p_ml")
+    wrap = kwargs.get("wrap")
+    diags = kwargs.get("diags", True)
+    output = kwargs.get("output", True)
+    eos = kwargs.get("eos", "gsw")
+    eos_s_t = kwargs.get("eos_s_t")
+    ITER_MIN = kwargs.get("ITER_MIN", 1)
+    ITER_MAX = kwargs.get("ITER_MAX", 10)
+    ITER_START_WETTING = kwargs.get("ITER_START_WETTING", 1)
+    ITER_STOP_WETTING = kwargs.get("ITER_STOP_WETTING", 5)
+    TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
+    TOL_LRPD_MAV = kwargs.get("TOL_LRPD_MAV", 1e-7)
+    TOL_P_CHANGE_RMS = kwargs.get("TOL_P_CHANGE_RMS", 0.0)
     # fmt: off
     # grid distances.  (soft notation: i = I-1/2; j = J-1/2)
     # dist1_iJ = kwargs.get('dist1_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
@@ -612,19 +599,30 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
     # fmt: on
     # dist2on1_iJ = dist2_iJ / dist1_iJ
     # dist1on2_Ij = dist1_Ij / dist2_Ij
-    geom = [opts.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")]
+    geom = [
+        kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
+    ]
+
+    n_good = kwargs.get("n_good")
+    Sppc = kwargs.get("Sppc")
+    Tppc = kwargs.get("Tppc")
+    interp_fn = kwargs.get("interp_fn", linear_coeffs)
 
     dist2on1_iJ = geom[3] / geom[0]  # dist2_iJ / dist1_iJ
     dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
 
+    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
+    S, T, P, Sppc, Tppc, n_good, wrap, eos, eos_s_t = _process_args(
+        S, T, P, vert_dim, wrap, diags, eos, eos_s_t, interp_fn, Sppc, Tppc, n_good
+    )
     ni, nj = n_good.shape
+
+    if not isinstance(pin_cast, (tuple, list)):
+        raise TypeError("`pin_cast` must be a tuple or list")
 
     pin_cast_1 = np.ravel_multi_index(pin_cast, (ni, nj))  # linear index
 
     # Pre-calculate grid adjacency needed for Breadth First Search:
-    # all grid points that are adjacent to all grid points
-    #A5 = grid_adjacency((ni, nj), 5, wrap)  # using 5-connectivity
-    #A4 = A5[:, 0:-1]  # using 4-connectivity
     A4 = grid_adjacency((ni, nj), 4, wrap)  # using 4-connectivity
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
@@ -651,17 +649,24 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
     else:
         d = dict()
 
+    timer = time()
     if p_init is None:
         # Calculate an initial "sigma" or "delta" surface
-        ref = opts.get("ref")
         if isinstance(ref, (tuple, list)) and len(ref) == 2:
             ans_type = "delta"
-            if any(x is None for x in ref):
-                ref = None  # reset (None, None) or similar trigger
         else:
             ans_type = "sigma"
 
-        s, t, p = _sigma_delta_surf(ans_type, S, T, P, Sppc, Tppc, n_good, eos, **opts)
+        # Update arguments with pre-processed values
+        kwargs["Sppc"] = Sppc
+        kwargs["Tppc"] = Tppc
+        kwargs["n_good"] = n_good
+        kwargs["eos"] = eos
+        kwargs["eos_s_t"] = eos_s_t
+        kwargs["wrap"] = wrap
+        kwargs["vert_dim"] = -1  # Since S, T, P already reordered
+        kwargs["diags"] = False  # Will make our own diags next
+        s, t, p, _ = _sigma_delta_surf(ans_type, S, T, P, **kwargs)
 
     else:
         # Handling and error checking on p_init
@@ -686,16 +691,8 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
 
     pin_p = p[pin_cast]
 
-    if diags:
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
-        d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
-        
-        n_wet = np.sum(np.isfinite(p))
-        d["n_wet"][0] = n_wet
-
     if np.isnan(p[pin_cast]):
         raise RuntimeError("The initial surface is NaN at the reference cast.")
-
 
     # Get mixed layer: the pressure of the mixed layer
     # if ITER_MAX > 1 && if isstruct(p_ml)
@@ -707,10 +704,15 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
     # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
     p[np.isnan(s)] = np.nan
 
-    vertsolve = _make_vertsolve(eos, "omega")
-
     if diags:
         d["timer"][0] = time() - timer
+
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+        d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
+
+        n_wet = np.sum(np.isfinite(p))
+        d["n_wet"][0] = n_wet
+
         if output:
             print(
                 "iter |"
@@ -723,10 +725,12 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
             print(
                 f"{0:4d} |"
                 f"                                 |"
-                f" {d['n_wet'][0]:11}         |"
+                f" {d['n_wet'][0]:11d}         |"
                 f" {ϵ_RMS:.8e} |"
                 f" {d['timer'][0]:.3f}"
             )
+
+    vertsolve = _make_vertsolve(eos, "omega")
 
     # --- Begin iterations
     # Note: the surface exists wherever p is non-nan.  The nan structure of s
@@ -803,7 +807,7 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
             # Diagnostics about the state AFTER this iteration
             ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
             d["ϵ_RMS"][iter_], d["ϵ_MAV"][iter_] = ϵ_RMS, ϵ_MAV
-            
+
             n_wet = np.sum(np.isfinite(p))
             d["n_wet"][iter_] = n_wet
 
@@ -812,7 +816,7 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
                     f"{iter_:4d} |"
                     f" {ϕ_MAV:.8e} |"
                     f" {Δp_RMS:.8e} |"
-                    f" {n_wet:11} ({n_newly_wet:5}) |"
+                    f" {n_wet:11d} ({n_newly_wet:5}) |"
                     f" {ϵ_RMS:.8e} |"
                     f" {d['timer'][iter_]:.3f}"
                 )
@@ -826,22 +830,23 @@ def omega_surf(S, T, P, Sppc, Tppc, n_good, eos, eos_s_t, wrap, **opts):
         for k, v in d.items():
             d[k] = v[0 : iter_ + (k in ("ϵ_MAV", "ϵ_RMS"))]
 
+    s, t, p = _xr_out(s, t, p, sxr, txr, pxr)
+
     return s, t, p, d
 
 
-def _check_ref(ref, isoval, pin_cast, pin_p, ans_type, ni, nj):
+def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
     """Error checking on ref / isoval / pin_cast / pin_p combinations for "sigma"
-    and "delta" surfaces, only
+    and "delta" surfaces
     """
     # First check None values to validate one of the following options:
-    # >>> approx_neutral_surf(ans_type, S, T, P, ref, isoval)
-    # >>> approx_neutral_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
-    # >>> approx_neutral_surf(ans_type, S, T, P, pin_cast, pin_p)
+    # >>> _sigma_delta_surf(ans_type, S, T, P, ref, isoval)
+    # >>> _sigma_delta_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
+    # >>> _sigma_delta_surf(ans_type, S, T, P, pin_cast, pin_p)
     if ref is None:
         if pin_cast is None or pin_p is None:
             raise TypeError(
-                'If "ref" is not provided and ans_type is "sigma" or "delta",'
-                ' "pin_cast" and "pin_p" must be provided'
+                'If "ref" is not provided, "pin_cast" and "pin_p" must be provided'
             )
     else:  # ref is not None
         if isoval is None and (pin_cast is None or pin_p is None):
@@ -855,12 +860,12 @@ def _check_ref(ref, isoval, pin_cast, pin_p, ans_type, ni, nj):
         if ans_type == "sigma":
             if not isinstance(ref, float):
                 raise TypeError(
-                    'If provided, "ref" must be float when "ans_type" is "sigma"'
+                    'For "sigma" surfaces, if provided "ref" must be a float'
                 )
         else:  # ans_type == "delta"
             if not (isinstance(ref, (tuple, list)) and len(ref) == 2):
                 raise TypeError(
-                    'If provided, "ref" must be 2 element tuple/list of float when "ans_type" is "delta"'
+                    'For "delta" surfaces, if provided "ref" must be 2 element tuple/list of float'
                 )
 
     # Error checking on pin_cast
@@ -891,12 +896,12 @@ def _check_ref(ref, isoval, pin_cast, pin_p, ans_type, ni, nj):
 
 
 def _choose_ref_isoval(
-    ref, isoval, pin_cast, pin_p, ans_type, eos, S, T, P, Sppc, Tppc
+    ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, Sppc, Tppc
 ):
     # Handle the three valid calls in the following order of precedence:
-    # >>> approx_neutral_surf(ans_type, S, T, P, ref, isoval)
-    # >>> approx_neutral_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
-    # >>> approx_neutral_surf(ans_type, S, T, P, pin_cast, pin_p)
+    # >>> _sigma_delta_surf(ans_type, S, T, P, ref, isoval)
+    # >>> _sigma_delta_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
+    # >>> _sigma_delta_surf(ans_type, S, T, P, pin_cast, pin_p)
     if isoval is None:  # => pin_cast and pin_p are both not None
         n0 = pin_cast  # evaluate S and T on the surface at the chosen location
         s0, t0 = val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], pin_p)
@@ -906,17 +911,10 @@ def _choose_ref_isoval(
                 ref = pin_p
             isoval = eos(s0, t0, ref)
         else:  # ans_type == "delta"
-            if ref is None:
+            if ref is None or any(x is None for x in ref):
                 ref = (s0, t0)
-            elif not (
-                isinstance(ref, (tuple, list))
-                and len(ref) == 2
-                and all(isinstance(x, float) for x in ref)
-            ):
-                raise TypeError(
-                    '"ref" must be None or tuple/list of 2 floats when "ans_type" is "delta"'
-                )
-            # isoval == 0. when ref = (s0,t0)
-            isoval = eos(s0, t0, pin_p) - eos(ref[0], ref[1], pin_p)
+            isoval = eos(s0, t0, pin_p) - eos(
+                ref[0], ref[1], pin_p
+            )  #  == 0 when ref = (s0, t0)
 
     return ref, isoval

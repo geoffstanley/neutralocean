@@ -35,13 +35,13 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "numpydoc",
+    "sphinx.ext.intersphinx",
 ]
-#    "sphinx.ext.intersphinx",
 #    "sphinx.ext.autosectionlabel",
 
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+#templates_path = ['_templates']
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -65,5 +65,5 @@ html_theme_options = {
 # html_static_path = ['_static']
 
 
-import numpydoc
-numpydoc_xref_param_type = True
+#import numpydoc
+#numpydoc_xref_param_type = True
