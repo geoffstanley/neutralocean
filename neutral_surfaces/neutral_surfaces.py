@@ -365,6 +365,13 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
     timer = time()
     s, t, p = vertsolve(S, T, P, Sppc, Tppc, n_good, ref, isoval, TOL_P_SOLVER)
 
+    if pin_p is not None:  # pin_cast must also be valid
+        # Adjust the surface at the pinning cast slightly, to match the pinning
+        # pressure / depth.  This fixes small deviations of order `TOL_P_SOLVER`
+        n0 = pin_cast
+        p[n0] = pin_p
+        s[n0], t[n0] = val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], pin_p)
+
     if diags:
         d["timer"] = time() - timer
         ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
@@ -758,12 +765,10 @@ def omega_surf(S, T, P, **kwargs):
         )
         timer_mat = time() - timer_loc
 
-        # --- Update the surface
+        # --- Update the surface (mutating s, t, p by vertsolve)
         timer_loc = time()
         p_old = p.copy()  # Record old surface for pinning and diagnostics
-        vertsolve(
-            s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, TOL_P_SOLVER
-        )  # mutates s, t, p
+        vertsolve(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, TOL_P_SOLVER)
 
         # DEV:  time seems indistinguishable from using factory function as above
         # _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, TOL_P_SOLVER, eos)
