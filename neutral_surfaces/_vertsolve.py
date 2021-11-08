@@ -1,3 +1,5 @@
+"""Functions to handle updating the pressure / depth of a surface, by 
+solving a nonlinear equation in the vertical dimension of each water column"""
 import numpy as np
 import numba
 import functools
@@ -18,12 +20,12 @@ def _make_vertsolve(eos, ans_type):
     elif ans_type == "sigma":
 
         def f(*args):
-            return _vertsolve(*args, eos, zero_sigma)
+            return _vertsolve(*args, eos, _zero_sigma)
 
     elif ans_type == "delta":
 
         def f(*args):
-            return _vertsolve(*args, eos, zero_delta)
+            return _vertsolve(*args, eos, _zero_delta)
 
     else:
         raise NameError(f'Unknown ans_type "{ans_type}"')
@@ -97,12 +99,12 @@ def _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos):
             args = (Sn, Tn, Pn, Sppcn, Tppcn, pn, eos(s[n], t[n], pn) + ϕn, eos)
 
             # Search for a sign-change, expanding outward from an initial guess
-            lb, ub = guess_to_bounds(zero_sigma, pn, Pn[0], Pn[-1], args)
+            lb, ub = guess_to_bounds(_zero_sigma, pn, Pn[0], Pn[-1], args)
 
             if np.isfinite(lb):
                 # A sign change was discovered, so a root exists in the interval.
                 # Solve the nonlinear root-finding problem using Brent's method
-                p[n] = brent(zero_sigma, lb, ub, tol_p, args)
+                p[n] = brent(_zero_sigma, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
                 s[n], t[n] = val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
@@ -120,12 +122,15 @@ def _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos):
 
 
 @numba.njit
-def zero_sigma(p, S, T, P, Sppc, Tppc, ref_p, isoval, eos):
+def _zero_sigma(p, S, T, P, Sppc, Tppc, ref_p, isoval, eos):
+    # Evaluate the potential density in a given cast, minus a given isovalue
     s, t = val2_0d(P, S, Sppc, T, Tppc, p)
     return eos(s, t, ref_p) - isoval
 
 
 @numba.njit
-def zero_delta(p, S, T, P, Sppc, Tppc, ref, isoval, eos):
+def _zero_delta(p, S, T, P, Sppc, Tppc, ref, isoval, eos):
+    # Evaluate the specific volume (or in-situ density) anomaly in a given cast,
+    # minus a given isovalue
     s, t = val2_0d(P, S, Sppc, T, Tppc, p)
     return eos(s, t, p) - eos(ref[0], ref[1], p) - isoval
