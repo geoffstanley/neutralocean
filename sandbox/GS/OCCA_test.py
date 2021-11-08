@@ -155,8 +155,7 @@ s, t, z, d = omega_surf(
 #     )
 print(f'Total time  : {np.sum(d["timer"]) : .4f} sec')
 print(f'      bfs time: {np.sum(d["timer_bfs"]) : .4f} sec')
-print(f' matbuild time: {np.sum(d["timer_matbuild"]) : .4f} sec')
-print(f' matsolve time: {np.sum(d["timer_matsolve"]) : .4f} sec')
+print(f'   matrix time: {np.sum(d["timer_mat"]) : .4f} sec')
 print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
 # Initialize omega surface with a (locally referenced) delta surface:

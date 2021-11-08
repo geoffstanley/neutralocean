@@ -486,13 +486,9 @@ def omega_surf(S, T, P, **kwargs):
 
             Time spent in Breadth-First Search including wetting, per iteration.
 
-        ``"timer_matbuild"`` : array of float
+        ``"timer_mat"`` : array of float
 
-            Time spent building the matrix problem, per iteration.
-
-        ``"timer_matsolve"`` : array of float
-
-            Time spent solving the matrix problem, per iteration.
+            Time spent building and solving the matrix problem, per iteration.
 
         ``"timer_update"`` : array of float
 
@@ -642,8 +638,7 @@ def omega_surf(S, T, P, **kwargs):
             "n_wet": np.zeros(ITER_MAX + 1, dtype=int),
             "n_newly_wet": np.zeros(ITER_MAX + 1, dtype=int),
             "timer_bfs": np.zeros(ITER_MAX + 1, dtype=np.float64),
-            "timer_matbuild": np.zeros(ITER_MAX + 1, dtype=np.float64),
-            "timer_matsolve": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "timer_mat": np.zeros(ITER_MAX + 1, dtype=np.float64),
             "timer_update": np.zeros(ITER_MAX + 1, dtype=np.float64),
         }
     else:
@@ -758,10 +753,10 @@ def omega_surf(S, T, P, **kwargs):
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        ϕ, timer_matbuild = _omega_matsolve_poisson(
+        ϕ = _omega_matsolve_poisson(
             s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A4, qu, qt, pin_cast, eos_s_t
         )
-        timer_solver = time() - timer_loc - timer_matbuild
+        timer_mat = time() - timer_loc
 
         # --- Update the surface
         timer_loc = time()
@@ -799,8 +794,7 @@ def omega_surf(S, T, P, **kwargs):
             d["Δp_Linf"][iter_] = Δp_Linf
             d["n_newly_wet"][iter_] = n_newly_wet
 
-            d["timer_matbuild"][iter_] = timer_matbuild
-            d["timer_matsolve"][iter_] = timer_solver
+            d["timer_mat"][iter_] = timer_mat
             d["timer_update"][iter_] = timer_update
             d["timer_bfs"][iter_] = timer_bfs
 
