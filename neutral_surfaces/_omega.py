@@ -4,8 +4,6 @@ from scipy.sparse import csc_matrix
 # from scipy.sparse.linalg import spsolve
 from sksparse.cholmod import cholesky
 
-from time import time
-
 
 def _omega_matsolve_poisson(
     s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A4, qu, qt, mr, eos_s_t
@@ -48,8 +46,6 @@ def _omega_matsolve_poisson(
     # Author[s] : Geoff Stanley
     # Email     : g.stanley@unsw.edu.au
     # Email     : geoffstanley@gmail.com
-
-    timer_loc = time()
 
     ni, nj = p.shape
 
@@ -228,8 +224,6 @@ def _omega_matsolve_poisson(
     # that one ourselves)
     # return r[good], c[good], v[good], N, rhs, m
 
-    timer_build = time() - timer_loc
-
     # Build the sparse matrix; with N rows & N columns
     mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
 
@@ -240,7 +234,7 @@ def _omega_matsolve_poisson(
     # spsolve (requires good = (c >= 0) above) is slower than using cholesky
     # ϕ[m] = spsolve(mat, rhs)
 
-    return ϕ.reshape(ni, nj), timer_build
+    return ϕ.reshape(ni, nj)
 
 
 def im1(F):  # G[i,j] == F[i-1,j]
