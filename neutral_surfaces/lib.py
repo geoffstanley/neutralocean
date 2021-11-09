@@ -211,8 +211,6 @@ def _process_args(
     wrap = _process_wrap(wrap, diags, sxr)  # must call before _process_casts
     eos, eos_s_t = _process_eos(eos, eos_s_t, grav, rho_c)
     S, T, P = _process_casts(S, T, P, vert_dim)
-    Sppc, Tppc = _interp_casts(
-        S, T, P, interp_fn, Sppc, Tppc
-    )  # must call after _process_casts
+    Sppc, Tppc = _interp_casts(S, T, P, interp_fn, Sppc, Tppc)  # after _process_casts
     n_good = _process_n_good(S, n_good)  # must call after _process_casts
     return S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t
