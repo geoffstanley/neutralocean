@@ -1,3 +1,5 @@
+"""Library of simple functions for neutral_surfaces"""
+
 import numpy as np
 import numba
 import xarray as xr
@@ -19,11 +21,13 @@ def find_first_nan(a):
     k : ndarray of int
         The index to the first NaN along each 1D array making up `a`, as in the
         following example with `a` being 3D.
-        If all `a[i,j,:]` are not NaN, then `k[i,j] = a.shape[-1]`.
-        Otherwise, `a[i,j,k[i,j]-1]` is not NaN, but `a[i,j,k[i,j]]` is NaN.
+        If all ``a[i,j,:]`` are NaN, then ``k[i,j] = 0``.
+        If all ``a[i,j,:]`` are not NaN, then ``k[i,j] = a.shape[-1]``.
+        Otherwise, ``K = k[i,j]`` is the smallest int such that ``a[i,j,K-1]`` 
+        is not NaN, but ``a[i,j,K]`` is NaN.
     """
     nk = a.shape[-1]
-    k = np.full(a.shape[:-1], nk, dtype=np.int64)
+    k = np.full(a.shape[:-1], nk, dtype=int)
     for n in np.ndindex(a.shape[0:-1]):
         for i in range(nk):
             if np.isnan(a[n][i]):
