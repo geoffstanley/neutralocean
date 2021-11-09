@@ -23,7 +23,7 @@ def find_first_nan(a):
         following example with `a` being 3D.
         If all ``a[i,j,:]`` are NaN, then ``k[i,j] = 0``.
         If all ``a[i,j,:]`` are not NaN, then ``k[i,j] = a.shape[-1]``.
-        Otherwise, ``K = k[i,j]`` is the smallest int such that ``a[i,j,K-1]`` 
+        Otherwise, ``K = k[i,j]`` is the smallest int such that ``a[i,j,K-1]``
         is not NaN, but ``a[i,j,K]`` is NaN.
     """
     nk = a.shape[-1]
@@ -176,29 +176,43 @@ def _process_eos(eos, eos_s_t, grav=None, rho_c=None):
 
 
 def _process_pin_cast(pin_cast, S):
-    # Convert pinning cast from a coordinate representation, suitable for ``S.sel(pin_cast)`` 
+    # Convert pinning cast from a coordinate representation, suitable for ``S.sel(pin_cast)``
     # when S is an xarray, into an index representation, suitable for ``S[pin_cast]``
-    # when S is an ndarray. 
-    
+    # when S is an ndarray.
+
     # DEV: There must be a better way of doing this...
     # One issue is this always rounds one way, whereas a "nearest" neighbour
     # type behaviour would be preferred, as in xr.DataArray.sel
     if isinstance(pin_cast, dict):
-        return tuple(int(S.get_index(k).searchsorted(v)) for (k,v) in pin_cast.items())
+        return tuple(int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items())
     else:
         return pin_cast
 
 
 def _process_args(
-    S, T, P, vert_dim, pin_cast, wrap, diags, eos, eos_s_t, grav, rho_c, interp_fn, Sppc, Tppc, n_good
+    S,
+    T,
+    P,
+    vert_dim,
+    pin_cast,
+    wrap,
+    diags,
+    eos,
+    eos_s_t,
+    grav,
+    rho_c,
+    interp_fn,
+    Sppc,
+    Tppc,
+    n_good,
 ):
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # must call before _process_casts
     wrap = _process_wrap(wrap, diags, sxr)  # must call before _process_casts
     eos, eos_s_t = _process_eos(eos, eos_s_t, grav, rho_c)
     S, T, P = _process_casts(S, T, P, vert_dim)
-    Sppc, Tppc = _interp_casts(S, T, P, interp_fn, Sppc, Tppc)  # must call after _process_casts
+    Sppc, Tppc = _interp_casts(
+        S, T, P, interp_fn, Sppc, Tppc
+    )  # must call after _process_casts
     n_good = _process_n_good(S, n_good)  # must call after _process_casts
     return S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t
-
-    

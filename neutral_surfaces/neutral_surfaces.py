@@ -351,7 +351,21 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
     d = dict()
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
     S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t = _process_args(
-        S, T, P, vert_dim, pin_cast, wrap, diags, eos, eos_s_t, grav, rho_c, interp_fn, Sppc, Tppc, n_good
+        S,
+        T,
+        P,
+        vert_dim,
+        pin_cast,
+        wrap,
+        diags,
+        eos,
+        eos_s_t,
+        grav,
+        rho_c,
+        interp_fn,
+        Sppc,
+        Tppc,
+        n_good,
     )
     ni, nj = n_good.shape
 
@@ -620,7 +634,21 @@ def omega_surf(S, T, P, **kwargs):
 
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
     S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t = _process_args(
-        S, T, P, vert_dim, pin_cast, wrap, diags, eos, eos_s_t, grav, rho_c, interp_fn, Sppc, Tppc, n_good
+        S,
+        T,
+        P,
+        vert_dim,
+        pin_cast,
+        wrap,
+        diags,
+        eos,
+        eos_s_t,
+        grav,
+        rho_c,
+        interp_fn,
+        Sppc,
+        Tppc,
+        n_good,
     )
     ni, nj = n_good.shape
 
