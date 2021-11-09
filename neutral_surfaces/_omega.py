@@ -1,3 +1,5 @@
+"""Private functions for omega surfaces"""
+
 import numpy as np
 from scipy.sparse import csc_matrix
 
@@ -8,48 +10,68 @@ from sksparse.cholmod import cholesky
 def _omega_matsolve_poisson(
     s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A4, qu, qt, mr, eos_s_t
 ):
-    # Doco from MATLAB, needs updating.
+    """Solve the Poisson formulation of the omega-surface global matrix problem
 
-    # OMEGA_MATSOLVE_POISSON  Build & solve the sparse matrix Poisson problem for omega surfaces
-    #
-    #
-    # ϕ = omega_matsolve_poisson(s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A4, qu, qt, m_ref)
-    # builds & solves the sparse matrix problem for omega surfaces in Poisson
-    # form.
-    #
-    #
-    # --- Input:
-    #  s [ni, nj]: practical / Absolute Salinity on the surface()
-    #  t [ni, nj]: potential / Conservative Temperature on the surface()
-    #  p [ni, nj]: pressure [or depth] on the surface()
-    # DIST2on1_iJ [ni, nj]: the area of a grid cell centred at [I-1/2, J]
-    #   divided by the distance, squared, from [I-1,J] to [I,J].  Equivalently
-    #   this is the grid distance in second dimension divided by grid distance
-    #   in first dimension, both centred at [I-1/2, J].
-    # DIST1on2_Ij [ni, nj]: the area of a grid cell centred at [I, J-1/2]
-    #   divided by the distance, squared, from [I,J-1] to [I,J].  Equivalently
-    #   this is the grid distance in first dimension divided by grid distance
-    #   in second dimension, both centred at [I, J-1/2].
-    # wrap [2 element array]: wrap[i] is true iff the domain is periodic in the
-    #                         i'th lateral dimension.
-    # A4 [4, ni*nj]: adjacency matrix  [see grid_adjacency.m]
-    # qu [ni*nj,1]: the nodes visited by the BFS's in order from 1 to qt [see bfs_conncomp1.m]
-    # qt [1,1]: the last valid index of qu [see bfs_conncomp1.m]
-    # m_ref [1,1]  : linear index to a reference cast at which ϕ will be zero.
-    #
-    #
-    # --- Output:
-    # ϕ [ni, nj]: density perturbation attempting to satisfy the discrete
-    #             version of  div grad ϕ = - div ϵ
-    #             where ϵ is the neutrality error (see ntp_errors).
+    Parameters
+    ----------
+    s, t, p : ndarray
 
-    # Author[s] : Geoff Stanley
-    # Email     : g.stanley@unsw.edu.au
-    # Email     : geoffstanley@gmail.com
+        Salinity, temperature, pressure on the surface
+
+    DIST2on1_iJ : ndarray or float
+
+        The grid distance in the second dimension divided by the grid distance
+        in the first dimension, both centred at (I-1/2,J). Equivalently, the
+        square root of the area of a grid cell centred at(I-1/2,J), divided
+        by the distance from (I-1,J) to (I,J).
+
+    DIST1on2_Ij : ndarray or float
+
+        The grid distance in the first dimension divided by the grid distance
+        in the second dimension, both centred at (I-1/2,J). Equivalently, the
+        square root of the area of a grid cell centred at(I,J-1/2), divided
+        by the distance from (I,J-1) to (I,J).
+
+    wrap : tuple of bool of length 2
+
+        ``wrap(i)`` is true iff the domain is periodic in the i'th lateral
+        dimension.
+
+    A4 : ndarray
+
+        four-connectivity adjacency matrix, computed as
+        ``A4 = grid_adjacency(s.shape, 4, wrap)``.
+        See `grid_adjacency` in `bfs.py`
+
+    qu : ndarray
+
+        The nodes visited by the BFS in order from 0 to `qt`(see bfs_conncomp1
+        in bfs.py).
+
+    qt : int
+
+        The tail index of `qu` (see bfs_conncomp1 in bfs.py).
+
+    mr : int
+
+        Linear index to the reference cast, at which ϕ will be zero
+
+    eos_s_t : function
+
+        Function returning the partial derivatives of the equation of state
+        with respect to S and T.
+
+    Returns
+    -------
+    ϕ : ndarray
+
+        Locally referenced potential density (LRPD) perturbation.  Vertically heaving the surface
+        so that its LRPD changes by ϕ will yield a more neutral surface.
+    """
 
     ni, nj = p.shape
 
-    # The value nij appears in A5 to index neighbours that would go across a
+    # The value nij appears in A4 to index neighbours that would go across a
     # non-periodic boundary
     nij = ni * nj
 
@@ -63,7 +85,7 @@ def _omega_matsolve_poisson(
     N = qt + 1  # Number of water columns
     if N <= 1:  # There are definitely no equations to solve
         ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
-        return ϕ.reshape(ni, nj), 0.0
+        return ϕ.reshape(ni, nj)
 
     # Collect & sort linear indices to all pixels in this region
     # sorting here makes matrix better structured; overall speedup.
@@ -77,9 +99,10 @@ def _omega_matsolve_poisson(
         and DIST1on2_Ij == 1
     )
 
-    # Begin building D = divergence of ϵ, and L = Laplacian [compact representation]
+    # Begin building D = divergence of ϵ,
+    # and L = Laplacian operator (compact representation)
 
-    # L refers to neighbours in this order [so does A4, except without the 5'th entry]:
+    # L refers to neighbours in this order (so does A4, except without the 5'th entry):
     # . 1 .
     # 0 4 3
     # . 2 .
@@ -109,9 +132,9 @@ def _omega_matsolve_poisson(
     if not wrap[0]:
         sn[0, :] = np.nan
 
-    # A stripped down version of ntp_errors[s,t,p,1,1,true,false,true]
+    # A stripped down version of ntp_ϵ_errors
     vs, vt = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
-    # [vs, vt] = eos_s_t[ 0.5 * (sm + sn), 0.5 * (tm + tn), 1500 ];  # DEV: testing omega software to find potential density surface()
+    # (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 1500)  # DEV: testing omega software to find potential density surface()
     ϵ = vs * (sm - sn) + vt * (tm - tn)
 
     bad = np.isnan(ϵ)
@@ -139,9 +162,9 @@ def _omega_matsolve_poisson(
     if not wrap[1]:
         sn[:, 0] = np.nan
 
-    # A stripped down version of ntp_errors[s,t,p,1,1,true,false,true]
+    # A stripped down version of ntp_ϵ_errors
     (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
-    # [vs, vt] = eos_s_t[ 0.5 * (sm + sn), 0.5 * (tm + tn), 1500 ];  # DEV: testing omega software to find potential density surface()
+    # (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 1500)  # DEV: testing omega software to find potential density surface()
 
     ϵ = vs * (sm - sn) + vt * (tm - tn)
     bad = np.isnan(ϵ)
@@ -162,11 +185,12 @@ def _omega_matsolve_poisson(
 
     L_IP[:] = -jp1(fac)
 
+    # --- Build matrix
     # `remap` changes from linear indices for the entire 2D space (0, 1, ..., ni*nj-1) into linear
     # indices for the current connected component (0, 1, ..., N-1)
     # If the domain were doubly periodic, we would want `remap` to be a 2D array
     # of size (ni,nj). However, with a potentially non-periodic domain, we need
-    # one more value for `A5` to index into.  Hence we use `remap` as a vector
+    # one more value for `A4` to index into.  Hence we use `remap` as a vector
     # with ni*nj+1 elements, the last one corresponding to non-periodic boundaries.
     # Water columns that are not in this connected component, and dry water columns (i.e. land),
     # and the fake water column for non-periodic boundaries are all left
@@ -205,7 +229,7 @@ def _omega_matsolve_poisson(
 
     # Build indices for the columns of the sparse matrix
     # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
-    # c = remap[A5[m]]
+    # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
     c = np.column_stack((remap[A4[m]], np.arange(N)))
 
     # Build the values of the sparse matrix
@@ -227,11 +251,11 @@ def _omega_matsolve_poisson(
     # Build the sparse matrix; with N rows & N columns
     mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
 
-    # Solve the matrix problem
+    # --- Solve the matrix problem
     factor = cholesky(mat)
     ϕ[m] = factor(rhs)
 
-    # spsolve (requires good = (c >= 0) above) is slower than using cholesky
+    # spsolve (requires ``good = (c >= 0)`` above) is slower than using cholesky
     # ϕ[m] = spsolve(mat, rhs)
 
     return ϕ.reshape(ni, nj)

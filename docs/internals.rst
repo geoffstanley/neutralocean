@@ -44,13 +44,3 @@ library
 find_first_nan
 ~~~~~~~~~~~~~~
 .. autofunction:: neutral_surfaces.lib.find_first_nan
-
-ntp_bottle_to_cast
-~~~~~~~~~~~~~~~~~~
-.. autofunction:: neutral_surfaces.lib.ntp_bottle_to_cast
-
-neutral_trajectory
-~~~~~~~~~~~~~~~~~~
-.. autofunction:: neutral_surfaces.lib.neutral_trajectory
-
-
