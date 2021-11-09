@@ -56,3 +56,35 @@ Choosing the Equation Of State
 make_eos
 ~~~~~~~~
 .. autofunction:: neutral_surfaces.eostools.make_eos
+
+vectorize_eos
+~~~~~~~~~~~~~
+.. autofunction:: neutral_surfaces.eostools.vectorize_eos
+
+make_eos_bsq
+~~~~~~~~~~~~~
+.. autofunction:: neutral_surfaces.eostools.make_eos_bsq
+
+
+JMD95 Equation of State
+-----------------------
+.. automodule:: neutral_surfaces.eos.densjmd95
+
+rho
+~~~
+.. autofunction:: neutral_surfaces.eos.densjmd95.rho
+
+rho_s_t
+~~~~~~~
+.. autofunction:: neutral_surfaces.eos.densjmd95.rho_s_t
+
+TEOS-10 GSW Equation of State
+-----------------------------
+
+rho
+---
+.. autofunction:: neutral_surfaces.eos.gsw.rho
+
+rho_s_t
+~~~~~~~
+.. autofunction:: neutral_surfaces.eos.gsw.rho_s_t

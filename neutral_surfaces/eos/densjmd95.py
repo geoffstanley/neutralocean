@@ -1,12 +1,10 @@
 """
-Density of Sea Water using Jackett and McDougall 1995 [1]_ polynomial
+Density of Sea Water using the Jackett and McDougall 1995 [1]_ function
 
 Functions:
 
 rho :: computes in-situ density from salinity, potential temperature and
     pressure
-
-rho_ufunc :: vectorized version of `rho`
 
 rho_s_t :: compute the partial derivatives of in-situ density with
     respect to salinity and potential temperature
@@ -14,6 +12,9 @@ rho_s_t :: compute the partial derivatives of in-situ density with
 Notes:
 To make Boussinesq versions of these functions, see 
 `eostools.make_eos_bsq`.
+
+To make vectorized versions of these functions, see
+`eostools.vectorize_eos`.
 
 .. [1] Jackett and McDougall, 1995, JAOT 12[4], pp. 381-388
 """
@@ -25,24 +26,64 @@ from numba import float64
 
 @numba.njit(float64(float64, float64, float64))
 def rho(s, t, p):
-    """
-    rho(s, t, p)
-
-    Fast JMD95 [1]_ in-situ density.
+    """Fast JMD95 [1]_ in-situ density.
 
     Parameters
     ----------
     s : float
-        Practical salinity, PSS-78
+        Practical salinity [PSS-78]
     t : float
-        Potential temperature, IPTS-68
+        Potential temperature [IPTS-68]
     p : float
-        Pressure, [dbar]
+        Pressure [dbar]
 
     Returns
     -------
     rho : float
-        JMD95 in-situ density, [kg / m^3]
+        JMD95 in-situ density, [kg m-3]
+
+    Notes
+    -----
+    This function is derived from densjmd95.m, documented below. Input
+    checks and expansion of variables have been removed. That code used
+    arrays to store coefficients, and also began by multiplying the
+    input pressure by 10 [dbar -> bar]. The coefficients, modified to
+    not need this multiplication by 10, have been taken out of arrays
+    and simply hardcoded into the later expressions.  The polynomial
+    calculations have also been optimized to favour faster, nested
+    multiplications.
+    
+    As such, the output of this function differs from the output of the
+    original densjmd95.m function, though the difference is at the
+    level of machine precision. 
+
+
+    % DENSJMD95    Density of sea water
+    %=========================================================================
+    %
+    % USAGE:  dens = densjmd95(S,Theta,P)
+    %
+    % DESCRIPTION:
+    %    Density of Sea Water using Jackett and McDougall 1995 (JAOT 12)
+    %    polynomial (modified UNESCO polynomial).
+    %
+    % INPUT:  (all must have same dimensions)
+    %   S     = salinity    [psu      (PSS-78)]
+    %   Theta = potential temperature [degree C (IPTS-68)]
+    %   P     = pressure    [dbar]
+    %       (P may have dims 1x1, mx1, 1xn or mxn for S(mxn) )
+    %
+    % OUTPUT:
+    %   dens = density  [kg/m^3]
+    %
+    % AUTHOR:  Martin Losch 2002-08-09  (mlosch@mit.edu)
+
+
+    % Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+
+    % created by mlosch on 2002-08-09
+    % $Header: /u/gcmpack/MITgcm/utils/matlab/densjmd95.m,v 1.2 2007/02/17 23:49:43 jmc Exp $
+    % $Name:  $
 
     .. [1] Jackett and McDougall, 1995, JAOT 12[4], pp. 381-388
     """
@@ -70,49 +111,29 @@ def rho(s, t, p):
     return rho
 
 
-@numba.vectorize
-def rho_ufunc(s, t, p):
-    """
-    rho_ufunc(s, t, p)
-
-    JMD95 in-situ density vectorized as a numpy universal function.
-    """
-
-    return rho(s, t, p)
-
-
 # @numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
 @numba.njit
 def rho_s_t(s, t, p):
     """
     Fast salinity and potential temperature derivatives of JMD95 in-situ density.
+    
+    Parameters
+    ----------
+    s, t, p : float
+        See `rho`
+  
+    Returns
+    -------
+        rho_s : float
+            Partial derivative of JMD95 in-situ density with respect to
+            salinity `s` [kg m^-3 psu^-1]
+        rho_t : float
+            Partial derivative of JMD95 in-situ density with respect to
+            temperature `t`   [kg m^-3 degC^-1]
 
-    (rho_s, rho_t) = densjmd95_s_t(s,t,p)
-    computes, from the practical salinity s, potential temperature t, and
-    pressure p, the partial derivatives of JMD95 in-situ density with respect
-    to s and t.
-
-    This function is derived from densjmd95.m, documented below. Input checks
-    and expansion of variables have been removed. The original code used arrays to
-    store coefficients, and also began by multiplying the input pressure by 10 [dbar -> bar].
-    The coefficients, modified to not need this multiplication by 10, have been
-    taken out of arrays and simply hardcoded into the later expressions.  The
-    polynomial calculations have also been optimized to favour nested multiplications.
-
-    INPUT:
-      s     = salinity              [psu [PSS-78]]
-      Theta = potential temperature [degree C [IPTS-68]]
-      p     = pressure              [dbar]
-
-    OUTPUT:
-      rho_s = density derivative w.r.t. salinity     [kg m^-3 psu^-1]
-      rho_t = density derivative w.r.t. temperature  [kg m^-3 degC^-1]
-
-    Author(s)       : Geoff Stanley
-    Email           : g.stanley@unsw.edu.au
-    Email           : geoffstanley@gmail.com
-    Version         : 1.0
-
+    Notes
+    -----
+    This function is derived from `rho`.
     """
 
     # INPUT CHECKS REMOVED

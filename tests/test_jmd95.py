@@ -1,6 +1,7 @@
 import numpy as np
 
-from neutral_surfaces._densjmd95 import rho, rho_ufunc
+from neutral_surfaces.eos.densjmd95 import rho
+from neutral_surfaces.eos.eostools import vectorize_eos
 
 # Check values from JMD95 p. 388:
 checkvals = (35.5, 3.0, 3000.0, 1041.83267)
@@ -9,6 +10,7 @@ checkvals = (35.5, 3.0, 3000.0, 1041.83267)
 def test_jmd95_scalar():
     assert np.round(rho(*checkvals[:-1]), decimals=5) == checkvals[-1]
 
+rho_ufunc = vectorize_eos(rho)
 
 def test_rho_ufunc_scalar():
     res = rho_ufunc(*checkvals[:-1])

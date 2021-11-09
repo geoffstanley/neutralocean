@@ -2,7 +2,8 @@ import itertools
 import pytest
 import numpy as np
 import gsw
-from neutral_surfaces._densjmd95 import rho_ufunc
+from neutral_surfaces.eos.densjmd95 import rho
+from neutral_surfaces.eos.eostools import vectorize_eos
 from neutral_surfaces.interp_ppc import linear_coefficients
 from neutral_surfaces.neutral_surfaces import (
     pot_dens_surf,
@@ -13,6 +14,7 @@ from neutral_surfaces.neutral_surfaces import (
     eosdict,
 )
 
+rho_ufunc = vectorize_eos(rho)
 
 def make_simple_stp(shape, p_axis=-1, p_is_1d=True):
     s = np.empty(shape, dtype=float)

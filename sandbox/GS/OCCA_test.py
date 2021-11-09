@@ -148,18 +148,12 @@ s, t, z, d = omega_surf(
     ITER_MAX=10,
     ITER_START_WETTING=1,
 )
-# %%
-# s, t, z, diags = approx_neutral_surf(
-#     'omega', S, T, Z, axis=-1, tol_p=1e-4, eos='jmd95', grav=g['grav'], rho_c=g['ρ_c'],
-#     pin=(i0, j0, z0), wrap=g['wrap'],
-#     ITER_MAX=10
-#     )
 print(f'Total time  : {np.sum(d["timer"]) : .4f} sec')
 print(f'      bfs time: {np.sum(d["timer_bfs"]) : .4f} sec')
 print(f'   matrix time: {np.sum(d["timer_mat"]) : .4f} sec')
 print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
-# Initialize omega surface with a (locally referenced) delta surface:
+# %% Initialize omega surface with a (locally referenced) delta surface:
 s, t, z, d = omega_surf(
     S,
     T,

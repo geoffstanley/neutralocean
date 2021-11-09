@@ -22,22 +22,6 @@ guess_to_bounds
 ~~~~~~~~~~~~~~~
 .. autofunction:: neutral_surfaces.fzero.guess_to_bounds
 
-JMD95 Equation of State
------------------------
-.. automodule:: neutral_surfaces.eos.densjmd95
-
-rho
-~~~
-.. autofunction:: neutral_surfaces.eos.densjmd95.rho
-
-rho_s_t
-~~~~~~~
-.. autofunction:: neutral_surfaces.eos.densjmd95.rho_s_t
-
-rho_ufunc
-~~~~~~~~~
-.. autofunction:: neutral_surfaces.eos.densjmd95.rho_ufunc
-
 library
 -------
 

@@ -11,6 +11,9 @@ available from...
 
 The algorithm is described in ...
 
+This Sphinx auto generated documentation is a work in progress.  
+You may or may not prefer to view the documentation in the code itself.
+
 
 .. toctree::
    :maxdepth: 2
