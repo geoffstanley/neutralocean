@@ -334,6 +334,8 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
     TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
     eos = kwargs.get("eos", "gsw")
     eos_s_t = kwargs.get("eos_s_t")
+    rho_c = kwargs.get("rho_c")
+    grav = kwargs.get("grav")
     wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
@@ -348,8 +350,8 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
 
     d = dict()
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
-    S, T, P, Sppc, Tppc, n_good, wrap, eos, eos_s_t = _process_args(
-        S, T, P, vert_dim, wrap, diags, eos, eos_s_t, interp_fn, Sppc, Tppc, n_good
+    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t = _process_args(
+        S, T, P, vert_dim, pin_cast, wrap, diags, eos, eos_s_t, grav, rho_c, interp_fn, Sppc, Tppc, n_good
     )
     ni, nj = n_good.shape
 
@@ -586,6 +588,8 @@ def omega_surf(S, T, P, **kwargs):
     output = kwargs.get("output", True)
     eos = kwargs.get("eos", "gsw")
     eos_s_t = kwargs.get("eos_s_t")
+    rho_c = kwargs.get("rho_c")
+    grav = kwargs.get("grav")
     ITER_MIN = kwargs.get("ITER_MIN", 1)
     ITER_MAX = kwargs.get("ITER_MAX", 10)
     ITER_START_WETTING = kwargs.get("ITER_START_WETTING", 1)
@@ -615,8 +619,8 @@ def omega_surf(S, T, P, **kwargs):
     dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
 
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
-    S, T, P, Sppc, Tppc, n_good, wrap, eos, eos_s_t = _process_args(
-        S, T, P, vert_dim, wrap, diags, eos, eos_s_t, interp_fn, Sppc, Tppc, n_good
+    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t = _process_args(
+        S, T, P, vert_dim, pin_cast, wrap, diags, eos, eos_s_t, grav, rho_c, interp_fn, Sppc, Tppc, n_good
     )
     ni, nj = n_good.shape
 
@@ -867,8 +871,8 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
                     'For "delta" surfaces, if provided "ref" must be 2 element tuple/list of float'
                 )
 
-    # Error checking on pin_cast
-    if pin_cast is not None:
+    # Error checking on pin_cast.  Let dict inputs (for xarray) pass through fine...
+    if not isinstance(pin_cast, (type(None), dict)):
         if (
             isinstance(pin_cast, (tuple, list))
             and len(pin_cast) == 2

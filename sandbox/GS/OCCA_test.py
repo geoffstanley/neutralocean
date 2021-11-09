@@ -60,6 +60,7 @@ s, t, z, d = sigma_surf(
 
 # Provide just the location to intersect (pin_cast, pin_p).
 # This takes the reference pressure ref to match pin_p.
+# Also illustrate using xarray coordinates for pin_cast
 s, t, z, d = sigma_surf(
     S,
     T,
@@ -68,7 +69,7 @@ s, t, z, d = sigma_surf(
     eos_s_t=eos_s_t,
     wrap="Longitude_t",
     vert_dim="Depth_c",
-    pin_cast=(i0, j0),
+    pin_cast={"Longitude_t" : 180.5, "Latitude_t" : 0.5},
     pin_p=z0,
 )
 
