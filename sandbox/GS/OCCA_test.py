@@ -166,6 +166,7 @@ s, t, z, d = omega_surf(
     eos="jmd95",
     grav=g["grav"],
     rho_c=g["ρ_c"],
+    p_ml={"bottle_num" : 1, "ref_p" : 0.0},
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,

@@ -16,6 +16,7 @@ from neutral_surfaces.lib import (
     _process_args,
 )
 from neutral_surfaces._omega import _omega_matsolve_poisson
+from neutral_surfaces.mixed_layer import mixed_layer
 
 
 def sigma_surf(S, T, P, **kwargs):
@@ -552,11 +553,23 @@ def omega_surf(S, T, P, **kwargs):
         change on the surface from one iteration to the next is less than this
         value. Set to 0 to deactivate. Units are the same as `P` [dbar or m].
 
-    p_ml : ndarray, Default None
+    p_ml : ndarray or dict, Default None
 
-        Mixed Layer pressure or depth, which is removed from the surface on
-        each iteration after the first. Pass None to not remove the mixed
-        layer.
+        If a dict, the pressure or depth at the base of the mixed layer is
+        computed using `mixed_layer` with p_ml passed as keyword arguments,
+        enabling control over the parameters in that function.  
+        See `mixed_layer` for details.
+        
+        If an ndarray (of the same shape as the lateral dimensions of `S`),
+        the pressure or depth at the base of the mixed layer in each water
+        column.
+        
+        When the surface's pressure is shallower than `p_ml` in any water
+        column, it is set to NaN (a "dry" water column). This is not applied
+        to the initial surface, but only to the surface after the first
+        iteration, as the initial surface could be very far from neutral. 
+        
+        If None, the mixed layer is not removed. 
 
     Examples
     --------
@@ -728,11 +741,10 @@ def omega_surf(S, T, P, **kwargs):
     if np.isnan(p[pin_cast]):
         raise RuntimeError("The initial surface is NaN at the reference cast.")
 
-    # Get mixed layer: the pressure of the mixed layer
-    # if ITER_MAX > 1 && if isstruct(p_ml)
-    #   # Compute the mixed layer from parameter inputs
-    #   p_ml = mixed_layer(S, T, P, ML)
-    # end
+    # Calculate bottom of mixed layer from given options
+    if ITER_MAX > 1 and isinstance(p_ml, dict):
+      # Compute the mixed layer from parameter inputs
+      p_ml = mixed_layer(S, T, P, eos, **p_ml)
 
     # ensure same nan structure between s, t, and p. Just in case user gives
     # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
@@ -774,8 +786,6 @@ def omega_surf(S, T, P, **kwargs):
         timer = time()
 
         # --- Remove the Mixed Layer
-        # But keep it for the first iteration, which may be initialized from a
-        # not very neutral surface
         if iter_ > 1 and p_ml is not None:
             p[p < p_ml] = np.nan
 
@@ -783,7 +793,7 @@ def omega_surf(S, T, P, **kwargs):
         timer_loc = time()
         if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
             qu, qt, n_newly_wet = bfs_conncomp1_wet(
-                s, t, p, S, T, P, Sppc, Tppc, n_good, A4, pin_cast_1, TOL_P_SOLVER, eos
+                s, t, p, S, T, P, Sppc, Tppc, n_good, A4, pin_cast_1, TOL_P_SOLVER, eos, p_ml
             )
         else:
             qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, pin_cast_1)
