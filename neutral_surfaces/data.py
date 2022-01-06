@@ -44,41 +44,32 @@ def load_OCCA(OCCA_dir, ts=0):
         np.sin((g["YGvec"] + 1 / g["resy"]) * deg2rad) - np.sin(g["YGvec"] * deg2rad)
     )
 
-    T = (
-        x.theta.isel(Time=ts)
-        .transpose("Longitude_t", "Latitude_t", "Depth_c")
-        .astype(np.float64, order="C")
-    )
+    T = x.theta.isel(Time=ts)
     x.close()
 
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "salt")).load()
-    S = (
-        x.salt.isel(Time=ts)
-        .transpose("Longitude_t", "Latitude_t", "Depth_c")
-        .astype(np.float64, order="C")
-    )
+    S = x.salt.isel(Time=ts)
     x.close()
 
     # phihyd = Pres / rho_c +  grav * z
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "phihyd")).load()
-    P = (
-        x.phihyd.isel(Time=ts)
-        .transpose("Longitude_t", "Latitude_t", "Depth_c")
-        .astype(np.float64, order="C")
-    )
+    P = x.phihyd.isel(Time=ts)
+
     # convert to full in-situ pressure, in [dbar]
-    P = (P - g["grav"] * g["RC"].reshape(1, 1, -1)) * (g["ρ_c"] * Pa2db)
+    Z3D = -g["RC"].reshape(tuple(-1 if x == "Depth_c" else 1 for x in P.dims))
+    P = (P + g["grav"] * Z3D) * (g["ρ_c"] * Pa2db)
     x.close()
 
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "etan"))
-    η = (
-        x.etan.isel(Time=ts)
-        .transpose("Longitude_t", "Latitude_t")
-        .astype(np.float64, order="C")
-    )
+    η = x.etan.isel(Time=ts)
     x.close()
 
-    # ATMP = 0.
-    # SAP = 0.
+    # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
+    dims = ("Longitude_t", "Latitude_t", "Depth_c")
+    S, T, P = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T, P))
+    η = η.transpose(*dims[0:-1]).astype(np.float64, order="C")
+
+    # ATMP = 0.  # Atmospheric Pressure (loading)
+    # SAP = 0.  # Standard Atmospheric Pressure
 
     return g, S, T, P, η

@@ -70,14 +70,15 @@ def _xr_out(s, t, p, sxr, txr, pxr):
 
 
 def _process_vert_dim(vert_dim, S):
-    """Convert `vert_dim` as a str naming a dimension in `S` into an int.
-    If vert_dim is not a str, or if S isn't an xarray, this just returns vert_dim."""
+    """Convert `vert_dim` as a str naming a dimension in `S` or a (possibly
+    negative) int into an int between 0 and S.ndim-1."""
     if isinstance(vert_dim, str) and hasattr(S, "dims"):
         try:
             vert_dim = S.dims.index(vert_dim)
         except:
             raise ValueError(f"vert_dim = {vert_dim} not found in S.dims")
-    return vert_dim
+
+    return np.mod(vert_dim, S.ndim)
 
 
 def _contiguous_casts(S, vert_dim=-1):
@@ -106,8 +107,12 @@ def _contiguous_casts(S, vert_dim=-1):
 def _process_casts(S, T, P, vert_dim):
     """Make individual casts contiguous in memory and extract numpy array from xarray"""
 
-    vert_dim = _process_vert_dim(vert_dim, S)  # Converts from str to int if needed
+    vert_dim = _process_vert_dim(vert_dim, S)
+
+    # Broadcast a 1D vector for P into a 3D array like S
     if P.ndim < S.ndim:
+        # First make P a 3D array with its non-singleton dimension be `vert_dim`
+        P = np.reshape(P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim)))
         P = np.broadcast_to(P, S.shape)
 
     S, T, P = (xr_to_np(x) for x in (S, T, P))

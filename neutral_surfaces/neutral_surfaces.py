@@ -114,7 +114,7 @@ def sigma_surf(S, T, P, **kwargs):
         As a tuple of str, simply name the periodic dimensions of `S` and
         `T`.
 
-        Required if diags is True
+        Required if `diags` is True
 
     vert_dim : int or str, Default -1
 
@@ -288,6 +288,12 @@ def delta_surf(S, T, P, **kwargs):
     Returns
     -------
     s, t, p, d :
+        See `sigma_surf`
+
+    Other Parameters
+    ----------------
+    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, eos_s_t, grav,
+    rho_c, interp_fn, Sppc, Tppc, n_good, diags, output, TOL_P_SOLVER :
         See `sigma_surf`
 
     Examples
@@ -520,7 +526,10 @@ def omega_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    See `sigma_surf`.
+    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, eos_s_t, grav,
+    rho_c, interp_fn, Sppc, Tppc, n_good, diags, output, TOL_P_SOLVER :
+
+        See `sigma_surf`
 
     ITER_MIN : int, Default 1
 
@@ -557,19 +566,19 @@ def omega_surf(S, T, P, **kwargs):
 
         If a dict, the pressure or depth at the base of the mixed layer is
         computed using `mixed_layer` with p_ml passed as keyword arguments,
-        enabling control over the parameters in that function.  
+        enabling control over the parameters in that function.
         See `mixed_layer` for details.
-        
+
         If an ndarray (of the same shape as the lateral dimensions of `S`),
         the pressure or depth at the base of the mixed layer in each water
         column.
-        
+
         When the surface's pressure is shallower than `p_ml` in any water
         column, it is set to NaN (a "dry" water column). This is not applied
         to the initial surface, but only to the surface after the first
-        iteration, as the initial surface could be very far from neutral. 
-        
-        If None, the mixed layer is not removed. 
+        iteration, as the initial surface could be very far from neutral.
+
+        If None, the mixed layer is not removed.
 
     Examples
     --------
@@ -743,8 +752,8 @@ def omega_surf(S, T, P, **kwargs):
 
     # Calculate bottom of mixed layer from given options
     if ITER_MAX > 1 and isinstance(p_ml, dict):
-      # Compute the mixed layer from parameter inputs
-      p_ml = mixed_layer(S, T, P, eos, **p_ml)
+        # Compute the mixed layer from parameter inputs
+        p_ml = mixed_layer(S, T, P, eos, **p_ml)
 
     # ensure same nan structure between s, t, and p. Just in case user gives
     # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
@@ -793,7 +802,20 @@ def omega_surf(S, T, P, **kwargs):
         timer_loc = time()
         if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
             qu, qt, n_newly_wet = bfs_conncomp1_wet(
-                s, t, p, S, T, P, Sppc, Tppc, n_good, A4, pin_cast_1, TOL_P_SOLVER, eos, p_ml
+                s,
+                t,
+                p,
+                S,
+                T,
+                P,
+                Sppc,
+                Tppc,
+                n_good,
+                A4,
+                pin_cast_1,
+                TOL_P_SOLVER,
+                eos,
+                p_ml,
             )
         else:
             qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, pin_cast_1)

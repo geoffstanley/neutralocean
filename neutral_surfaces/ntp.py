@@ -310,17 +310,17 @@ def neutral_trajectory(
     S, T, P : 2D ndarray
 
         1D data specifying the practical / Absolute salinity, and potential /
-        Conservative temperature, and pressure down a 1D sequence of casts
+        Conservative temperature, and pressure / depth down a 1D sequence of casts
 
     p0 : float
 
-        The pressure at which to begin the neutral trajectory on the first cast
+        The pressure / depth at which to begin the neutral trajectory on the first cast
 
     s0, t0 : float, optional
 
         If provided, the first step of the neutral trajectory is a neutral
-        connection a bottle with salinity s0, temperature t0, and pressure p0
-        to the first cast.
+        connection a bottle with salinity s0, temperature t0, and pressure /
+        depth p0 to the first cast.
 
     Returns
     -------
@@ -333,7 +333,7 @@ def neutral_trajectory(
     ----------------
     tol_p : float, Default 1e-4
 
-        Error tolerance when root-finding to update the pressure or depth of
+        Error tolerance when root-finding to update the pressure / depth of
         the surface in each water column. Units are the same as `P`.
 
     interp_fn : function, Default ``linear_coeffs``

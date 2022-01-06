@@ -8,25 +8,30 @@ import matplotlib.pyplot as plt
 
 from neutral_surfaces import sigma_surf, delta_surf, omega_surf
 from neutral_surfaces.data import load_OCCA
-from neutral_surfaces.ntp import ntp_ϵ_errors_norms
-from neutral_surfaces.ntp import veronis_density
+from neutral_surfaces.ntp import ntp_ϵ_errors_norms, veronis_density
+from neutral_surfaces.mixed_layer import mixed_layer
 
 from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
 
-# %% Load OCCA data
-g, S, T, P, _ = load_OCCA("~/work/data/OCCA/")
-Z = -g["RC"]  # Depth vector (note positive and increasing down)
+from neutral_surfaces.lib import _process_casts
 
+# %% Load OCCA data
+path_occa = "~/work/data/OCCA/"  # ** ADJUST AS NEEDED **
+g, S, T, _, _ = load_OCCA(path_occa)  # S and T are arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
+Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
 # Select pinning cast
 i0 = int(ni / 2)
 j0 = int(nj / 2)
 z0 = 1500.0
 
-# Prepare equation of state functions
+# Prepare equation of state functions (in this case, the Boussinesq versions)
 eos = make_eos("jmd95", g["grav"], g["ρ_c"])
 eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
+
+# Pre-compute depth of the mixed layer
+z_ml = mixed_layer(S, T, Z, eos)
 
 # %% Potential Density surface
 
@@ -153,7 +158,8 @@ print(f'      bfs time: {np.sum(d["timer_bfs"]) : .4f} sec')
 print(f'   matrix time: {np.sum(d["timer_mat"]) : .4f} sec')
 print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
-# %% Initialize omega surface with a (locally referenced) delta surface:
+# Initialize omega surface with a (locally referenced) delta surface.
+# Also remove the mixed layer.
 s, t, z, d = omega_surf(
     S,
     T,
@@ -170,6 +176,7 @@ s, t, z, d = omega_surf(
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
+    p_ml=z_ml,
 )
 # old tests below:
 
@@ -198,6 +205,7 @@ s, t, z, d = omega_surf(
 # Iter  6 [  0.17 sec] log_10(|ϵ|_2) = -9.340763 by |ϕ|_1 = 6.579950e-08;    0 casts freshly wet; |Δp|_2 = 3.238430e-03
 # Note:  10 ** -9.340763 == 4.56285848989746e-10  -- matches Stanley et al (2021) Fig 4.
 
+
 # %% Show figure
 
 fig, ax = plt.subplots()
@@ -212,9 +220,10 @@ ax.set_title(r"Depth of surface in OCCA")
 from neutral_surfaces.ntp import ntp_bottle_to_cast
 from neutral_surfaces.interp_ppc import linear_coeffs
 
+sB, tB, zB = 35.0, 16.0, 500.0  # Thermodynamic properties of a given Bottle
 S1 = S.values[180, 80, :]
 T1 = T.values[180, 80, :]
-s0, t0, p0 = ntp_bottle_to_cast(35.0, 16.0, 500.0, S1, T1, Z)
+s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # Or the more manual version:
 from neutral_surfaces.ntp import _ntp_bottle_to_cast
@@ -223,8 +232,8 @@ from neutral_surfaces.lib import find_first_nan
 n_good = find_first_nan(S1)[()]
 S1ppc = linear_coeffs(Z, S1)
 T1ppc = linear_coeffs(Z, T1)
-s0, t0, p0 = _ntp_bottle_to_cast(
-    35.0, 16.0, 500.0, S1, T1, Z, S1ppc, T1ppc, n_good, eos, 1e-4
+s1, t1, z1 = _ntp_bottle_to_cast(
+    sB, tB, zB, S1, T1, Z, S1ppc, T1ppc, n_good, eos, 1e-4
 )
 
 
@@ -232,5 +241,24 @@ s0, t0, p0 = _ntp_bottle_to_cast(
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
 ρ_v = veronis_density(
-    S_ref_cast, T_ref_cast, Z, 1500.0, eos=eos, eos_s_t=eos_s_t
+    S_ref_cast, T_ref_cast, Z, z0, eos=eos, eos_s_t=eos_s_t
 )  # 1027.7700462375435
+
+
+
+# %% Work with Numpy arrays instead of xarrays
+
+# Convert S and T from xarray to numpy ndarrays, and make vertical dimension contiguous in memory.
+# If not done here in advance, this will be done each time sigma_surf, delta_surf, or omega_surf is called. 
+S, T, Z = _process_casts(S, T, Z, "Depth_c")
+
+s, t, z, d = sigma_surf(
+    S,
+    T,
+    Z,
+    eos=eos,
+    wrap=(True, False),
+    vert_dim=-1,
+    ref=0.0,
+    isoval=1027.5,
+)
