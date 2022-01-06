@@ -10,7 +10,9 @@ checkvals = (35.5, 3.0, 3000.0, 1041.83267)
 def test_jmd95_scalar():
     assert np.round(rho(*checkvals[:-1]), decimals=5) == checkvals[-1]
 
+
 rho_ufunc = vectorize_eos(rho)
+
 
 def test_rho_ufunc_scalar():
     res = rho_ufunc(*checkvals[:-1])
