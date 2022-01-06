@@ -10,10 +10,9 @@ from neutral_surfaces import sigma_surf, delta_surf, omega_surf
 from neutral_surfaces.data import load_OCCA
 from neutral_surfaces.ntp import ntp_ϵ_errors_norms, veronis_density
 from neutral_surfaces.mixed_layer import mixed_layer
-
-from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
-
+from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t, make_eos_p
 from neutral_surfaces.lib import _process_casts
+from neutral_surfaces.interp_ppc import linear_coeffs, val2
 
 # %% Load OCCA data
 path_occa = "~/work/data/OCCA/"  # ** ADJUST AS NEEDED **
@@ -29,9 +28,15 @@ z0 = 1500.0
 # Prepare equation of state functions (in this case, the Boussinesq versions)
 eos = make_eos("jmd95", g["grav"], g["ρ_c"])
 eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
+eos_z = make_eos_p("jmd95", g["grav"], g["ρ_c"])
+
 
 # Pre-compute depth of the mixed layer
 z_ml = mixed_layer(S, T, Z, eos)
+
+# Pre-compute linear interpolants for S and T in terms of Z
+Sppc = linear_coeffs(Z, S)
+Tppc = linear_coeffs(Z, T)
 
 # %% Potential Density surface
 
@@ -94,6 +99,7 @@ print(ϵ_RMS)
 
 # %% Delta surface
 # Provide reference pressure and isovalue
+s0, t0 = 34.5, 4.0
 s, t, z, d = delta_surf(
     S,
     T,
@@ -103,7 +109,7 @@ s, t, z, d = delta_surf(
     rho_c=g["ρ_c"],
     wrap="Longitude_t",
     vert_dim="Depth_c",
-    ref=(34.5, 4.0),
+    ref=(s0, t0),
     isoval=0.0,
 )
 
@@ -117,7 +123,7 @@ s, t, z, _ = delta_surf(
     eos_s_t=eos_s_t,
     diags=False,
     vert_dim="Depth_c",
-    ref=(34.5, 4.0),
+    ref=(s0, t0),
     pin_cast=(i0, j0),
     pin_p=z0,
 )
@@ -159,7 +165,9 @@ print(f'   matrix time: {np.sum(d["timer_mat"]) : .4f} sec')
 print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
 # Initialize omega surface with a (locally referenced) delta surface.
-# Also remove the mixed layer.
+# Also remove the pre-computed mixed layer.  Could also pass
+# p_ml={"bottle_index" : 1, "ref_p" : 0.0} 
+# for example, to compute mixed layer internally with the given parameters.
 s, t, z, d = omega_surf(
     S,
     T,
@@ -172,7 +180,6 @@ s, t, z, d = omega_surf(
     eos="jmd95",
     grav=g["grav"],
     rho_c=g["ρ_c"],
-    p_ml={"bottle_num" : 1, "ref_p" : 0.0},
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
@@ -210,7 +217,6 @@ s, t, z, d = omega_surf(
 
 fig, ax = plt.subplots()
 cs = ax.imshow(z.T, origin="lower")
-# cs = ax.contourf(lon, lat, z_sigma.T)
 cbar = fig.colorbar(cs, ax=ax)
 cbar.set_label("Depth [m]")
 ax.set_title(r"Depth of surface in OCCA")
@@ -252,13 +258,31 @@ T_ref_cast = T.values[i0, j0]
 # If not done here in advance, this will be done each time sigma_surf, delta_surf, or omega_surf is called. 
 S, T, Z = _process_casts(S, T, Z, "Depth_c")
 
-s, t, z, d = sigma_surf(
+# %% 
+s, t, z, d = delta_surf(
     S,
     T,
     Z,
     eos=eos,
+    eos_s_t=eos_s_t,
     wrap=(True, False),
     vert_dim=-1,
-    ref=0.0,
-    isoval=1027.5,
+    ref=(s0, t0),
+    isoval=0.0,
 )
+
+
+# %% Calculate a large-scale potential vorticity on our surface
+
+Earth_day = 86164 # Earth sidereal day period [s]
+f = 2 * (2 * np.pi / Earth_day) * np.sin(g["YCvec"] * (np.pi / 180))  # Coriolis param [s-1] on tracer grid
+
+sz, tz = val2(Z, S, Sppc, T, Tppc, z, 1)  # ∂S/∂Z and ∂T/∂Z, on the surface
+rs, rt = eos_s_t(s, t, z)  # ∂ρ/∂S and ∂ρ/∂T, on the surface
+
+σz = rs * sz + rt * tz  # ∂σ/∂z on the surface, where σ is the locally reference potential density.
+q = f * σz  # large-scale potential vorticity [m-1 s-1] defined via locally referenced potential density, on the surface
+
+# ∂δ/∂z on the surface, where δ is the in-situ density anomaly
+δz = rs * sz + rt * tz + (eos_z(s, t, z) - eos_z(s0, t0, z))
+q = f * δz  # large-scale potential vorticity [m-1 s-1] defined via in-situ density anomaly, on the surface

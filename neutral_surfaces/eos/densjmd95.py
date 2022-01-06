@@ -40,14 +40,14 @@ def rho(s, t, p):
     Returns
     -------
     rho : float
-        JMD95 in-situ density, [kg m-3]
+        JMD95 in-situ density [kg m-3]
 
     Notes
     -----
     This function is derived from densjmd95.m, documented below. Input
     checks and expansion of variables have been removed. That code used
     arrays to store coefficients, and also began by multiplying the
-    input pressure by 10 [dbar -> bar]. The coefficients, modified to
+    input pressure by 10 (dbar -> bar). The coefficients, modified to
     not need this multiplication by 10, have been taken out of arrays
     and simply hardcoded into the later expressions.  The polynomial
     calculations have also been optimized to favour faster, nested
@@ -115,7 +115,7 @@ def rho(s, t, p):
 @numba.njit
 def rho_s_t(s, t, p):
     """
-    Fast salinity and potential temperature derivatives of JMD95 in-situ density.
+    Fast salinity and potential temperature partial derivatives of JMD95 in-situ density
 
     Parameters
     ----------
@@ -126,10 +126,10 @@ def rho_s_t(s, t, p):
     -------
         rho_s : float
             Partial derivative of JMD95 in-situ density with respect to
-            salinity `s` [kg m^-3 psu^-1]
+            practical salinity `s` [kg m-3 psu-1]
         rho_t : float
             Partial derivative of JMD95 in-situ density with respect to
-            temperature `t`   [kg m^-3 degC^-1]
+            potential temperature `t`   [kg m-3 degC-1]
 
     Notes
     -----
@@ -137,8 +137,10 @@ def rho_s_t(s, t, p):
     """
 
     # INPUT CHECKS REMOVED
+
+
     # fmt: off
-    # coefficients nonlinear equation of state in pressure coordinates for
+    # Coefficients nonlinear equation of state in pressure coordinates for
     # 1. density of fresh water at p = 0
     eosJMDCFw = [
        999.842594  ,
@@ -158,7 +160,6 @@ def rho_s_t(s, t, p):
        1.022700e-04,
     -  1.654600e-06,
        4.831400e-04]
-    
     # coefficients in pressure coordinates for
     # 3. secant bulk modulus K of fresh water at p = 0
     eosJMDCKFw = [
@@ -192,7 +193,9 @@ def rho_s_t(s, t, p):
     - 2.040237e-07, # .== original / 10
       6.128773e-09, # .== original / 10
       6.207323e-11] # .== original / 10
-
+    # The above coeffs need to be defined in the function for 
+    # compatability with @numba.njit
+    
     s1o2 = np.sqrt(s)
 
     # The secant bulk modulus
@@ -296,3 +299,115 @@ def rho_s_t(s, t, p):
     # fmt: on
 
     return rho_s, rho_t
+
+@numba.njit
+def rho_p(s,t,p):
+    """
+    Fast pressure derivative of JMD95 in-situ density.
+
+    Parameters
+    ----------
+    s, t, p : float
+        See `rho`
+
+    Returns
+    -------
+    rho_p : float
+        Partial derivative of JMD95 in-situ density with respect to
+        pressure `p` [kg m-3 dbar-1]
+
+    Notes
+    -----
+    This function is derived from `rho`.
+    """
+
+    s1o2 = np.sqrt(s)
+
+    # fmt: off
+    # Coefficients nonlinear equation of state in pressure coordinates for
+    # 1. density of fresh water at p = 0
+    eosJMDCFw = [
+       999.842594  ,
+       6.793952e-02,
+    -  9.095290e-03,
+       1.001685e-04,
+    -  1.120083e-06,
+       6.536332e-09]
+    # 2. density of sea water at p = 0
+    eosJMDCSw = [
+       8.244930e-01,
+    -  4.089900e-03,
+       7.643800e-05,
+    -  8.246700e-07,
+       5.387500e-09,
+    -  5.724660e-03,
+       1.022700e-04,
+    -  1.654600e-06,
+       4.831400e-04]
+    # coefficients in pressure coordinates for
+    # 3. secant bulk modulus K of fresh water at p = 0
+    eosJMDCKFw = [
+      1.965933e+05, # .== original * 10
+      1.444304e+03, # .== original * 10
+    - 1.706103e+01, # .== original * 10
+      9.648704e-02, # .== original * 10
+    - 4.190253e-04] # .== original * 10
+    # 4. secant bulk modulus K of sea water at p = 0
+    eosJMDCKSw = [
+      5.284855e+02, # .== original * 10
+    - 3.101089e+00, # .== original * 10
+      6.283263e-02, # .== original * 10
+    - 5.084188e-04, # .== original * 10
+      3.886640e+00, # .== original * 10
+      9.085835e-02, # .== original * 10
+    - 4.619924e-03] # .== original * 10
+    # 5. secant bulk modulus K of sea water at p
+    eosJMDCKP = [
+      3.186519e+00,
+      2.212276e-02,
+    - 2.984642e-04,
+      1.956415e-06,
+      6.704388e-03,
+    - 1.847318e-04,
+      2.059331e-07,
+      1.480266e-04,
+      2.102898e-05, # .== original / 10
+    - 1.202016e-06, # .== original / 10
+      1.394680e-08, # .== original / 10
+    - 2.040237e-07, # .== original / 10
+      6.128773e-09, # .== original / 10
+      6.207323e-11] # .== original / 10
+    # The above coeffs need to be defined in the function for 
+    # compatability with @numba.njit
+
+    K2 = (
+        p * ( eosJMDCKP[8] + t*(eosJMDCKP[9] + t*eosJMDCKP[10])  
+        + s *  (eosJMDCKP[11] + t*(eosJMDCKP[12] + t*eosJMDCKP[13])) ) 
+        )
+
+    K1plusK2 = (
+        K2 +
+            eosJMDCKP[0] + t*(eosJMDCKP[1] + t*(eosJMDCKP[2] + t*eosJMDCKP[3]))            # \__ these 2 lines are K1
+            + s * ( eosJMDCKP[4] + t*(eosJMDCKP[5] + t*eosJMDCKP[6]) + eosJMDCKP[7]*s1o2 ) # /  
+        )
+    # K == bulkmod
+    K = (   eosJMDCKFw[0] + t*(eosJMDCKFw[1] + t*(eosJMDCKFw[2] + t*(eosJMDCKFw[3] + t*eosJMDCKFw[4])))  # secant bulk modulus of fresh water at the surface
+        + s * (   eosJMDCKSw[0] + t*(eosJMDCKSw[1] + t*(eosJMDCKSw[2] + t*eosJMDCKSw[3])) 
+            + s1o2 * (eosJMDCKSw[4] + t*(eosJMDCKSw[5] + t*eosJMDCKSw[6]) ) 
+        )  # secant bulk modulus of sea water at the surface
+        + p * K1plusK2 # secant bulk modulus of sea water at pressure z
+        )
+
+    rho = (
+        eosJMDCFw[0] + t*(eosJMDCFw[1] + t*(eosJMDCFw[2] + t*(eosJMDCFw[3] + t*(eosJMDCFw[4] + t*eosJMDCFw[5])))) # density of freshwater at the surface
+        + s * ( eosJMDCSw[0] + t*(eosJMDCSw[1] + t*(eosJMDCSw[2] + t*(eosJMDCSw[3] + t*eosJMDCSw[4])))
+            + s1o2 * ( eosJMDCSw[5] + t*(eosJMDCSw[6] + t*eosJMDCSw[7]) )
+            + s * eosJMDCSw[8]
+        ) # density of sea water at the surface
+        )
+    
+    # (K1 + 2 * K2) is K_p, the partial derivative of K w.r.t p
+    rho_p = rho * (K - p * (K1plusK2 + K2)) / (K - p)**2
+    # fmt: on
+    
+    return rho_p
