@@ -106,15 +106,17 @@ def make_eos_bsq(eos, grav, rho_c):
         Boussinesq version of `eos`, with inputs of salinity, temperature, depth
     """
     z_to_p = 1e-4 * grav * rho_c
+
     @numba.njit
     def eos_bsq(s, t, z):
         return eos(s, t, z * z_to_p)
+
     return eos_bsq
 
 
 def vectorize_eos(eos):
     """Convert an eos function that takes scalar inputs into one taking arrays
-    
+
     Parameters
     ----------
     eos : function
@@ -127,10 +129,12 @@ def vectorize_eos(eos):
     -------
     eos_vec : function
         A @numba.vectorize'd version of `eos`, which can take array inputs and
-        returns one array output.  The array inputs' shape need not match 
+        returns one array output.  The array inputs' shape need not match
         exactly, but must be broadcastable to each other.
     """
+
     @numba.vectorize
     def eos_vec(s, t, p):
         return eos(s, t, p)
+
     return eos_vec

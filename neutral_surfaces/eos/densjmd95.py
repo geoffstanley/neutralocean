@@ -52,10 +52,10 @@ def rho(s, t, p):
     and simply hardcoded into the later expressions.  The polynomial
     calculations have also been optimized to favour faster, nested
     multiplications.
-    
+
     As such, the output of this function differs from the output of the
     original densjmd95.m function, though the difference is at the
-    level of machine precision. 
+    level of machine precision.
 
 
     % DENSJMD95    Density of sea water
@@ -116,12 +116,12 @@ def rho(s, t, p):
 def rho_s_t(s, t, p):
     """
     Fast salinity and potential temperature derivatives of JMD95 in-situ density.
-    
+
     Parameters
     ----------
     s, t, p : float
         See `rho`
-  
+
     Returns
     -------
         rho_s : float
