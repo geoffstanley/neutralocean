@@ -5,13 +5,13 @@ from neutral_surfaces.eos.eostools import vectorize_eos
 from neutral_surfaces.lib import _process_casts, _process_vert_dim
 
 def mixed_layer(
-    S, T, P, eos, pot_dens_diff=0.03, ref_p=100.0, bottle_num=1, interp_fn=linear_coeffs, vert_dim=-1
+    S, T, P, eos, pot_dens_diff=0.03, ref_p=100.0, bottle_index=1, interp_fn=linear_coeffs, vert_dim=-1
 ):
     """Calculate the pressure or depth at the bottom of the mixed layer
 
     The mixed layer is the pressure or depth at which the potential density
     (referenced to `ref_p`) exceeds the potential density near the surface
-    (specifically, the n'th bottle on each cast where n = `bottle_num`) by an
+    (specifically, the bottle indexed by `bottle_index` on each cast) by an
     amount of `pot_dens_diff`.
 
     Parameters
@@ -49,10 +49,11 @@ def mixed_layer(
 
         Reference pressure or depth for potential density [dbar or m].
 
-    bottle_num : int, Default 2
+    bottle_index : int, Default 1
 
-        The bottle number on each cast where the "near surface" potential
-        density is calculated.
+        The index for the bottle on each cast where the "near surface" potential
+        density is calculated.  Note this index is 0-based.  The Default of 1
+        therefore indexes the second bottle in each cast. 
 
     interp_fn : function, Default `linear_coeffs`
 
@@ -90,8 +91,8 @@ def mixed_layer(
     # Convert S, T, P from xarray to numpy arrays if needed, and make casts contiguous in memory
     S, T, P = _process_casts(S, T, P, vert_dim)
 
-    SB = S[:, :, bottle_num : bottle_num + 1]  # retain singleton trailing dimension
-    TB = T[:, :, bottle_num : bottle_num + 1]
+    SB = S[:, :, bottle_index : bottle_index + 1]  # retain singleton trailing dimension
+    TB = T[:, :, bottle_index : bottle_index + 1]
 
     # Calculate potential density difference between each data point and the
     # near-surface bottle
