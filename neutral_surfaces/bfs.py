@@ -86,7 +86,9 @@ def bfs_conncomp1(G, A, r):
 
 
 @numba.njit
-def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_ml=None):
+def bfs_conncomp1_wet(
+    s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_ml=None
+):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting
 
@@ -125,7 +127,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
 
         Pre-computed number of ocean data points in each water column.
         This should be computed as ``n_good = lib.find_first_nan(S)``.
-        
+
     A : ndarray of int
          As in `bfs_conncomp1`
 
@@ -144,9 +146,9 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
 
         This should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
-        
+
     p_ml : ndarray, Default None
-    
+
         Pressure or depth of the base of the mixed layer.
         If None, NTP links that enter the mixed layer are retained.
 
@@ -189,17 +191,16 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
     Sppc = np.reshape(Sppc, (N, nk - 1, -1))
     Tppc = np.reshape(Tppc, (N, nk - 1, -1))
     n_good = np.reshape(n_good, -1)
-    
+
     if p_ml is None:
         # Ensure p[n] > p_ml[n] will always be true, below.
-        #p_ml = np.broadcast_to(-np.inf, s.shape)  # Does not work with numba.njit
+        # p_ml = np.broadcast_to(-np.inf, s.shape)  # Does not work with numba.njit
         p_ml = np.array([-np.inf])
         zero_or_one = 0  # to change p_ml[n] to p_ml[0] on the fly
     else:
         zero_or_one = 1
         p_ml = np.reshape(p_ml, N)
-    
-    
+
     # Initialize BFS from root node
     qt += 1  # Add r to queue
     qu[qt] = r
@@ -237,7 +238,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
                     )
 
                     if np.isfinite(p[n]) and p[n] > p_ml[n * zero_or_one]:
-                        # The NTP connection was successful, and its location 
+                        # The NTP connection was successful, and its location
                         # on the neighbouring cast is below the mixed layer.
                         qt += 1  # Add n to queue
                         qu[qt] = n
