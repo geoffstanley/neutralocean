@@ -4,8 +4,6 @@ import numpy as np
 import numba
 import xarray as xr
 
-from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
-
 
 @numba.njit
 def find_first_nan(a):
@@ -169,17 +167,6 @@ def _process_wrap(wrap, diags=True, s=None):
     return wrap
 
 
-def _process_eos(eos, eos_s_t, grav=None, rho_c=None):
-    # Process equation of state function and make cache functions
-    if eos_s_t is None and isinstance(eos, str):
-        eos_s_t = eos
-    elif isinstance(eos, str) and isinstance(eos_s_t, str) and eos != eos_s_t:
-        raise ValueError("eos and eos_s_t, if strings, must be the same string")
-    eos = make_eos(eos, grav, rho_c)
-    eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
-    return eos, eos_s_t
-
-
 def _process_pin_cast(pin_cast, S):
     # Convert pinning cast from a coordinate representation, suitable for ``S.sel(pin_cast)``
     # when S is an xarray, into an index representation, suitable for ``S[pin_cast]``
@@ -202,10 +189,6 @@ def _process_args(
     pin_cast,
     wrap,
     diags,
-    eos,
-    eos_s_t,
-    grav,
-    rho_c,
     interp_fn,
     Sppc,
     Tppc,
@@ -214,8 +197,7 @@ def _process_args(
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # must call before _process_casts
     wrap = _process_wrap(wrap, diags, sxr)  # must call before _process_casts
-    eos, eos_s_t = _process_eos(eos, eos_s_t, grav, rho_c)
     S, T, P = _process_casts(S, T, P, vert_dim)
     Sppc, Tppc = _interp_casts(S, T, P, interp_fn, Sppc, Tppc)  # after _process_casts
     n_good = _process_n_good(S, n_good)  # must call after _process_casts
-    return S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t
+    return S, T, P, Sppc, Tppc, n_good, pin_cast, wrap

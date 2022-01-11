@@ -17,6 +17,11 @@ from neutral_surfaces.lib import (
 )
 from neutral_surfaces._omega import _omega_matsolve_poisson
 from neutral_surfaces.mixed_layer import mixed_layer
+from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
+
+# Prepare default values for eos and eos_s_t
+eos_ = make_eos("gsw")
+eos_s_t_ = make_eos_s_t("gsw")
 
 
 def sigma_surf(S, T, P, **kwargs):
@@ -339,10 +344,10 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
     pin_p = kwargs.get("pin_p")
     vert_dim = kwargs.get("vert_dim", -1)
     TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
-    eos = kwargs.get("eos", "gsw")
-    eos_s_t = kwargs.get("eos_s_t")
-    rho_c = kwargs.get("rho_c")
-    grav = kwargs.get("grav")
+    eos = kwargs.get("eos", eos_)
+    eos_s_t = kwargs.get("eos_s_t", eos_s_t_)
+    #rho_c = kwargs.get("rho_c")
+    #grav = kwargs.get("grav")
     wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
@@ -357,7 +362,7 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
 
     d = dict()
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
-    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t = _process_args(
+    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap = _process_args(
         S,
         T,
         P,
@@ -365,10 +370,6 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
         pin_cast,
         wrap,
         diags,
-        eos,
-        eos_s_t,
-        grav,
-        rho_c,
         interp_fn,
         Sppc,
         Tppc,

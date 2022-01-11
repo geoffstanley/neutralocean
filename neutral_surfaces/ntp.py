@@ -6,7 +6,7 @@ import numba
 from neutral_surfaces.fzero import guess_to_bounds, brent
 from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val_0d_i, dval_0d_i
 from neutral_surfaces.eos.eostools import make_eos
-from neutral_surfaces.lib import _process_wrap, _process_eos, xr_to_np, find_first_nan
+from neutral_surfaces.lib import _process_wrap, xr_to_np, find_first_nan
 
 
 def _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, shift):
@@ -480,33 +480,19 @@ def veronis_density(
         interpolants of `S` and `T` as functions of `P`.  Options include
         ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
 
-    eos : str or function, Default 'gsw'
+    eos : function
 
         Equation of state for the density or specific volume as a function of
-        `S`, `T`, and pressure (not depth) inputs.
+        `S`, `T`, and pressure (if non-Boussinesq) or depth (if Boussinesq).
 
-        If a str, can be either 'gsw' to use TEOS-10 or 'jmd' to use Jackett
-        and McDougall (1995) [1]_.
-
-    eos_s_t : str or function, Default None
+    eos_s_t : function
 
         Equation of state for the partial derivatives of density or specific
-        volume with respect to `S` and `T` as a function of `S`, `T`, and
-        pressure (not depth) inputs.
+        volume with respect to `S` and `T`.  The inputs are `S`, `T`, and
+        pressure (if non-Boussinesq) or depth (if Boussinesq).
 
-        If a function, this need not be @numba.njit decorated but should be
-        vectorized, as it will be called a few times with ndarray inputs.
-
-        If a str, the same options apply as for `eos`. If None and `eos` is a
-        str, then this defaults to the same str as `eos`.
-
-    grav : float, Default None
-
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
-
-    rho_c : float, Default None
-
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+        This need not be @numba.njit decorated but should be vectorized, as it
+        will be called a few times with ndarray inputs.
 
     Notes
     -----
@@ -540,8 +526,6 @@ def veronis_density(
 
     if p0 is None:
         p0 = P[0]
-
-    eos, eos_s_t = _process_eos(eos, eos_s_t, grav, rho_c)
 
     # Interpolate S and T as piecewise polynomials of P
     Sppc = interp_fn(P, S)
