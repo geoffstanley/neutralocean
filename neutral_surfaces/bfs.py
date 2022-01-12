@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 
-from neutral_surfaces.ntp import _ntp_bottle_to_cast
+from neutral_surfaces.neutral_traj import _ntp_bottle_to_cast
 
 
 @numba.njit
