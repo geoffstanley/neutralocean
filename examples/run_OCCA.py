@@ -16,18 +16,17 @@ from neutral_surfaces.interp_ppc import linear_coeffs, val2
 
 # %% Prepare for loading OCCA data
 import xarray as xr
-import wget
 
-# ** ADJUST AS NEEDED **
-path_nspy = "/home/stanley/work/projects-gfd/neutral-surfaces-python/"
-# path_occa = "~/work/data/OCCA/"  # ** ADJUST AS NEEDED **
+# import wget
+path_nspy = "/home/stanley/work/projects-gfd/neutral-surfaces-python/"  # EDIT AS NEEDED
 path_occa = path_nspy + "examples/"
+# path_occa = "~/work/data/OCCA/"  # EDIT AS NEEDED
 
-# URL = 'ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/'
-url = "https://www.dropbox.com/s/q9hywvjup1mwhc9/DDsalt.0406annclim.nc"
-wget.download(url, path_occa)
-url = "https://www.dropbox.com/s/qr6bivfyk0s06ot/DDtheta.0406annclim.nc"
-wget.download(url, path_occa)
+# url = 'ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/'
+# url = "https://www.dropbox.com/s/q9hywvjup1mwhc9/DDsalt.0406annclim.nc"
+# wget.download(url, path_occa)
+# url = "https://www.dropbox.com/s/qr6bivfyk0s06ot/DDtheta.0406annclim.nc"
+# wget.download(url, path_occa)
 
 
 def load_OCCA(OCCA_dir, ts=0):
