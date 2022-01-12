@@ -1,6 +1,6 @@
 import numpy as np
 
-from neutral_surfaces._neutral_surfaces import find_first_nan
+from neutral_surfaces.lib import find_first_nan
 from neutral_surfaces.interp_ppc import (
     linear_coeffs,
     pchip_coeffs,
