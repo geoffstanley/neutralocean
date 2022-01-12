@@ -17,11 +17,7 @@ from neutral_surfaces.lib import (
 )
 from neutral_surfaces._omega import _omega_matsolve_poisson
 from neutral_surfaces.mixed_layer import mixed_layer
-from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t
-
-# Prepare default values for eos and eos_s_t
-eos_ = make_eos("gsw")
-eos_s_t_ = make_eos_s_t("gsw")
+from neutral_surfaces.eos.gsw import rho, rho_s_t
 
 
 def sigma_surf(S, T, P, **kwargs):
@@ -105,6 +101,15 @@ def sigma_surf(S, T, P, **kwargs):
 
             Time spent on the whole algorithm, excluding set-up and diagnostics.
 
+        ``"ref"`` : float
+
+            Reference pressure / depth for surface (matching input `ref` if given,
+            otherwise this is calculated internally).
+
+        ``"isoval"`` : float
+
+            Isovalue of potential density for surface (matching input `ref` if
+            given, otherwise this is calculated internally).
 
     Other Parameters
     ----------------
@@ -145,39 +150,50 @@ def sigma_surf(S, T, P, **kwargs):
         (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
         between cells (5,3) and (5,2).
 
-    eos : str or function, Default 'gsw'
+    eos : function, Default gsw.rho
 
         Equation of state for the density or specific volume as a function of
-        `S`, `T`, and pressure inputs.  For Boussinesq models, provide `grav`
-        and `rho_c`, so this function with third input pressure will be
-        converted to a function with third input depth.
+        `S`, `T`, and `P` inputs.
 
-        If a function, this should be @numba.njit decorated and need not be
-        vectorized, as it will be called many times with scalar inputs.
+        For non-Boussinesq models, construct this as
+        `eos = neutral_surfaces.make_eos(x)`
+        where `x` is either "gsw" to use the TEOS-10 in-situ density or
+        "jmd95" to use the Jackett and McDougall (1995) in-situ density [1]_.
+        In this case, the third input to `eos` is pressure.
 
-        If a str, can be either 'gsw' to use the TEOS-10 specific volume
-        or 'jmd95' to use the Jackett and McDougall (1995) in-situ density
-        [1]_.
+        For Boussinesq models, construct this as
+        `eos = neutral_surfaces.make_eos(x, grav, rho_c)`
+        with `x` as above,
+        `grav` the gravitational acceleration [m s-2], and
+        Boussinesq reference desnity [kg m-3].
+        In this case, the third input to `eos` is depth, not pressure.
 
-    eos_s_t : str or function, Default None
+        Alternatively, you may pass your own function.  It should be
+        @numba.njit decorated and need not be vectorized, as it will be called
+        many times with scalar inputs.
+
+    eos_s_t : function, Default gsw.rho_s_t
 
         Equation of state for the partial derivatives of density or specific
-        volume with respect to `S` and `T` as a function of `S`, `T`, and
-        pressure (not depth) inputs.
+        volume with respect to `S` and `T` as a function of `S`, `T`, and `P`
+        inputs.
 
-        If a function, this need not be @numba.njit decorated but should be
-        vectorized, as it will be called a few times with ndarray inputs.
+        For non-Boussinesq models, construct this as
+        `eos = neutral_surfaces.make_eos_s_t(x)`
+        where `x` is either "gsw" to use the TEOS-10 in-situ density or
+        "jmd95" to use the Jackett and McDougall (1995) in-situ density [1]_.
+        In this case, the third input to `eos` is pressure.
 
-        If a str, the same options apply as for `eos`. If None and `eos` is a
-        str, then this defaults to the same str as `eos`.
+        For Boussinesq models, construct this as
+        `eos = neutral_surfaces.make_eos_s_t(x, grav, rho_c)`
+        with `x` as above,
+        `grav` the gravitational acceleration [m s-2], and
+        Boussinesq reference desnity [kg m-3].
+        In this case, the third input to `eos` is depth, not pressure.
 
-    grav : float, Default None
-
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
-
-    rho_c : float, Default None
-
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+        Alternatively, pass your own function.  It need not be @numba.njit
+        decorated but should be vectorized, as it will be called a few times
+        with ndarray inputs.
 
     interp_fn : function, Default ``linear_coeffs``
 
@@ -293,7 +309,8 @@ def delta_surf(S, T, P, **kwargs):
     Returns
     -------
     s, t, p, d :
-        See `sigma_surf`
+        See `sigma_surf`.
+        Note d["ref"] returns a 2 element tuple, namely `ref` as here.
 
     Other Parameters
     ----------------
@@ -344,10 +361,10 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
     pin_p = kwargs.get("pin_p")
     vert_dim = kwargs.get("vert_dim", -1)
     TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
-    eos = kwargs.get("eos", eos_)
-    eos_s_t = kwargs.get("eos_s_t", eos_s_t_)
-    #rho_c = kwargs.get("rho_c")
-    #grav = kwargs.get("grav")
+    eos = kwargs.get("eos", rho)
+    eos_s_t = kwargs.get("eos_s_t", rho_s_t)
+    # rho_c = kwargs.get("rho_c")
+    # grav = kwargs.get("grav")
     wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
@@ -410,6 +427,9 @@ def _sigma_delta_surf(ans_type, S, T, P, **kwargs):
                 f" | RMS(ϵ) = {ϵ_RMS:.8e}",
                 f" | {d['timer']:.3f} sec",
             )
+
+        d["ref"] = ref
+        d["isoval"] = isoval
 
     s, t, p = _xr_out(s, t, p, sxr, txr, pxr)
     return s, t, p, d
@@ -623,10 +643,8 @@ def omega_surf(S, T, P, **kwargs):
     wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
-    eos = kwargs.get("eos", "gsw")
-    eos_s_t = kwargs.get("eos_s_t")
-    rho_c = kwargs.get("rho_c")
-    grav = kwargs.get("grav")
+    eos = kwargs.get("eos", rho)
+    eos_s_t = kwargs.get("eos_s_t", rho_s_t)
     ITER_MIN = kwargs.get("ITER_MIN", 1)
     ITER_MAX = kwargs.get("ITER_MAX", 10)
     ITER_START_WETTING = kwargs.get("ITER_START_WETTING", 1)
@@ -656,7 +674,7 @@ def omega_surf(S, T, P, **kwargs):
     dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
 
     sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
-    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap, eos, eos_s_t = _process_args(
+    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap = _process_args(
         S,
         T,
         P,
@@ -664,10 +682,6 @@ def omega_surf(S, T, P, **kwargs):
         pin_cast,
         wrap,
         diags,
-        eos,
-        eos_s_t,
-        grav,
-        rho_c,
         interp_fn,
         Sppc,
         Tppc,
@@ -756,6 +770,11 @@ def omega_surf(S, T, P, **kwargs):
         # Compute the mixed layer from parameter inputs
         p_ml = mixed_layer(S, T, P, eos, **p_ml)
 
+    if p_ml is None:
+        # Prepare array as needed for bfs_conncomp1_wet
+        p_ml = np.full((ni, nj), -np.inf)
+        # p_ml = np.broadcast_to(-np.inf, (ni, nj))  # DEV: Doesn't work with @numba.njit
+
     # ensure same nan structure between s, t, and p. Just in case user gives
     # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
     p[np.isnan(s)] = np.nan
@@ -796,7 +815,7 @@ def omega_surf(S, T, P, **kwargs):
         timer = time()
 
         # --- Remove the Mixed Layer
-        if iter_ > 1 and p_ml is not None:
+        if iter_ > 1 and p_ml[0, 0] != -np.inf:
             p[p < p_ml] = np.nan
 
         # --- Determine the connected component containing the reference cast, via Breadth First Search
@@ -816,7 +835,7 @@ def omega_surf(S, T, P, **kwargs):
                 pin_cast_1,
                 TOL_P_SOLVER,
                 eos,
-                p_ml,
+                p_ml=p_ml,
             )
         else:
             qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, pin_cast_1)
