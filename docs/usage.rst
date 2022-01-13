@@ -23,34 +23,33 @@ or Conda,
 Calculating approximately neutral surfaces
 ------------------------------------------
 
-sigma_surf
-~~~~~~~~~~
-.. autofunction:: neutralocean.surface.sigma_surf
+potential_surf
+~~~~~~~~~~~~~~
+.. autofunction:: neutralocean.surface.trad.potential_surf
 
-delta_surf
-~~~~~~~~~~
-.. autofunction:: neutralocean.surface.delta_surf
+anomaly_surf
+~~~~~~~~~~~~
+.. autofunction:: neutralocean.surface.trad.anomaly_surf
 
 omega_surf
 ~~~~~~~~~~
-.. autofunction:: neutralocean.surface.omega_surf
+.. autofunction:: neutralocean.surface.omega.omega_surf
 
 
 Calculating other neutral things
 --------------------------------
 
-veronis_density
-~~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.ntp.veronis_density
-
 ntp_bottle_to_cast
 ~~~~~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.ntp.ntp_bottle_to_cast
+.. autofunction:: neutralocean.traj.ntp_bottle_to_cast
 
 neutral_trajectory
 ~~~~~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.ntp.neutral_trajectory
+.. autofunction:: neutralocean.traj.neutral_trajectory
 
+veronis_density
+~~~~~~~~~~~~~~~
+.. autofunction:: neutralocean.label.veronis_density
 
 Choosing the Equation Of State
 ------------------------------

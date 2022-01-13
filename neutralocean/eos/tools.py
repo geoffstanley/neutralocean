@@ -68,7 +68,7 @@ def make_eos_s_t(eos, grav=None, rho_c=None):
 
     Parameters
     ----------
-    eos, grav, rho_c : 
+    eos, grav, rho_c :
         See `make_eos`
 
     Returns
@@ -89,7 +89,7 @@ def make_eos_p(eos, grav=None, rho_c=None):
 
     Parameters
     ----------
-    eos, grav, rho_c : 
+    eos, grav, rho_c :
         See `make_eos`
 
     Returns
@@ -102,6 +102,7 @@ def make_eos_p(eos, grav=None, rho_c=None):
     eos_dict = {"jmd95": rho_p_jmd95, "gsw": rho_p_gsw}
     return _make_eos(eos, eos_dict, grav, rho_c, 1)
 
+
 @functools.lru_cache(maxsize=10)
 def make_bsq(fn, grav, rho_c, num_p_derivs=0):
     """Make a Boussinesq version of a given equation of state (or its partial derivative(s))
@@ -111,7 +112,7 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
     fn : function
         Function with (salinity, temperature, pressure) as inputs.  Typically
         this is the equation of state, returning the density or specific volume.
-        However, it can also be a function for partial derivative(s) of the 
+        However, it can also be a function for partial derivative(s) of the
         equation of state with respect to salinity, temperature, or pressure.
     grav : float
         Gravitational acceleration [m s-2]
@@ -121,11 +122,11 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
         Number of `p` partial derivatives that relate `fn` to the equation of
         state.  For example,
         - if `fn` is the equation of state, or its partial derivative (of
-        any order) with respect to salinity or temperature, pass 0.  
+        any order) with respect to salinity or temperature, pass 0.
         - if `fn` is the partial derivative of the equation of state with
-          respect to pressure, pass 1.  
+          respect to pressure, pass 1.
         - if `fn is the second partial derivative of the equation of state
-          with respect to salinity and pressure (i.e. ∂²ρ/∂S∂p), pass 1.  
+          with respect to salinity and pressure (i.e. ∂²ρ/∂S∂p), pass 1.
 
     Returns
     -------
@@ -133,13 +134,16 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
         Boussinesq version of `fn`.
         The inputs to `fn_bsq` are (salinity, temperature, depth).
     """
-    z_to_p = 1e-4 * grav * rho_c  # Hydrostatic conversion from depth [m] to pressure [dbar]
-    
+
+    # Hydrostatic conversion from depth [m] to pressure [dbar]
+    z_to_p = 1e-4 * grav * rho_c
+
     if num_p_derivs == 0:
         # Slight optimization for later: don't multiply by 1
         @numba.njit
         def fn_bsq(s, t, z):
             return fn(s, t, z * z_to_p)
+
     else:
         factor = z_to_p ** num_p_derivs
 
@@ -150,6 +154,7 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
     return fn_bsq
 
 
+@functools.lru_cache(maxsize=10)
 def vectorize_eos(eos):
     """Convert an eos function that takes scalar inputs into one taking arrays
 

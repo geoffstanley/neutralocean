@@ -6,7 +6,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from neutralocean.surface.neutral_surfaces import sigma_surf, delta_surf, omega_surf
+from neutralocean.surface.omega import omega_surf
+from neutralocean.surface.trad import potential_surf, anomaly_surf
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.label import veronis_density
 from neutralocean.mixed_layer import mixed_layer
@@ -19,7 +20,7 @@ import xarray as xr
 
 # import wget
 path_neutralocean = "/home/stanley/work/projects-gfd/neutralocean/"  # EDIT AS NEEDED
-path_occa = path_neutralocean + "examples/"
+path_occa = path_neutralocean + "neutralocean/examples/"
 # path_occa = "~/work/data/OCCA/"  # EDIT AS NEEDED
 
 # url = 'ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/'
@@ -35,7 +36,7 @@ def load_OCCA(OCCA_dir, ts=0):
     x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "theta")).load()
 
     # Build our own grid, as the MITgcm does it
-    Pa2db = 1e-4
+    # Pa2db = 1e-4
     deg2rad = np.pi / 180
 
     g = dict()  # model grid and parameters
@@ -78,32 +79,33 @@ def load_OCCA(OCCA_dir, ts=0):
     S = x.salt.isel(Time=ts)
     x.close()
 
-    # phihyd = Pres / rho_c +  grav * z
-    x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "phihyd")).load()
-    P = x.phihyd.isel(Time=ts)
+    # # phihyd = Pres / rho_c +  grav * z
+    # x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "phihyd")).load()
+    # P = x.phihyd.isel(Time=ts)
 
-    # convert to full in-situ pressure, in [dbar]
-    Z3D = -g["RC"].reshape(tuple(-1 if x == "Depth_c" else 1 for x in P.dims))
-    P = (P + g["grav"] * Z3D) * (g["ρ_c"] * Pa2db)
-    x.close()
+    # # convert to full in-situ pressure, in [dbar]
+    # Z3D = -g["RC"].reshape(tuple(-1 if x == "Depth_c" else 1 for x in P.dims))
+    # P = (P + g["grav"] * Z3D) * (g["ρ_c"] * Pa2db)
+    # x.close()
 
-    x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "etan"))
-    η = x.etan.isel(Time=ts)
-    x.close()
+    # x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "etan"))
+    # η = x.etan.isel(Time=ts)
+    # x.close()
 
-    # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
+    # # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
     dims = ("Longitude_t", "Latitude_t", "Depth_c")
-    S, T, P = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T, P))
-    η = η.transpose(*dims[0:-1]).astype(np.float64, order="C")
+    # S, T, P = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T, P))
+    S, T = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T))
+    # η = η.transpose(*dims[0:-1]).astype(np.float64, order="C")
 
     # ATMP = 0.  # Atmospheric Pressure (loading)
     # SAP = 0.  # Standard Atmospheric Pressure
 
-    return g, S, T, P, η
+    return g, S, T  # , P, η
 
 
 # %% Load OCCA data
-g, S, T, _, _ = load_OCCA(path_occa)  # S arranged as (Longitude, Latitude, Depth)
+g, S, T = load_OCCA(path_occa)  # S arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
@@ -128,7 +130,7 @@ Tppc = linear_coeffs(Z, T)
 # %% Potential Density surface
 
 # Provide reference pressure and isovalue
-s, t, z, d = sigma_surf(
+s, t, z, d = potential_surf(
     S,
     T,
     Z,
@@ -140,7 +142,7 @@ s, t, z, d = sigma_surf(
 )
 
 # Provide reference pressure and location for the surface to intersect (pin_cast and pin_p)
-s, t, z, d = sigma_surf(
+s, t, z, d = potential_surf(
     S,
     T,
     Z,
@@ -156,7 +158,7 @@ s, t, z, d = sigma_surf(
 # Provide just the location to intersect (pin_cast, pin_p).
 # This takes the reference pressure ref to match pin_p.
 # Also illustrate using xarray coordinates for pin_cast
-s, t, z, d = sigma_surf(
+s, t, z, d = potential_surf(
     S,
     T,
     Z,
@@ -185,7 +187,7 @@ print(ϵ_RMS)
 # %% Delta surface
 # Provide reference pressure and isovalue
 s0, t0 = 34.5, 4.0
-s, t, z, d = delta_surf(
+s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
@@ -198,7 +200,7 @@ s, t, z, d = delta_surf(
 
 # Provide reference pressure and location for the surface to intersect (pin_cast and pin_p)
 # and don't ask for diagnostics
-s, t, z, _ = delta_surf(
+s, t, z, _ = anomaly_surf(
     S,
     T,
     Z,
@@ -213,7 +215,7 @@ s, t, z, _ = delta_surf(
 
 # Provide just the location to intersect (pin_cast, pin_p).
 # This takes the reference pressure ref to match pin_p.
-s, t, z, d = delta_surf(
+s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
@@ -331,11 +333,11 @@ T_ref_cast = T.values[i0, j0]
 # %% Work with Numpy arrays instead of xarrays
 
 # Convert S and T from xarray to numpy ndarrays, and make vertical dimension contiguous in memory.
-# If not done here in advance, this will be done each time sigma_surf, delta_surf, or omega_surf is called.
+# If not done here in advance, this will be done each time potential_surf, anomaly_surf, or omega_surf is called.
 S, T, Z = _process_casts(S, T, Z, "Depth_c")
 
 # %%
-s, t, z, d = delta_surf(
+s, t, z, d = anomaly_surf(
     S,
     T,
     Z,

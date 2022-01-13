@@ -1,6 +1,6 @@
 import numpy as np
 
-from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val_0d_i, dval_0d_i
+from neutralocean.interp_ppc import linear_coeffs, val2_0d, val_0d_i, dval_0d_i
 
 # CHECK VALUE from MATLAB:
 # >> veronis_density(0, S(:,i0,j0), T(:,i0,j0), Z, 10, 1500, 1, @ppc_linterp)

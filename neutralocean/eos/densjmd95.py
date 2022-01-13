@@ -138,7 +138,6 @@ def rho_s_t(s, t, p):
 
     # INPUT CHECKS REMOVED
 
-
     # fmt: off
     # Coefficients nonlinear equation of state in pressure coordinates for
     # 1. density of fresh water at p = 0
@@ -300,8 +299,9 @@ def rho_s_t(s, t, p):
 
     return rho_s, rho_t
 
-@numba.njit
-def rho_p(s,t,p):
+
+@numba.njit(float64(float64, float64, float64))
+def rho_p(s, t, p):
     """
     Fast pressure derivative of JMD95 in-situ density.
 
@@ -409,5 +409,5 @@ def rho_p(s,t,p):
     # (K1 + 2 * K2) is K_p, the partial derivative of K w.r.t p
     rho_p = rho * (K - p * (K1plusK2 + K2)) / (K - p)**2
     # fmt: on
-    
+
     return rho_p

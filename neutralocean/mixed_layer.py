@@ -1,11 +1,20 @@
 """ Mixed Layer """
 
-from neutral_surfaces.interp_ppc import linear_coeffs, val
-from neutral_surfaces.eos.tools import vectorize_eos
-from neutral_surfaces.lib import _process_casts, _process_vert_dim
+from neutralocean.interp_ppc import linear_coeffs, val
+from neutralocean.eos.tools import vectorize_eos
+from neutralocean.lib import _process_casts, _process_vert_dim
+
 
 def mixed_layer(
-    S, T, P, eos, pot_dens_diff=0.03, ref_p=100.0, bottle_index=1, interp_fn=linear_coeffs, vert_dim=-1
+    S,
+    T,
+    P,
+    eos,
+    pot_dens_diff=0.03,
+    ref_p=100.0,
+    bottle_index=1,
+    interp_fn=linear_coeffs,
+    vert_dim=-1,
 ):
     """Calculate the pressure or depth at the bottom of the mixed layer
 
@@ -53,7 +62,7 @@ def mixed_layer(
 
         The index for the bottle on each cast where the "near surface" potential
         density is calculated.  Note this index is 0-based.  The Default of 1
-        therefore indexes the second bottle in each cast. 
+        therefore indexes the second bottle in each cast.
 
     interp_fn : function, Default `linear_coeffs`
 
@@ -62,16 +71,16 @@ def mixed_layer(
         ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
 
     vert_dim : int or str, Default -1
-    
+
         Specifies which dimension of `S`, `T` (and `P` if 3D) is vertical.
-    
+
         If `S` and `T` are `ndarray`, then `vert_dim` is the `int` indexing
         the vertical dimension of `S` and `T` (e.g. -1 indexes the last
         dimension).
-    
+
         If `S` and `T` are `xarray.DataArray`, then `vert_dim` is a `str`
         naming the vertical dimension of `S` and `T`.
-    
+
         Ideally, `vert_dim` is -1.  See `Notes`.
 
 
@@ -84,10 +93,10 @@ def mixed_layer(
 
     # Ensure eos is vectorized. It's okay if eos already was.
     eos = vectorize_eos(eos)
-    
+
     # Convert vert_dim from str to int if needed
     vert_dim = _process_vert_dim(vert_dim, S)
-    
+
     # Convert S, T, P from xarray to numpy arrays if needed, and make casts contiguous in memory
     S, T, P = _process_casts(S, T, P, vert_dim)
 
