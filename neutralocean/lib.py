@@ -187,7 +187,7 @@ def _interp_casts(S, T, P, interp_fn, Sppc=None, Tppc=None):
     return Sppc, Tppc
 
 
-def _process_wrap(wrap, diags=True, s=None):
+def _process_wrap(wrap, s=None, diags=False):
     """Convert to a tuple of `int`s specifying which horizontal dimensions are periodic"""
 
     if wrap is None:
@@ -232,25 +232,3 @@ def _process_pin_cast(pin_cast, S):
         return tuple(int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items())
     else:
         return pin_cast
-
-
-def _process_args(
-    S,
-    T,
-    P,
-    vert_dim,
-    pin_cast,
-    wrap,
-    diags,
-    interp_fn,
-    Sppc,
-    Tppc,
-    n_good,
-):
-    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
-    pin_cast = _process_pin_cast(pin_cast, S)  # must call before _process_casts
-    wrap = _process_wrap(wrap, diags, sxr)  # must call before _process_casts
-    S, T, P = _process_casts(S, T, P, vert_dim)
-    Sppc, Tppc = _interp_casts(S, T, P, interp_fn, Sppc, Tppc)  # after _process_casts
-    n_good = _process_n_good(S, n_good)  # must call after _process_casts
-    return S, T, P, Sppc, Tppc, n_good, pin_cast, wrap

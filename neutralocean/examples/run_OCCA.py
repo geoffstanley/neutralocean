@@ -6,17 +6,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from neutralocean.surface.omega import omega_surf
+from neutralocean.eos.tools import make_eos, make_eos_s_t, make_eos_p
+
 from neutralocean.surface.trad import potential_surf, anomaly_surf
+from neutralocean.surface.omega import omega_surf
+
+from neutralocean.mixed_layer import mixed_layer
+
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.label import veronis_density
-from neutralocean.mixed_layer import mixed_layer
-from neutralocean.eos.tools import make_eos, make_eos_s_t, make_eos_p
 from neutralocean.lib import _process_casts
 from neutralocean.interp_ppc import linear_coeffs, val2
 
-# %% Prepare for loading OCCA data
-import xarray as xr
+from neutralocean.examples.load_OCCA import load_OCCA
+
+# %% Load OCCA data
 
 # import wget
 path_neutralocean = "/home/stanley/work/projects-gfd/neutralocean/"  # EDIT AS NEEDED
@@ -29,82 +33,6 @@ path_occa = path_neutralocean + "neutralocean/examples/"
 # url = "https://www.dropbox.com/s/qr6bivfyk0s06ot/DDtheta.0406annclim.nc"
 # wget.download(url, path_occa)
 
-
-def load_OCCA(OCCA_dir, ts=0):
-
-    # Read grid info from the theta nc file
-    x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "theta")).load()
-
-    # Build our own grid, as the MITgcm does it
-    # Pa2db = 1e-4
-    deg2rad = np.pi / 180
-
-    g = dict()  # model grid and parameters
-    g["ρ_c"] = 1027.5  # A guess. Same as ECCO2
-    g["grav"] = 9.81  # A guess. Same as ECCO2
-    g["rSphere"] = 6.37e6  # A guess. Same as ECCO2
-    g["resx"] = 1  # 1 grid cell per zonal degree
-    g["resy"] = 1  # 1 grid cell per meridional degree
-    g["wrap"] = (True, False)  # periodic in longitude, not in latitude
-
-    # Lateral coordinates
-    g["XCvec"] = np.require(x.Longitude_t.values, dtype=np.float64, requirements="C")
-    g["XGvec"] = np.require(x.Longitude_u.values, dtype=np.float64, requirements="C")
-    g["YCvec"] = np.require(x.Latitude_t.values, dtype=np.float64, requirements="C")
-    g["YGvec"] = np.require(x.Latitude_v.values, dtype=np.float64, requirements="C")
-
-    # Lateral distances
-    g["DXGvec"] = g["rSphere"] * np.cos(g["YGvec"] * deg2rad) / g["resx"] * deg2rad
-    g["DYGsc"] = g["rSphere"] * deg2rad / g["resy"]
-    g["DXCvec"] = g["rSphere"] * np.cos(g["YCvec"] * deg2rad) / g["resx"] * deg2rad
-    g["DYCsc"] = g["DYGsc"]
-
-    # Vertical coordinate and distances
-    g["RC"] = -np.require(x.Depth_c, dtype=np.float64, requirements="C")
-    g["DRC"] = np.diff(-g["RC"])
-
-    g["nx"] = g["XCvec"].size
-    g["ny"] = g["YCvec"].size
-    g["nz"] = g["RC"].size
-
-    # Vertical area of the tracer cells [m^2]
-    g["RACvec"] = (g["rSphere"] ** 2 / g["resx"] * deg2rad) * abs(
-        np.sin((g["YGvec"] + 1 / g["resy"]) * deg2rad) - np.sin(g["YGvec"] * deg2rad)
-    )
-
-    T = x.theta.isel(Time=ts)
-    x.close()
-
-    x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "salt")).load()
-    S = x.salt.isel(Time=ts)
-    x.close()
-
-    # # phihyd = Pres / rho_c +  grav * z
-    # x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "phihyd")).load()
-    # P = x.phihyd.isel(Time=ts)
-
-    # # convert to full in-situ pressure, in [dbar]
-    # Z3D = -g["RC"].reshape(tuple(-1 if x == "Depth_c" else 1 for x in P.dims))
-    # P = (P + g["grav"] * Z3D) * (g["ρ_c"] * Pa2db)
-    # x.close()
-
-    # x = xr.open_dataset("%sDD%s.0406annclim.nc" % (OCCA_dir, "etan"))
-    # η = x.etan.isel(Time=ts)
-    # x.close()
-
-    # # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
-    dims = ("Longitude_t", "Latitude_t", "Depth_c")
-    # S, T, P = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T, P))
-    S, T = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T))
-    # η = η.transpose(*dims[0:-1]).astype(np.float64, order="C")
-
-    # ATMP = 0.  # Atmospheric Pressure (loading)
-    # SAP = 0.  # Standard Atmospheric Pressure
-
-    return g, S, T  # , P, η
-
-
-# %% Load OCCA data
 g, S, T = load_OCCA(path_occa)  # S arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
@@ -170,19 +98,22 @@ s, t, z, d = potential_surf(
     pin_p=z0,
 )
 
-# Calculate epsilon neutrality errors on the surface (these are also given in diagnostics `d`)
-ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g["wrap"])
-
-
-# Calculate area-weighted epsilon neutrality errors on the surface
-dist1_iJ = g["DXCvec"]
-dist1_Ij = g["DXGvec"]
-dist2_Ij = g["DYGsc"]
-dist2_iJ = g["DYCsc"]
+# Calculate area-weighted epsilon neutrality errors on the surface (these are also given in diagnostics `d`)
+dist1_iJ = g["DXCvec"]  # Distance [m] in 1st dim centred at (I-1/2, J)
+dist1_Ij = g["DXGvec"]  # Distance [m] in 1st dim centred at (I, J-1/2)
+dist2_Ij = g["DYGsc"]  # Distance [m] in 2nd dim centred at (I-1/2, J)
+dist2_iJ = g["DYCsc"]  # Distance [m] in 2nd dim centred at (I, J-1/2)
 geom = [dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ]
 
-ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, g["wrap"], *geom)
-print(ϵ_RMS)
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, "Longitude_t")
+print(
+    f"RMS of ϵ on potential density anomaly surface: {ϵ_RMS : 4e} [kg m-3] all grid distances = 1)"
+)
+
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, "Longitude_t", *geom)
+print(
+    f"Area-weighted RMS of ϵ on potential density anomaly surface: {ϵ_RMS : 4e} [kg m-4]"
+)
 
 # %% Delta surface
 # Provide reference pressure and isovalue
@@ -227,6 +158,17 @@ s, t, z, d = anomaly_surf(
     pin_p=z0,
 )
 
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, "Longitude_t")
+print(
+    f"RMS of ϵ on in-situ density anomaly surface: {ϵ_RMS : 4e} [kg m-3] all grid distances = 1)"
+)
+
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, "Longitude_t", *geom)
+print(
+    f"Area-weighted RMS of ϵ on in-situ density anomaly surface: {ϵ_RMS : 4e} [kg m-4]"
+)
+
+
 # %% Omega surface
 
 # Initialize omega surface with a (locally referenced) sigma surface
@@ -251,6 +193,13 @@ print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 # Also remove the pre-computed mixed layer.  Could also pass
 # p_ml={"bottle_index" : 1, "ref_p" : 0.0}
 # for example, to compute mixed layer internally with the given parameters.
+# Also provide grid distances.
+geomargs = {
+    "dist1_iJ": dist1_iJ,  # Distance [m] in 1st dim centred at (I-1/2, J)
+    "dist1_Ij": dist1_Ij,  # Distance [m] in 1st dim centred at (I, J-1/2)
+    "dist2_Ij": dist2_Ij,  # Distance [m] in 2nd dim centred at (I-1/2, J)
+    "dist2_iJ": dist2_iJ,  # Distance [m] in 2nd dim centred at (I, J-1/2)
+}
 s, t, z, d = omega_surf(
     S,
     T,
@@ -265,36 +214,14 @@ s, t, z, d = omega_surf(
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
     p_ml=z_ml,
+    **geomargs,
 )
-# old tests below:
+print(f'Total time  : {np.sum(d["timer"]) : .4f} sec')
+print(f'      bfs time: {np.sum(d["timer_bfs"]) : .4f} sec')
+print(f'   matrix time: {np.sum(d["timer_mat"]) : .4f} sec')
+print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
-# Initial surface has log_10(|ϵ|_2) = -2.342477 ..................
-# Iter  1 [  0.19 sec] log_10(|ϵ|_2) = -3.972863 by |ϕ|_1 = 2.015180e-02;   29 casts freshly wet; |Δp|_2 = 2.009176e+01
-# Iter  2 [  0.21 sec] log_10(|ϵ|_2) = -4.279229 by |ϕ|_1 = 3.621773e-04;  272 casts freshly wet; |Δp|_2 = 1.701764e+00
-# Iter  3 [  0.23 sec] log_10(|ϵ|_2) = -4.287579 by |ϕ|_1 = 2.237068e-05;    2 casts freshly wet; |Δp|_2 = 1.468717e-01
-# Iter  4 [  0.25 sec] log_10(|ϵ|_2) = -4.287644 by |ϕ|_1 = 9.968479e-07;    0 casts freshly wet; |Δp|_2 = 7.314240e-03
-# Iter  5 [  0.24 sec] log_10(|ϵ|_2) = -4.287643 by |ϕ|_1 = 1.449314e-07;    0 casts freshly wet; |Δp|_2 = 2.144395e-03
-# Iter  6 [  0.23 sec] log_10(|ϵ|_2) = -4.287643 by |ϕ|_1 = 2.316665e-08;    0 casts freshly wet; |Δp|_2 = 3.548166e-04
-
-
-# z_omega, s, t, diags = omega_surf(
-#     S, T, Z, z_delta, (i0, j0), g['wrap'], axis=-1, ITER_MAX=10, ITER_START_WETTING=np.inf,
-#     dist1_iJ=g['DXCvec'],  # Distance [m] in 1st dimension centred at (I-1/2, J)
-#     dist2_Ij=g['DYCsc'],  # Distance [m] in 2nd dimension centred at (I, J-1/2)
-#     dist2_iJ=g['DYGsc'],  # Distance [m] in 2nd dimension centred at (I-1/2, J)
-#     dist1_Ij=g['DXGvec'],  # Distance [m] in 1st dimension centred at (I, J-1/2)
-#     )
-# Initial surface has log_10(|ϵ|_2) = -7.723916 ..................
-# Iter  1 [  0.20 sec] log_10(|ϵ|_2) = -8.726053 by |ϕ|_1 = 1.040064e-02;    0 casts freshly wet; |Δp|_2 = 2.167515e+01
-# Iter  2 [  0.19 sec] log_10(|ϵ|_2) = -9.237233 by |ϕ|_1 = 6.336332e-04;    0 casts freshly wet; |Δp|_2 = 6.089017e+00
-# Iter  3 [  0.19 sec] log_10(|ϵ|_2) = -9.338989 by |ϕ|_1 = 6.601303e-05;    0 casts freshly wet; |Δp|_2 = 1.187603e+00
-# Iter  4 [  0.19 sec] log_10(|ϵ|_2) = -9.340732 by |ϕ|_1 = 6.353485e-06;    0 casts freshly wet; |Δp|_2 = 2.204033e-01
-# Iter  5 [  0.18 sec] log_10(|ϵ|_2) = -9.340763 by |ϕ|_1 = 6.398824e-07;    0 casts freshly wet; |Δp|_2 = 2.975967e-02
-# Iter  6 [  0.17 sec] log_10(|ϵ|_2) = -9.340763 by |ϕ|_1 = 6.579950e-08;    0 casts freshly wet; |Δp|_2 = 3.238430e-03
-# Note:  10 ** -9.340763 == 4.56285848989746e-10  -- matches Stanley et al (2021) Fig 4.
-
-
-# %% Show figure
+# %% Show figure mapping the depth of the (most recently calculated) surface
 
 fig, ax = plt.subplots()
 cs = ax.imshow(z.T, origin="lower")

@@ -16,7 +16,11 @@ from neutralocean.lib import (
     xr_to_np,
     _xr_in,
     _xr_out,
-    _process_args,
+    _process_pin_cast,
+    _process_wrap,
+    _process_casts,
+    _process_n_good,
+    _interp_casts,
 )
 from neutralocean.mixed_layer import mixed_layer
 from neutralocean.eos.gsw import rho, rho_s_t
@@ -242,9 +246,9 @@ def omega_surf(S, T, P, **kwargs):
     # fmt: off
     # grid distances.  (soft notation: i = I-1/2; j = J-1/2)
     # dist1_iJ = kwargs.get('dist1_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
-    # dist1_Ij = kwargs.get('dist1_Ij', 1.) # Distance [m] in 2nd dim centred at (I, J-1/2)
+    # dist1_Ij = kwargs.get('dist1_Ij', 1.) # Distance [m] in 1st dim centred at (I, J-1/2)
     # dist2_Ij = kwargs.get('dist2_Ij', 1.) # Distance [m] in 2nd dim centred at (I, J-1/2)
-    # dist2_iJ = kwargs.get('dist2_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
+    # dist2_iJ = kwargs.get('dist2_iJ', 1.) # Distance [m] in 2nd dim centred at (I-1/2, J)
     # fmt: on
     # dist2on1_iJ = dist2_iJ / dist1_iJ
     # dist1on2_Ij = dist1_Ij / dist2_Ij
@@ -257,24 +261,19 @@ def omega_surf(S, T, P, **kwargs):
     Tppc = kwargs.get("Tppc")
     interp_fn = kwargs.get("interp_fn", linear_coeffs)
 
+    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # call before _process_casts
+    pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
+    wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
+    S, T, P = _process_casts(S, T, P, vert_dim)
+    Sppc, Tppc = _interp_casts(S, T, P, interp_fn, Sppc, Tppc)  # after _process_casts
+    n_good = _process_n_good(S, n_good)  # call after _process_casts
+    ni, nj = n_good.shape
+
+    # Prepare grid ratios for matrix problem.
+    if not np.all(geom == 1.0):
+        geom = [np.broadcast_to(x, (ni, nj)) for x in geom]
     dist2on1_iJ = geom[3] / geom[0]  # dist2_iJ / dist1_iJ
     dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
-
-    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
-    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap = _process_args(
-        S,
-        T,
-        P,
-        vert_dim,
-        pin_cast,
-        wrap,
-        diags,
-        interp_fn,
-        Sppc,
-        Tppc,
-        n_good,
-    )
-    ni, nj = n_good.shape
 
     if not isinstance(pin_cast, (tuple, list)):
         raise TypeError("`pin_cast` must be a tuple or list")
@@ -506,7 +505,7 @@ def omega_surf(S, T, P, **kwargs):
 
 
 def _omega_matsolve_poisson(
-    s, t, p, DIST2on1_iJ, DIST1on2_Ij, wrap, A4, qu, qt, mr, eos_s_t
+    s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A4, qu, qt, mr, eos_s_t
 ):
     """Solve the Poisson formulation of the omega-surface global matrix problem
 
@@ -516,14 +515,14 @@ def _omega_matsolve_poisson(
 
         Salinity, temperature, pressure on the surface
 
-    DIST2on1_iJ : ndarray or float
+    dist2on1_iJ : ndarray or float
 
         The grid distance in the second dimension divided by the grid distance
         in the first dimension, both centred at (I-1/2,J). Equivalently, the
         square root of the area of a grid cell centred at(I-1/2,J), divided
         by the distance from (I-1,J) to (I,J).
 
-    DIST1on2_Ij : ndarray or float
+    dist1on2_Ij : ndarray or float
 
         The grid distance in the first dimension divided by the grid distance
         in the second dimension, both centred at (I-1/2,J). Equivalently, the
@@ -591,10 +590,10 @@ def _omega_matsolve_poisson(
 
     # If both gridding variables are 1, then grid is uniform
     UNIFORM_GRID = (
-        isinstance(DIST2on1_iJ, float)
-        and DIST2on1_iJ == 1
-        and isinstance(DIST1on2_Ij, float)
-        and DIST1on2_Ij == 1
+        isinstance(dist2on1_iJ, float)
+        and dist2on1_iJ == 1
+        and isinstance(dist1on2_Ij, float)
+        and dist1on2_Ij == 1
     )
 
     # Begin building D = divergence of ϵ,
@@ -641,7 +640,7 @@ def _omega_matsolve_poisson(
     if UNIFORM_GRID:
         fac = np.float64(~bad)  # 0 and 1
     else:
-        fac = DIST2on1_iJ.copy()
+        fac = dist2on1_iJ.copy()
         fac[bad] = 0.0
         ϵ *= fac  # scale ϵ
 
@@ -671,7 +670,7 @@ def _omega_matsolve_poisson(
     if UNIFORM_GRID:
         fac = np.float64(~bad)  # 0 and 1
     else:
-        fac = DIST1on2_Ij.copy()
+        fac = dist1on2_Ij.copy()
         fac[bad] = 0.0
         ϵ *= fac  # scale ϵ
 

@@ -13,7 +13,11 @@ from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (
     _xr_in,
     _xr_out,
-    _process_args,
+    _process_pin_cast,
+    _process_wrap,
+    _process_casts,
+    _process_n_good,
+    _interp_casts,
 )
 from neutralocean.eos.gsw import rho, rho_s_t
 
@@ -345,7 +349,8 @@ def anomaly_surf(S, T, P, **kwargs):
     See `potential_surf`.
     """
 
-    return _traditional_surf("delta", S, T, P, **kwargs)
+    return _traditional_surf("anomaly", S, T, P, **kwargs)
+
 
 def _traditional_surf(ans_type, S, T, P, **kwargs):
     """Core function to calculate "potential" or "anomaly" surfaces.
@@ -374,21 +379,14 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     Tppc = kwargs.get("Tppc")
     interp_fn = kwargs.get("interp_fn", linear_coeffs)
 
-    d = dict()
-    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # must call before _process_casts
-    S, T, P, Sppc, Tppc, n_good, pin_cast, wrap = _process_args(
-        S,
-        T,
-        P,
-        vert_dim,
-        pin_cast,
-        wrap,
-        diags,
-        interp_fn,
-        Sppc,
-        Tppc,
-        n_good,
-    )
+    # Process arguments
+    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # call before _process_casts
+    pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
+    wrap = _process_wrap(wrap, sxr, diags)  # call before _process_casts
+    S, T, P = _process_casts(S, T, P, vert_dim)
+    Sppc, Tppc = _interp_casts(S, T, P, interp_fn, Sppc, Tppc)  # after _process_casts
+    n_good = _process_n_good(S, n_good)  # call after _process_casts
+
     ni, nj = n_good.shape
 
     # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
@@ -410,6 +408,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
         p[n0] = pin_p
         s[n0], t[n0] = val2_0d(P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0], pin_p)
 
+    d = dict()
     if diags:
         d["timer"] = time() - timer
         ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
