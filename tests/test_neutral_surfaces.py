@@ -1,8 +1,8 @@
 import numpy as np
-from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t, vectorize_eos
-from neutral_surfaces.neutral_surfaces import sigma_surf, delta_surf, omega_surf
-from neutral_surfaces.synthocean import synthocean
-from neutral_surfaces.lib import find_first_nan, val_bot
+from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
+from neutralocean.neutral_surfaces import sigma_surf, delta_surf, omega_surf
+from neutralocean.synthocean import synthocean
+from neutralocean.lib import find_first_nan, val_bot
 
 grav = 9.81
 rho_c = 1027.5

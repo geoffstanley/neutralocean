@@ -3,10 +3,10 @@
 import numpy as np
 import numba
 
-from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d
-from neutral_surfaces.eos.eostools import make_eos
-from neutral_surfaces.fzero import guess_to_bounds, brent
-from neutral_surfaces.lib import find_first_nan
+from neutralocean.interp_ppc import linear_coeffs, val2_0d
+from neutralocean.eos.tools import make_eos
+from neutralocean.fzero import guess_to_bounds, brent
+from neutralocean.lib import find_first_nan
 
 
 @numba.njit

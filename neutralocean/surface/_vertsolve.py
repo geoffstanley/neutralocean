@@ -4,8 +4,8 @@ import numpy as np
 import numba
 import functools
 
-from neutral_surfaces.fzero import guess_to_bounds, brent
-from neutral_surfaces.interp_ppc import val2_0d
+from neutralocean.fzero import guess_to_bounds, brent
+from neutralocean.interp_ppc import val2_0d
 
 
 @functools.lru_cache(maxsize=10)

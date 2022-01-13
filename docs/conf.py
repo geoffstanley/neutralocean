@@ -16,7 +16,7 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'Neutral surfaces'
+project = 'Neutral Ocean'
 copyright = '2021, Geoffrey Stanley'
 author = 'Geoffrey Stanley'
 

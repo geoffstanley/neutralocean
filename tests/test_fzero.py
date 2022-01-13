@@ -1,8 +1,7 @@
 import pytest
 import numpy as np
 import numba
-from neutral_surfaces.fzero import brent_guess
-from neutral_surfaces.fzero import guess_to_bounds, brent
+from neutralocean.fzero import brent_guess
 
 tol = 1e-6
 

@@ -5,19 +5,19 @@ Calculate approximately neutral surfaces from structured ocean data.
 import numpy as np
 from time import time
 
-from neutral_surfaces._vertsolve import _make_vertsolve
-from neutral_surfaces.interp_ppc import linear_coeffs, val2_0d, val2
-from neutral_surfaces.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
-from neutral_surfaces.ntp import ntp_ϵ_errors_norms
-from neutral_surfaces.lib import (
+from neutralocean.surface._vertsolve import _make_vertsolve
+from neutralocean.interp_ppc import linear_coeffs, val2_0d, val2
+from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
+from neutralocean.ntp import ntp_ϵ_errors_norms
+from neutralocean.lib import (
     xr_to_np,
     _xr_in,
     _xr_out,
     _process_args,
 )
-from neutral_surfaces._omega import _omega_matsolve_poisson
-from neutral_surfaces.mixed_layer import mixed_layer
-from neutral_surfaces.eos.gsw import rho, rho_s_t
+from neutralocean.surface_omega import _omega_matsolve_poisson
+from neutralocean.mixed_layer import mixed_layer
+from neutralocean.eos.gsw import rho, rho_s_t
 
 
 def sigma_surf(S, T, P, **kwargs):

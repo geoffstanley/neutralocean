@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from neutral_surfaces.lib import _process_wrap, xr_to_np
+from neutralocean.lib import _process_wrap, xr_to_np
 
 
 def _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, shift):

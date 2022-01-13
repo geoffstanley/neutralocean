@@ -1,7 +1,7 @@
 import numpy as np
 
-from neutral_surfaces.lib import find_first_nan
-from neutral_surfaces.interp_ppc import (
+from neutralocean.lib import find_first_nan
+from neutralocean.interp_ppc import (
     linear_coeffs,
     pchip_coeffs,
     val,

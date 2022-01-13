@@ -11,10 +11,10 @@ rho_s_t :: compute the partial derivatives of in-situ density with
 
 Notes:
 To make Boussinesq versions of these functions, see 
-`eostools.make_eos_bsq`.
+`neutralocean.eos.tools.make_eos_bsq`.
 
 To make vectorized versions of these functions, see
-`eostools.vectorize_eos`.
+`neutralocean.eos.tools.vectorize_eos`.
 
 .. [1] Jackett and McDougall, 1995, JAOT 12[4], pp. 381-388
 """

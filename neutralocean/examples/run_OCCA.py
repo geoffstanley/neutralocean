@@ -6,20 +6,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from neutral_surfaces import sigma_surf, delta_surf, omega_surf
-from neutral_surfaces.ntp import ntp_ϵ_errors_norms
-from neutral_surfaces.label import veronis_density
-from neutral_surfaces.mixed_layer import mixed_layer
-from neutral_surfaces.eos.eostools import make_eos, make_eos_s_t, make_eos_p
-from neutral_surfaces.lib import _process_casts
-from neutral_surfaces.interp_ppc import linear_coeffs, val2
+from neutralocean.surface.neutral_surfaces import sigma_surf, delta_surf, omega_surf
+from neutralocean.ntp import ntp_ϵ_errors_norms
+from neutralocean.label import veronis_density
+from neutralocean.mixed_layer import mixed_layer
+from neutralocean.eos.tools import make_eos, make_eos_s_t, make_eos_p
+from neutralocean.lib import _process_casts
+from neutralocean.interp_ppc import linear_coeffs, val2
 
 # %% Prepare for loading OCCA data
 import xarray as xr
 
 # import wget
-path_nspy = "/home/stanley/work/projects-gfd/neutral-surfaces-python/"  # EDIT AS NEEDED
-path_occa = path_nspy + "examples/"
+path_neutralocean = "/home/stanley/work/projects-gfd/neutralocean/"  # EDIT AS NEEDED
+path_occa = path_neutralocean + "examples/"
 # path_occa = "~/work/data/OCCA/"  # EDIT AS NEEDED
 
 # url = 'ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/'
@@ -302,8 +302,8 @@ ax.set_title(r"Depth of surface in OCCA")
 
 
 # %% Neutral Tangent Plane bottle to cast
-from neutral_surfaces.ntp import ntp_bottle_to_cast
-from neutral_surfaces.interp_ppc import linear_coeffs
+from neutralocean.ntp import ntp_bottle_to_cast
+from neutralocean.interp_ppc import linear_coeffs
 
 sB, tB, zB = 35.0, 16.0, 500.0  # Thermodynamic properties of a given Bottle
 S1 = S.values[180, 80, :]
@@ -311,8 +311,8 @@ T1 = T.values[180, 80, :]
 s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # Or the more manual version:
-from neutral_surfaces.ntp import _ntp_bottle_to_cast
-from neutral_surfaces.lib import find_first_nan
+from neutralocean.ntp import _ntp_bottle_to_cast
+from neutralocean.lib import find_first_nan
 
 n_good = find_first_nan(S1)[()]
 S1ppc = linear_coeffs(Z, S1)

@@ -1,7 +1,7 @@
 import numpy as np
 
-from neutral_surfaces.eos.densjmd95 import rho
-from neutral_surfaces.eos.eostools import vectorize_eos
+from neutralocean.eos.densjmd95 import rho
+from neutralocean.eos.tools import vectorize_eos
 
 # Check values from JMD95 p. 388:
 checkvals = (35.5, 3.0, 3000.0, 1041.83267)

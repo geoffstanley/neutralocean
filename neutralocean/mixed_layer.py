@@ -1,7 +1,7 @@
 """ Mixed Layer """
 
 from neutral_surfaces.interp_ppc import linear_coeffs, val
-from neutral_surfaces.eos.eostools import vectorize_eos
+from neutral_surfaces.eos.tools import vectorize_eos
 from neutral_surfaces.lib import _process_casts, _process_vert_dim
 
 def mixed_layer(
