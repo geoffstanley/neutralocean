@@ -1,4 +1,5 @@
 """Tools for handling the Equation of State"""
+import numpy as np
 import functools
 import numba
 
@@ -70,7 +71,7 @@ def make_eos(eos, grav=None, rho_c=None):
        Journal of Atmospheric and Oceanic Technology, 23(12), 1709–1728.
        https://doi.org/10.1175/JTECH1946.1
     """
-    eos_dict = {"jmd95": rho_jmd95, "jmdfwg06" : rho_jmdfwg06, "gsw": rho_gsw}
+    eos_dict = {"jmd95": rho_jmd95, "jmdfwg06": rho_jmdfwg06, "gsw": rho_gsw}
     return _make_eos(eos, eos_dict, grav, rho_c)
 
 
@@ -91,7 +92,11 @@ def make_eos_s_t(eos, grav=None, rho_c=None):
         potential / Conservative temperature) of the desired equation of
         state.
     """
-    eos_dict = {"jmd95": rho_s_t_jmd95, "jmdfwg06" : rho_s_t_jmdfwg06, "gsw": rho_s_t_gsw}
+    eos_dict = {
+        "jmd95": rho_s_t_jmd95,
+        "jmdfwg06": rho_s_t_jmdfwg06,
+        "gsw": rho_s_t_gsw,
+    }
     return _make_eos(eos, eos_dict, grav, rho_c)
 
 
@@ -110,7 +115,7 @@ def make_eos_p(eos, grav=None, rho_c=None):
         Function returning the partial derivative with respect to the third
         argument (pressure) of the desired equation of state.
     """
-    eos_dict = {"jmd95": rho_p_jmd95, "jmdfwg06" : rho_p_jmdfwg06, "gsw": rho_p_gsw}
+    eos_dict = {"jmd95": rho_p_jmd95, "jmdfwg06": rho_p_jmdfwg06, "gsw": rho_p_gsw}
     return _make_eos(eos, eos_dict, grav, rho_c, 1)
 
 
