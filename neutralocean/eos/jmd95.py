@@ -9,6 +9,9 @@ rho :: computes in-situ density from salinity, potential temperature and
 rho_s_t :: compute the partial derivatives of in-situ density with
     respect to salinity and potential temperature
 
+rho_p :: compute the partial derivative of in-situ density with
+    respect to pressure
+
 Notes:
 To make Boussinesq versions of these functions, see 
 `neutralocean.eos.tools.make_eos_bsq`.
@@ -20,11 +23,10 @@ To make vectorized versions of these functions, see
 """
 
 import numpy as np
-import numba
-from numba import float64
+from numba import njit, float64
 
 
-@numba.njit(float64(float64, float64, float64))
+@njit(float64(float64, float64, float64))
 def rho(s, t, p):
     """Fast JMD95 [1]_ in-situ density.
 
@@ -111,8 +113,8 @@ def rho(s, t, p):
     return rho
 
 
-# @numba.njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
-@numba.njit
+# @njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
+@njit
 def rho_s_t(s, t, p):
     """
     Fast salinity and potential temperature partial derivatives of JMD95 in-situ density
@@ -300,7 +302,7 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
-@numba.njit(float64(float64, float64, float64))
+@njit(float64(float64, float64, float64))
 def rho_p(s, t, p):
     """
     Fast pressure derivative of JMD95 in-situ density.
@@ -411,3 +413,27 @@ def rho_p(s, t, p):
     # fmt: on
 
     return rho_p
+
+
+def _check_rho_vals():
+    # Checkval from Jackett and McDougall (1995) Appendix
+    assert np.isclose(rho(35.5, 3.0, 3000.0), 1041.83267, rtol=0, atol=1e-6)
+
+
+def _check_rho_derivs():
+    # Check rho_s_t by centred differences
+    s, t, p = (35.0, 25.0, 2000.0)
+    ds, dt, dp = (1e-4, 1e-4, 1e-1)
+
+    rs_centred = (rho(s + ds, t, p) - rho(s - ds, t, p)) / (2.0 * ds)
+    rt_centred = (rho(s, t + dt, p) - rho(s, t - dt, p)) / (2.0 * dt)
+    rp_centred = (rho(s, t, p + dp) - rho(s, t, p - dp)) / (2.0 * dp)
+
+    rs, rt = rho_s_t(s, t, p)
+    rp = rho_p(s, t, p)
+    # rs - rs_centred  # 4.609965742474742e-10
+    # rt - rt_centred  # 3.676223214732488e-10
+    # rp - rp_centred  # -1.0332706912308254e-12
+    assert np.isclose(rs, rs_centred, rtol=0, atol=1e-8)
+    assert np.isclose(rt, rt_centred, rtol=0, atol=1e-8)
+    assert np.isclose(rp, rp_centred, rtol=0, atol=1e-11)
