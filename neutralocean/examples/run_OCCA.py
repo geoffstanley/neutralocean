@@ -1,10 +1,6 @@
 # %% Imports
 
-# %matplotlib notebook
-# %matplotlib inline
-
 import numpy as np
-import matplotlib.pyplot as plt
 
 from neutralocean.eos.tools import make_eos, make_eos_s_t, make_eos_p
 
@@ -21,7 +17,7 @@ from neutralocean.interp_ppc import linear_coeffs, val2
 # %% Load OCCA data
 
 # *** EDIT `path_occa` AS NEEDED ***
-path_occa = path_neutralocean + "/home/stanley/work/projects-gfd/neutralocean/neutralocean/examples/" 
+path_occa = "/home/stanley/work/projects-gfd/neutralocean/neutralocean/examples/"
 
 # import wget
 # url = 'ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/'
@@ -29,6 +25,9 @@ path_occa = path_neutralocean + "/home/stanley/work/projects-gfd/neutralocean/ne
 # wget.download(url, path_occa)
 # url = "https://www.dropbox.com/s/qr6bivfyk0s06ot/DDtheta.0406annclim.nc"
 # wget.download(url, path_occa)
+
+import xarray as xr
+
 
 def load_OCCA(OCCA_dir, ts=0):
 
@@ -297,14 +296,6 @@ print(f'Total time  : {np.sum(d["timer"]) : .4f} sec')
 print(f'      bfs time: {np.sum(d["timer_bfs"]) : .4f} sec')
 print(f'   matrix time: {np.sum(d["timer_mat"]) : .4f} sec')
 print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
-
-# %% Show figure mapping the depth of the (most recently calculated) surface
-
-fig, ax = plt.subplots()
-cs = ax.imshow(z.T, origin="lower")
-cbar = fig.colorbar(cs, ax=ax)
-cbar.set_label("Depth [m]")
-ax.set_title(r"Depth of surface in OCCA")
 
 
 # %% Neutral Tangent Plane bottle to cast
