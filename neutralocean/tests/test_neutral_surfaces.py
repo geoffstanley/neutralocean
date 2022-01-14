@@ -1,6 +1,6 @@
 import numpy as np
 from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
-from neutralocean.neutral_surfaces import sigma_surf, delta_surf, omega_surf
+from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.synthocean import synthocean
 from neutralocean.lib import find_first_nan, val_bot
 
@@ -22,12 +22,12 @@ def make_simple_stp(shape):
     return S, T, Z
 
 
-def test_sigma_surf():
+def test_potential_surf():
     # Test sigma_surf using a prescribed reference depth and isovalue
     S, T, Z = make_simple_stp((16, 32, 50))
     z_ref = 0.0
     isoval = 1027.0
-    s, t, z, _ = sigma_surf(
+    s, t, z, _ = potential_surf(
         S, T, Z, ref=z_ref, isoval=isoval, eos=eos, TOL_P_SOLVER=1e-8, diags=False
     )
 
@@ -54,14 +54,14 @@ def test_sigma_surf():
     )
 
 
-def test_delta_surf():
+def test_anomaly_surf():
     # Test delta_surf using prescribed reference values and a given cast and depth
     # that the surface will intersect.
     S, T, Z = make_simple_stp((16, 32, 50))
     s_ref, t_ref = 34.5, 4.0
     i0, j0 = (int(x / 2) for x in S.shape[:-1])  # ref cast in middle of domain
     pin_z = 1000.0  # find surface through this depth at ref cast
-    s, t, z, d = delta_surf(
+    s, t, z, d = anomaly_surf(
         S,
         T,
         Z,
