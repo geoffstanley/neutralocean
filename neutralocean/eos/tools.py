@@ -2,9 +2,13 @@
 import functools
 import numba
 
-from .densjmd95 import rho as rho_jmd95
-from .densjmd95 import rho_s_t as rho_s_t_jmd95
-from .densjmd95 import rho_p as rho_p_jmd95
+from .jmd95 import rho as rho_jmd95
+from .jmd95 import rho_s_t as rho_s_t_jmd95
+from .jmd95 import rho_p as rho_p_jmd95
+
+from .jmdfwg06 import rho as rho_jmdfwg06
+from .jmdfwg06 import rho_s_t as rho_s_t_jmdfwg06
+from .jmdfwg06 import rho_p as rho_p_jmdfwg06
 
 from .gsw import rho as rho_gsw
 from .gsw import rho_s_t as rho_s_t_gsw
@@ -17,7 +21,7 @@ def _make_eos(eos, eos_dict, grav=None, rho_c=None, num_p_derivs=0):
 
     if not callable(eos):
         raise TypeError(
-            f'First input must be a function, "gsw", or "jmd95"; found {eos}'
+            f'First input must be a function, "gsw", "jmd95", or "jmdfwg06"; found {eos}'
         )
 
     if grav != None and rho_c != None:
@@ -33,9 +37,10 @@ def make_eos(eos, grav=None, rho_c=None):
     ----------
     eos : str or function
 
-        If a str, can be 'gsw' to generate the TEOS-10 specific volume
-        or 'jmd95' to generate the Jackett and McDougall (1995) in-situ
-        density [1]_.
+        If a str, can be 'gsw' to generate the TEOS-10 specific volume,
+        'jmd95' to generate the Jackett and McDougall (1995) in-situ
+        density [1]_, or 'jmdfwg06' to generate the Jackett et al (2006)
+        in-situ density [2]_.
 
         If a function, should be an equation of state as a function of
         practical / Absolute salinity, potential / Conservative temperature,
@@ -58,8 +63,14 @@ def make_eos(eos, grav=None, rho_c=None):
         The desired equation of state.
 
     .. [1] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+
+    .. [2] Jackett, D. R., McDougall, T. J., Feistel, R., Wright, D. G., &
+       Griffies, S. M. (2006). Algorithms for Density, Potential Temperature,
+       Conservative Temperature, and the Freezing Temperature of Seawater.
+       Journal of Atmospheric and Oceanic Technology, 23(12), 1709–1728.
+       https://doi.org/10.1175/JTECH1946.1
     """
-    eos_dict = {"jmd95": rho_jmd95, "gsw": rho_gsw}
+    eos_dict = {"jmd95": rho_jmd95, "jmdfwg06" : rho_jmdfwg06, "gsw": rho_gsw}
     return _make_eos(eos, eos_dict, grav, rho_c)
 
 
@@ -80,7 +91,7 @@ def make_eos_s_t(eos, grav=None, rho_c=None):
         potential / Conservative temperature) of the desired equation of
         state.
     """
-    eos_dict = {"jmd95": rho_s_t_jmd95, "gsw": rho_s_t_gsw}
+    eos_dict = {"jmd95": rho_s_t_jmd95, "jmdfwg06" : rho_s_t_jmdfwg06, "gsw": rho_s_t_gsw}
     return _make_eos(eos, eos_dict, grav, rho_c)
 
 
@@ -99,7 +110,7 @@ def make_eos_p(eos, grav=None, rho_c=None):
         Function returning the partial derivative with respect to the third
         argument (pressure) of the desired equation of state.
     """
-    eos_dict = {"jmd95": rho_p_jmd95, "gsw": rho_p_gsw}
+    eos_dict = {"jmd95": rho_p_jmd95, "jmdfwg06" : rho_p_jmdfwg06, "gsw": rho_p_gsw}
     return _make_eos(eos, eos_dict, grav, rho_c, 1)
 
 

@@ -69,19 +69,35 @@ make_eos_bsq
 
 JMD95 Equation of State
 -----------------------
-.. automodule:: neutralocean.eos.densjmd95
+.. automodule:: neutralocean.eos.jmd95
 
 rho
 ~~~
-.. autofunction:: neutralocean.eos.densjmd95.rho
+.. autofunction:: neutralocean.eos.jmd95.rho
 
 rho_s_t
 ~~~~~~~
-.. autofunction:: neutralocean.eos.densjmd95.rho_s_t
+.. autofunction:: neutralocean.eos.jmd95.rho_s_t
 
 rho_p
 ~~~~~
-.. autofunction:: neutralocean.eos.densjmd95.rho_p
+.. autofunction:: neutralocean.eos.jmd95.rho_p
+
+JMDFWG06 Equation of State
+-----------------------
+.. automodule:: neutralocean.eos.jmdfwg06
+
+rho
+~~~
+.. autofunction:: neutralocean.eos.jmdfwg06.rho
+
+rho_s_t
+~~~~~~~
+.. autofunction:: neutralocean.eos.jmdfwg06.rho_s_t
+
+rho_p
+~~~~~
+.. autofunction:: neutralocean.eos.jmdfwg06.rho_p
 
 TEOS-10 GSW Equation of State
 -----------------------------

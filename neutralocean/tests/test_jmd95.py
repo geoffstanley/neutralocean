@@ -1,6 +1,6 @@
 import numpy as np
 
-from neutralocean.eos.densjmd95 import rho
+from neutralocean.eos.jmd95 import rho
 from neutralocean.eos.tools import vectorize_eos
 
 # Check values from JMD95 p. 388:
