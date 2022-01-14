@@ -299,7 +299,7 @@ print(f'   update time: {np.sum(d["timer_update"]) : .4f} sec')
 
 
 # %% Neutral Tangent Plane bottle to cast
-from neutralocean.ntp import ntp_bottle_to_cast
+from neutralocean.traj import ntp_bottle_to_cast
 from neutralocean.interp_ppc import linear_coeffs
 
 sB, tB, zB = 35.0, 16.0, 500.0  # Thermodynamic properties of a given Bottle
@@ -308,7 +308,7 @@ T1 = T.values[180, 80, :]
 s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # Or the more manual version:
-from neutralocean.ntp import _ntp_bottle_to_cast
+from neutralocean.traj import _ntp_bottle_to_cast
 from neutralocean.lib import find_first_nan
 
 n_good = find_first_nan(S1)[()]
