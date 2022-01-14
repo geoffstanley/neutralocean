@@ -1,24 +1,29 @@
 """
-USAGE: r = rho(s, t, p)
-USAGE: rs, rt = rho_s_t(s, t, p)
+Density of Sea Water using the Jackett et al. (2006) [1]_ function
 
-Purpose
--------
-Calculates the density of seawater, using the equation of state of:
+Functions:
 
-Jackett, McDougall, Feistel, Wright, and Griffies (2006):
-Algorithms for density, potential temperature, conservative  temperature, and freezing
-temperature of seawater. Journal of Atmospheric and Oceanic Technology, 23, 1709-1728.
+rho :: computes in-situ density from salinity, potential temperature and
+    pressure
 
-Inputs
-------
-s       Salinity (psu)
-t       Potential temperature (degC)
-p       Pressure (db)
+rho_s_t :: compute the partial derivatives of in-situ density with
+    respect to salinity and potential temperature
 
-Outputs
--------
-rho     Density (kg m-3)
+rho_p :: compute the partial derivative of in-situ density with
+    respect to pressure
+
+Notes:
+To make Boussinesq versions of these functions, see 
+`neutralocean.eos.tools.make_eos_bsq`.
+
+To make vectorized versions of these functions, see
+`neutralocean.eos.tools.vectorize_eos`.
+
+.. [1] Jackett, D. R., McDougall, T. J., Feistel, R., Wright, D. G., &
+   Griffies, S. M. (2006). Algorithms for Density, Potential Temperature,
+   Conservative Temperature, and the Freezing Temperature of Seawater.
+   Journal of Atmospheric and Oceanic Technology, 23(12), 1709–1728.
+   https://doi.org/10.1175/JTECH1946.1
 
 History
 -------
@@ -33,6 +38,22 @@ from numba import njit, float64
 
 @njit(float64(float64, float64, float64))
 def rho(s, t, p):
+    """
+    Parameters
+    ----------
+    s : float
+        Practical salinity [PSS-78]
+    t : float
+        Potential temperature [ITS-90]
+    p : float
+        Pressure [dbar]
+
+    Returns
+    -------
+    rho : float
+        In-situ density [kg m-3]
+    """
+
     # List of coefficients for the rational function
     # fmt: off
     a0  =  9.9984085444849347e+02
@@ -75,7 +96,7 @@ def rho(s, t, p):
         + p * (a7 + a8 * t2 + a9 * s + p * (a10 + a11 * t2))
     )
 
-    den = 1.0 / (
+    inv_den = 1.0 / (
         b0
         + t * (b1 + t * (b2 + t * (b3 + t * b4)))
         + s * (b5 + t * (b6 + b7 * t2) + np.sqrt(s) * (b8 + b9 * t2))
@@ -83,10 +104,30 @@ def rho(s, t, p):
         + epsln
     )
 
-    return num * den
+    return num * inv_den
 
 
+@njit
 def rho_s_t(s, t, p):
+    """
+    Parameters
+    ----------
+    s : float
+        Practical salinity [PSS-78]
+    t : float
+        Potential temperature [ITS-90]
+    p : float
+        Pressure [dbar]
+
+    Returns
+    -------
+    rho_s : float
+        Partial derivative of in-situ density with respect to salinity [kg m-3 psu-1]
+
+    rho_t : float
+        Partial derivative of in-situ density with respect to temperature [kg m-3 degc-1]
+    """
+
     # List of coefficients for the rational function
     # fmt: off
     a0  =  9.9984085444849347e+02
@@ -142,8 +183,8 @@ def rho_s_t(s, t, p):
 
     # The density is
     #   rho = num / den
-    # Taking the partial derivative w.r.t. S gives
-    #   rho_s = (num_S - num * den_S / den ) / den
+    # Taking the partial derivative w.r.t. s gives
+    #   rho_s = (num_s - num * den_s / den ) / den
     # and similarly for rho_t
 
     num_s = a4 + a5 * t + 2.0 * a6 * s + p * a9
@@ -166,6 +207,86 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
+@njit(float64(float64, float64, float64))
+def rho_p(s, t, p):
+    """
+    Parameters
+    ----------
+    s : float
+        Practical salinity [PSS-78]
+    t : float
+        Potential temperature [ITS-90]
+    p : float
+        Pressure [dbar]
+
+    Returns
+    -------
+    rho_p : float
+        Partial derivative of in-situ density with respect to pressure [kg m-3 dbar-1]
+    """
+
+    # List of coefficients for the rational function
+    # fmt: off
+    a0  =  9.9984085444849347e+02
+    a1  =  7.3471625860981584e+00
+    a2  = -5.3211231792841769e-02
+    a3  =  3.6492439109814549e-04
+    a4  =  2.5880571023991390e+00
+    a5  = -6.7168282786692355e-03
+    a6  =  1.9203202055760151e-03
+    a7  =  1.1798263740430364e-02
+    a8  =  9.8920219266399117e-08
+    a9  =  4.6996642771754730e-06
+    a10 = -2.5862187075154352e-08
+    a11 = -3.2921414007960662e-12
+
+    b0  =  1.0000000000000000e+00 
+    b1  =  7.2815210113327091e-03
+    b2  = -4.4787265461983921e-05 
+    b3  =  3.3851002965802430e-07
+    b4  =  1.3651202389758572e-10
+    b5  =  1.7632126669040377e-03
+    b6  = -8.8066583251206474e-06
+    b7  = -1.8832689434804897e-10
+    b8  =  5.7463776745432097e-06
+    b9  =  1.4716275472242334e-09
+    b10 =  6.7103246285651894e-06
+    b11 = -2.4461698007024582e-17
+    b12 = -9.1534417604289062e-18
+    # fmt: on
+    epsln = 1.0e-40
+
+    # Precompute some commonly used terms
+    t2 = t * t
+
+    # Rational function for density
+    num = (
+        a0
+        + t * (a1 + t * (a2 + a3 * t))
+        + s * (a4 + a5 * t + a6 * s)
+        + p * (a7 + a8 * t2 + a9 * s + p * (a10 + a11 * t2))
+    )
+
+    inv_den = 1.0 / (
+        b0
+        + t * (b1 + t * (b2 + t * (b3 + t * b4)))
+        + s * (b5 + t * (b6 + b7 * t2) + np.sqrt(s) * (b8 + b9 * t2))
+        + p * (b10 + p * t * (b11 * t2 + b12 * p))
+        + epsln
+    )
+
+    # The density is
+    #   rho = num / den
+    # Taking the partial derivative w.r.t. p gives
+    #   rho_p = (num_p - num * den_p / den ) / den
+
+    num_p = a7 + a8 * t2 + a9 * s + p * (2.0 * a10 + 2.0 * a11 * t2)
+
+    den_p = b10 + p * t * (2.0 * b11 * t2 + 3.0 * b12 * p)
+
+    return (num_p - num * den_p * inv_den) * inv_den
+
+
 def _check_rho_vals():
     # Checkval from Jackett et al (2006) Appendix B:
     assert np.isclose(rho(35, 25, 2000), 1031.65056056576, rtol=0, atol=1e-11)
@@ -178,12 +299,15 @@ def _check_rho_derivs():
     s, t, p = (35.0, 25.0, 2000.0)
     ds, dt, dp = (1e-4, 1e-4, 1e-1)
 
-    rho_s_centred = (rho(s + ds, t, p) - rho(s - ds, t, p)) / (2.0 * ds)
-    rho_t_centred = (rho(s, t + dt, p) - rho(s, t - dt, p)) / (2.0 * dt)
-    rho_p_centred = (rho(s, t, p + dp) - rho(s, t, p - dp)) / (2.0 * dp)
+    rs_centred = (rho(s + ds, t, p) - rho(s - ds, t, p)) / (2.0 * ds)
+    rt_centred = (rho(s, t + dt, p) - rho(s, t - dt, p)) / (2.0 * dt)
+    rp_centred = (rho(s, t, p + dp) - rho(s, t, p - dp)) / (2.0 * dp)
 
-    rho_s, rho_t = rho_s_t(s, t, p)
-    # rho_s - rho_s_centred  # 3.96301880201122e-11
-    # rho_t - rho_t_centred  # -1.3336413084985566e-09
-    assert np.isclose(rho_s, rho_s_centred, rtol=0, atol=1e-8)
-    assert np.isclose(rho_t, rho_t_centred, rtol=0, atol=1e-8)
+    rs, rt = rho_s_t(s, t, p)
+    rp = rho_p(s, t, p)
+    # rs - rs_centred  # 3.96301880201122e-11
+    # rt - rt_centred  # -1.3336413084985566e-09
+    # rp - rp_centred  # 1.3271501952960563e-12
+    assert np.isclose(rs, rs_centred, rtol=0, atol=1e-8)
+    assert np.isclose(rt, rt_centred, rtol=0, atol=1e-8)
+    assert np.isclose(rp, rp_centred, rtol=0, atol=1e-11)
