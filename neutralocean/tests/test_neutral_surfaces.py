@@ -1,6 +1,6 @@
 import numpy as np
 from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
-from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
+from neutralocean import potential_surf, anomaly_surf, omega_surf
 from neutralocean.synthocean import synthocean
 from neutralocean.lib import find_first_nan, val_bot
 
