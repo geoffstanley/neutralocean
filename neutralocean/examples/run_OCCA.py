@@ -4,8 +4,7 @@ import numpy as np
 
 from neutralocean.eos.tools import make_eos, make_eos_s_t, make_eos_p
 
-from neutralocean.surface.trad import potential_surf, anomaly_surf
-from neutralocean.surface.omega import omega_surf
+from neutralocean import potential_surf, anomaly_surf, omega_surf
 
 from neutralocean.mixed_layer import mixed_layer
 
