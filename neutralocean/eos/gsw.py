@@ -43,7 +43,7 @@ def rho(s, t, p):
 # so the Python ufunc wrappers are okay.
 def rho_s_t(s, t, p):
     """
-    The partial derivatives of the TEOS-10 GSW equation of state for in-situ 
+    The partial derivatives of the TEOS-10 GSW equation of state for in-situ
     density with respect to Absolute Salinity and Conservative Temperature
 
     Parameters
@@ -56,9 +56,9 @@ def rho_s_t(s, t, p):
     rho_s : float or ndarray
         Partial derivative of in-situ density with respect to Absolute
         Salinity [kg m-3 (g/kg)-1]
-        
+
     rho_t : float or ndarray
-        Partial derivative of in-situ density with respect to Conservative 
+        Partial derivative of in-situ density with respect to Conservative
         Temperature [kg m-3 degC-1]
 
     """
@@ -66,9 +66,10 @@ def rho_s_t(s, t, p):
     rs, rt, _ = gsw.rho_first_derivatives(s, t, p)
     return rs, rt
 
+
 def rho_p(s, t, p):
     """
-    The partial derivatives of the TEOS-10 GSW equation of state for in-situ 
+    The partial derivatives of the TEOS-10 GSW equation of state for in-situ
     density with respect to pressure
 
     Parameters

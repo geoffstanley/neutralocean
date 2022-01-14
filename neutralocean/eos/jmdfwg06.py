@@ -285,29 +285,3 @@ def rho_p(s, t, p):
     den_p = b10 + p * t * (2.0 * b11 * t2 + 3.0 * b12 * p)
 
     return (num_p - num * den_p * inv_den) * inv_den
-
-
-def _check_rho_vals():
-    # Checkval from Jackett et al (2006) Appendix B:
-    assert np.isclose(rho(35, 25, 2000), 1031.65056056576, rtol=0, atol=1e-11)
-    assert np.isclose(rho(20, 20, 1000), 1017.72886801964, rtol=0, atol=1e-11)
-    assert np.isclose(rho(40, 12, 8000), 1062.95279820631, rtol=0, atol=1e-11)
-
-
-def _check_rho_derivs():
-    # Check rho_s_t by centred differences
-    s, t, p = (35.0, 25.0, 2000.0)
-    ds, dt, dp = (1e-4, 1e-4, 1e-1)
-
-    rs_centred = (rho(s + ds, t, p) - rho(s - ds, t, p)) / (2.0 * ds)
-    rt_centred = (rho(s, t + dt, p) - rho(s, t - dt, p)) / (2.0 * dt)
-    rp_centred = (rho(s, t, p + dp) - rho(s, t, p - dp)) / (2.0 * dp)
-
-    rs, rt = rho_s_t(s, t, p)
-    rp = rho_p(s, t, p)
-    # rs - rs_centred  # 3.96301880201122e-11
-    # rt - rt_centred  # -1.3336413084985566e-09
-    # rp - rp_centred  # 1.3271501952960563e-12
-    assert np.isclose(rs, rs_centred, rtol=0, atol=1e-8)
-    assert np.isclose(rt, rt_centred, rtol=0, atol=1e-8)
-    assert np.isclose(rp, rp_centred, rtol=0, atol=1e-11)
