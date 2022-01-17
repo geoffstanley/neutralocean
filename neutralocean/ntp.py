@@ -28,8 +28,8 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
         dimensions of `s` and `t` are periodic iff ``wrap[0]`` and
         ``wrap[1]`` is True, respectively.
 
-        As a tuple of str, simply name the periodic dimensions of `S` and
-        `T`.
+        As a tuple of str, simply name the periodic dimensions of `s` and
+        `t`.
 
     dist1_iJ, dist2_Ij, : float or ndarray, Default 1.0
 
@@ -37,23 +37,20 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
         centred at the location specified.  The naming uses a soft notation:
         the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
         `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
-        `dist2_iJ[5,3]` is the distance of the face between cells (5,3) and
-        (4,3). Similarly, `dist2_Ij[5,3]` is the distance between cells
-        (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
-        between cells (5,3) and (5,2).
+        `dist2_Ij[5,3]` is the distance between cells (5,3) and (5,2).
 
     Returns
     -------
     ϵx, ϵy : ndarray
         The ϵ neutrality errors (in the first and second lateral directions)
-        on the surface.
+        on the surface.  Results live on the half grids, midway between where
+        `s`, `t`, and `p` live.
     """
-    # Calculate neutrality error on a surface.
-    # Use backward differences; results are on the U, V grids.
 
     wrap = _process_wrap(wrap, s)
     s, t, p = (xr_to_np(x) for x in (s, t, p))
 
+    # Use backward differences; results are on the U, V grids.
     ϵx = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, im1) / dist1_iJ
     ϵy = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, jm1) / dist2_Ij
 
