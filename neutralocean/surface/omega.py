@@ -308,7 +308,7 @@ def omega_surf(S, T, P, **kwargs):
 
     timer = time()
     if p_init is None:
-        # Calculate an initial "sigma" or "delta" surface
+        # Calculate an initial "potential" or "anomaly" surface
         if isinstance(ref, (tuple, list)) and len(ref) == 2:
             ans_type = "anomaly"
         else:
@@ -318,8 +318,6 @@ def omega_surf(S, T, P, **kwargs):
         kwargs["Sppc"] = Sppc
         kwargs["Tppc"] = Tppc
         kwargs["n_good"] = n_good
-        kwargs["eos"] = eos
-        kwargs["eos_s_t"] = eos_s_t
         kwargs["wrap"] = wrap
         kwargs["vert_dim"] = -1  # Since S, T, P already reordered
         kwargs["diags"] = False  # Will make our own diags next
