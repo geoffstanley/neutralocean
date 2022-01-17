@@ -302,7 +302,7 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
-@njit(float64(float64, float64, float64))
+@njit
 def rho_p(s, t, p):
     """
     Fast pressure derivative of JMD95 in-situ density.
