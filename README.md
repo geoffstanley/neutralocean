@@ -10,7 +10,7 @@ $ conda create --name nocean
 $ conda activate nocean
 ```
 
-2. Install dependencies.  First we install `numpy` and `numba` so that a somewhat older version of `python` will be installed: it seems `numba` does not work with `python3.10` ... and numpy 1.22 does not work with numba.vectorize right now.  How annoying.  
+2. Install dependencies.  First we install `numpy` and `numba` so that a somewhat older version of `python` will be installed: it seems `numba` does not work with `python3.10`, and numpy 1.22 does not work with numba.vectorize right now.  How annoying.  
 Also, we'll install everything from `conda-forge` since that's where we must get `gsw`, and I find it's better (in terms of resolving the environment) to have everything or nothing from `conda-forge`.
 ```
 $ conda install -c conda-forge numpy==1.21 numba
@@ -24,11 +24,9 @@ $ conda install -c conda-forge pip
 
 3. Install `neutralocean`:
 ```
-$ pip install -i https://test.pypi.org/simple/ neutralocean==0.0.7
+$ pip install -i https://test.pypi.org/simple/ neutralocean
 ```
 
 4. Test it out:
-Try running the example script, `run_OCCA.py`.
-```
-$ python /path/to/neutralocean/neutralocean/examples/run_OCCA.py
-```
+Take a look at the example script, `run_OCCA.py` in `neutralocean/examples/` and try running it.
+
