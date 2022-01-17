@@ -48,11 +48,12 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
     """
 
     wrap = _process_wrap(wrap, s)
+
     s, t, p = (xr_to_np(x) for x in (s, t, p))
 
     # Use backward differences; results are on the U, V grids.
-    ϵx = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, im1) / dist1_iJ
-    ϵy = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, jm1) / dist2_Ij
+    ϵx = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, im1, dist1_iJ)
+    ϵy = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, jm1, dist2_Ij)
 
     return ϵx, ϵy
 
@@ -131,15 +132,16 @@ def ntp_ϵ_errors_norms(
     return ϵ_RMS, ϵ_MAV
 
 
-def _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, shift):
+def _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, shift, dist=1.0):
     # Calculate neutrality error on a surface in one direction.
 
     sa, ta, pa = (avg(x, shift, wrap) for x in (s, t, p))
-
     ds, dt = (dif(x, shift, wrap) for x in (s, t))
-
     rsa, rta = eos_s_t(sa, ta, pa)
-    return rsa * ds + rta * dt
+    ϵ = rsa * ds + rta * dt
+    if dist is not float or dist != 1.0:
+        ϵ = ϵ / dist
+    return ϵ
 
 
 def im1(F, wrap, fill=np.nan):  # G[i,j] == F[i-1,j]
