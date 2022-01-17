@@ -261,7 +261,7 @@ def omega_surf(S, T, P, **kwargs):
     Tppc = kwargs.get("Tppc")
     interp_fn = kwargs.get("interp_fn", linear_coeffs)
 
-    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # call before _process_casts
+    sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
@@ -497,7 +497,7 @@ def omega_surf(S, T, P, **kwargs):
         for k, v in d.items():
             d[k] = v[0 : iter_ + (k in ("ϵ_MAV", "ϵ_RMS"))]
 
-    s, t, p = _xr_out(s, t, p, sxr, txr, pxr)
+    s, t, p = (_xr_out(x, xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr)))
 
     return s, t, p, d
 

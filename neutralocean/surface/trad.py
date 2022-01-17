@@ -380,7 +380,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     interp_fn = kwargs.get("interp_fn", linear_coeffs)
 
     # Process arguments
-    sxr, txr, pxr = _xr_in(S, T, P, vert_dim)  # call before _process_casts
+    sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     wrap = _process_wrap(wrap, sxr, diags)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
@@ -427,7 +427,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
         d["ref"] = ref
         d["isoval"] = isoval
 
-    s, t, p = _xr_out(s, t, p, sxr, txr, pxr)
+    s, t, p = (_xr_out(x, xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr)))
     return s, t, p, d
 
 

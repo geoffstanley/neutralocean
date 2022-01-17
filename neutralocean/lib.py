@@ -94,30 +94,24 @@ def xr_to_np(S):
     return S
 
 
-def _xr_in(S, T, P, vert_dim):
-    # Prepare xarray containers for output
-    sxr, txr, pxr = None, None, None
+def _xr_in(S, drop_dim):
+    # Prepare xarray container for output: like input S but without dimension
+    # labelled `drop_dim`
     if isinstance(S, xr.core.dataarray.DataArray):
-        sxr = xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if isinstance(T, xr.core.dataarray.DataArray):
-        txr = xr.full_like(T.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    if isinstance(P, xr.core.dataarray.DataArray):
-        pxr = xr.full_like(P.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
-    return (sxr, txr, pxr)
+        if drop_dim is None:
+            return xr.full_like(S, 0)
+        else:
+            return xr.full_like(S.isel({drop_dim: 0}).drop_vars(drop_dim), 0)
+    else:
+        return None
 
 
-def _xr_out(s, t, p, sxr, txr, pxr):
+def _xr_out(s, sxr):
     # Return xarrays if inputs were xarrays
     if isinstance(sxr, xr.core.dataarray.DataArray):
         sxr.data = s
         s = sxr
-    if isinstance(txr, xr.core.dataarray.DataArray):
-        txr.data = t
-        t = txr
-    if isinstance(pxr, xr.core.dataarray.DataArray):
-        pxr.data = p
-        p = pxr
-    return (s, t, p)
+    return s
 
 
 def _process_vert_dim(vert_dim, S):
