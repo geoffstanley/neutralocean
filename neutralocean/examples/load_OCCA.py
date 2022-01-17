@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 
 import os
-import urllib
+import urllib.request
 
 try:
     import wget
@@ -146,7 +146,7 @@ def download_OCCA(folder=None):
             if have_wget:
                 wget.download(url_theta, file_theta)
             else:
-                _, _ = urllib.request.urlretrieve(url_salt, file_salt)
+                _, _ = urllib.request.urlretrieve(url_theta, file_theta)
 
     else:
         print(
