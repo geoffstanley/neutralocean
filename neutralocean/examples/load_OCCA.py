@@ -108,10 +108,10 @@ def download_OCCA(folder=None):
         folder = local_folder()
 
     # The dropbox links can be used for testing... they are faster:
-    url_salt = "https://www.dropbox.com/s/q9hywvjup1mwhc9/DDsalt.0406annclim.nc?dl=1"
-    url_theta = "https://www.dropbox.com/s/qr6bivfyk0s06ot/DDtheta.0406annclim.nc?dl=1"
-    # url_salt = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDsalt.0406annclim.nc"
-    # url_theta = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDtheta.0406annclim.nc"
+    # url_salt = "https://www.dropbox.com/s/q9hywvjup1mwhc9/DDsalt.0406annclim.nc?dl=1"
+    # url_theta = "https://www.dropbox.com/s/qr6bivfyk0s06ot/DDtheta.0406annclim.nc?dl=1"
+    url_salt = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDsalt.0406annclim.nc"
+    url_theta = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDtheta.0406annclim.nc"
 
     file_salt = folder + "DDsalt.0406annclim.nc"
     file_theta = folder + "DDtheta.0406annclim.nc"
