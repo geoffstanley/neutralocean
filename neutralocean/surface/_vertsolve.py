@@ -5,7 +5,7 @@ import numba
 import functools
 
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.interp_ppc import val2_0d
+from neutralocean.interp_ppc import interp2_0d
 
 
 @functools.lru_cache(maxsize=10)
@@ -13,17 +13,20 @@ def _make_vertsolve(eos, ans_type):
 
     if ans_type == "omega":
 
+        @numba.njit
         def f(*args):
             _vertsolve_omega(*args, eos)
             return None
 
     elif ans_type == "potential":
 
+        @numba.njit
         def f(*args):
             return _vertsolve(*args, eos, _zero_potential)
 
     elif ans_type == "anomaly":
 
+        @numba.njit
         def f(*args):
             return _vertsolve(*args, eos, _zero_anomaly)
 
@@ -66,7 +69,7 @@ def _vertsolve(S, T, P, Sppc, Tppc, n_good, ref, d0, tol_p, eos, zero_func):
                 p[n] = brent(zero_func, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
+                s[n], t[n] = interp2_0d(p[n], Pn, Sn, Sppcn, Tn, Tppcn)
 
     return s, t, p
 
@@ -107,7 +110,7 @@ def _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos):
                 p[n] = brent(_zero_potential, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = val2_0d(Pn, Sn, Sppcn, Tn, Tppcn, p[n])
+                s[n], t[n] = interp2_0d(p[n], Pn, Sn, Sppcn, Tn, Tppcn)
 
             else:
                 # Ensure s,t,p all have the same nan structure
@@ -124,7 +127,7 @@ def _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, tol_p, eos):
 @numba.njit
 def _zero_potential(p, S, T, P, Sppc, Tppc, ref_p, isoval, eos):
     # Evaluate the potential density in a given cast, minus a given isovalue
-    s, t = val2_0d(P, S, Sppc, T, Tppc, p)
+    s, t = interp2_0d(p, P, S, Sppc, T, Tppc)
     return eos(s, t, ref_p) - isoval
 
 
@@ -132,5 +135,5 @@ def _zero_potential(p, S, T, P, Sppc, Tppc, ref_p, isoval, eos):
 def _zero_anomaly(p, S, T, P, Sppc, Tppc, ref, isoval, eos):
     # Evaluate the specific volume (or in-situ density) anomaly in a given cast,
     # minus a given isovalue
-    s, t = val2_0d(P, S, Sppc, T, Tppc, p)
+    s, t = interp2_0d(p, P, S, Sppc, T, Tppc)
     return eos(s, t, p) - eos(ref[0], ref[1], p) - isoval

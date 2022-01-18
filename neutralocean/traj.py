@@ -3,7 +3,7 @@
 import numpy as np
 import numba
 
-from neutralocean.interp_ppc import linear_coeffs, val2_0d
+from neutralocean.interp_ppc import linear_coeffs, interp2_0d
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.lib import find_first_nan
@@ -15,7 +15,7 @@ def _func(p, sB, tB, pB, S, T, P, Sppc, Tppc, eos):
     # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB)
     # here, eos is always evaluated at the average pressure or depth, (p +
     # pB)/2.
-    s, t = val2_0d(P, S, Sppc, T, Tppc, p)
+    s, t = interp2_0d(p, P, S, Sppc, T, Tppc)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
 
@@ -169,7 +169,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p):
             p = brent(_func, lb, ub, tol_p, args)
 
             # Interpolate S and T onto the updated surface
-            s, t = val2_0d(P, S, Sppc, T, Tppc, p)
+            s, t = interp2_0d(p, P, S, Sppc, T, Tppc)
 
         else:
             s, t, p = np.nan, np.nan, np.nan
@@ -278,7 +278,7 @@ def neutral_trajectory(
     Pc = P[:, 0]
     Sppc = interp_fn(Pc, Sc)
     Tppc = interp_fn(Pc, Tc)
-    s[0], t[0] = val2_0d(Pc, Sppc, Tppc, p0)
+    s[0], t[0] = interp2_0d(p0, Pc, Sppc, Tppc)
     p[0] = p0
 
     # Loop over remaining casts

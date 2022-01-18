@@ -53,9 +53,9 @@ def linear_coeffs(X, Y):
 
     Notes
     -----
-    Evaluate the piecewise polynomial at `x` as
+    Einterpuate the piecewise polynomial at `x` as
 
-    >>> y = val(X, Y, Yppc, x)
+    >>> y = interp(x, X, Y, Yppc)
 
     """
     Yppc = np.diff(Y, axis=-1) / np.diff(X, axis=-1)
@@ -97,7 +97,7 @@ def pchip_coeffs(X, Y):
 
     Evaluate the piecewise polynomial at `x` as
 
-    >>> y = val(X, Y, Yppc, x)
+    >>> y = interp(x, X, Y, Yppc)
 
     """
     if X.ndim == 1 and X.size == Y.shape[-1]:
@@ -114,12 +114,21 @@ def pchip_coeffs(X, Y):
     return pchip_coeffs_nd(X, Y)
 
 
-def val(X, Y, Yppc, x, d=0):
+def interp(x, X, Y, Yppc, d=0):
     """
     Evaluate a given Piecewise Polynomial
 
     Parameters
     ----------
+    x : ndarray
+
+        Sites of the independent variable at which to evaluate.
+
+        Must be the same size as `X` or `Y` less their final dimension,
+        with any dimension possibly a singleton: that is, must be
+        broadcastable to the size of `X` and `Y` less their final
+        dimension.
+
     X : ndarray
 
         Independent variable. Must be same dimensions as `Y`, with any
@@ -141,16 +150,6 @@ def val(X, Y, Yppc, x, d=0):
 
         Degree 1 and higher Piecewise Polynomial Coefficients for the
         interpolant, as returned by `linear_coeffs` or `pchip_coeffs`.
-
-    x : ndarray
-
-        Sites of the independent variable at which to evaluate.
-
-        Must be the same size as `X` or `Y` less their final dimension,
-        with any dimension possibly a singleton: that is, must be
-        broadcastable to the size of `X` and `Y` less their final
-        dimension.
-
 
     d : int, Default 0
 
@@ -195,21 +194,21 @@ def val(X, Y, Yppc, x, d=0):
     x = np.broadcast_to(x, shape)
     Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
 
-    return val_nd(X, Y, Yppc, x, d)
+    return interp_nd(x, X, Y, Yppc, d)
 
 
-def val2(X, Y, Yppc, Z, Zppc, x, d=0):
+def interp2(x, X, Y, Yppc, Z, Zppc, d=0):
     """
     Evaluate two given Piecewise Polynomials
 
-    The inputs and outputs are like for `val`, but a second pair of
+    The inputs and outputs are like for `interp`, but a second pair of
     inputs, `Z` and `Zppc`, give the second piecewise polynomial, for
     which a second output `z` is given.
 
     Notes
     -----
-    Because `val2` only calls `np.searchsorted` once, it is faster than
-    calling `val` twice.
+    Because `interp2` only calls `np.searchsorted` once, it is faster than
+    calling `interp` twice.
     """
 
     nk = X.shape[-1]
@@ -238,7 +237,7 @@ def val2(X, Y, Yppc, Z, Zppc, x, d=0):
     Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
     Zppc = np.broadcast_to(Zppc, (*shape, nk - 1, Zppc.shape[-1]))
 
-    return val2_nd(X, Y, Yppc, Z, Zppc, x, d)
+    return interp2_nd(x, X, Y, Yppc, Z, Zppc, d)
 
 
 @numba.njit
@@ -347,7 +346,7 @@ def pchip_coeffs_nd(X, Y):
 
 
 @numba.njit
-def val_0d(X, Y, Yppc, x):
+def interp_0d(x, X, Y, Yppc):
     """
     Evaluate a single interpolant.
     """
@@ -366,26 +365,26 @@ def val_0d(X, Y, Yppc, x):
     # Subtract 1 so X[i] < x <= X[i+1]  and  0 <= i <= len(X)-2
     i = np.searchsorted(X, x) - 1
 
-    return val_0d_i(X, Y, Yppc, x, i)
+    return interp_0d_i(x, X, Y, Yppc, i)
 
 
 @numba.njit
-def val_nd(X, Y, Yppc, x, d):
+def interp_nd(x, X, Y, Yppc, d):
     """
     Evaluate interpolants with all inputs' dimensions agreeable
     """
     y = np.empty(x.shape, dtype=np.float64)
     if d == 0:
         for n in np.ndindex(x.shape):
-            y[n] = val_0d(X[n], Y[n], Yppc[n], x[n])
+            y[n] = interp_0d(x[n], X[n], Y[n], Yppc[n])
     else:
         for n in np.ndindex(x.shape):
-            y[n] = dval_0d(X[n], Y[n], Yppc[n], x[n], d)
+            y[n] = dinterp_0d(x[n], X[n], Y[n], Yppc[n], d)
     return y
 
 
 @numba.njit
-def dval_0d(X, Y, Yppc, x, d):
+def dinterp_0d(x, X, Y, Yppc, d):
     """
     Evaluate a single interpolant's derivative.
 
@@ -393,7 +392,7 @@ def dval_0d(X, Y, Yppc, x, d):
     """
 
     # if d == 0:
-    #     return val_0d(X, Y, Yppc, x)
+    #     return interp_0d(x, X, Y, Yppc)
 
     if np.isnan(x) or x < X[0] or X[-1] < x:
         return np.nan
@@ -407,11 +406,11 @@ def dval_0d(X, Y, Yppc, x, d):
 
     i = np.searchsorted(X, x) - 1
 
-    return dval_0d_i(X, Y, Yppc, x, d, i)
+    return dinterp_0d_i(x, X, Y, Yppc, d, i)
 
 
 @numba.njit
-def val_0d_i(X, Y, Yppc, x, i):
+def interp_0d_i(x, X, Y, Yppc, i):
     """
     Evaluate a single interpolant, knowing where the evaluation site lies.
 
@@ -432,7 +431,7 @@ def val_0d_i(X, Y, Yppc, x, i):
 
 
 @numba.njit
-def dval_0d_i(X, Y, Yppc, x, d, i):
+def dinterp_0d_i(x, X, Y, Yppc, d, i):
     """
     Evaluate a single interpolant's derivative, knowing where the evaluation site lies.
 
@@ -441,7 +440,7 @@ def dval_0d_i(X, Y, Yppc, x, d, i):
     """
 
     # if d == 0:
-    #     return val_0d_i(X, Y, Yppc, x, i)
+    #     return interp_0d_i(x, X, Y, Yppc, i)
 
     degree = Yppc.shape[1]
 
@@ -462,7 +461,7 @@ def dval_0d_i(X, Y, Yppc, x, d, i):
 
 
 @numba.njit
-def val2_0d(X, Y, Yppc, Z, Zppc, x):
+def interp2_0d(x, X, Y, Yppc, Z, Zppc):
     """
     Evaluate two single interpolants
     """
@@ -473,13 +472,13 @@ def val2_0d(X, Y, Yppc, Z, Zppc, x):
         return Y[0], Z[0]
 
     i = np.searchsorted(X, x) - 1
-    y = val_0d_i(X, Y, Yppc, x, i)
-    z = val_0d_i(X, Z, Zppc, x, i)
+    y = interp_0d_i(x, X, Y, Yppc, i)
+    z = interp_0d_i(x, X, Z, Zppc, i)
     return y, z
 
 
 @numba.njit
-def val2_nd(X, Y, Yppc, Z, Zppc, x, d):
+def interp2_nd(x, X, Y, Yppc, Z, Zppc, d):
     """
     Evaluate two interpolants with all inputs' dimensions agreeable
     """
@@ -487,15 +486,15 @@ def val2_nd(X, Y, Yppc, Z, Zppc, x, d):
     z = np.empty(x.shape, dtype=np.float64)
     if d == 0:
         for n in np.ndindex(x.shape):
-            y[n], z[n] = val2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n])
+            y[n], z[n] = interp2_0d(x[n], X[n], Y[n], Yppc[n], Z[n], Zppc[n])
     else:
         for n in np.ndindex(x.shape):
-            y[n], z[n] = dval2_0d(X[n], Y[n], Yppc[n], Z[n], Zppc[n], x[n], d)
+            y[n], z[n] = dinterp2_0d(x[n], X[n], Y[n], Yppc[n], Z[n], Zppc[n], d)
     return y, z
 
 
 @numba.njit
-def dval2_0d(X, Y, Yppc, Z, Zppc, x, d):
+def dinterp2_0d(x, X, Y, Yppc, Z, Zppc, d):
     """
     Evaluate two single interpolants' derivatives
 
@@ -503,7 +502,7 @@ def dval2_0d(X, Y, Yppc, Z, Zppc, x, d):
     """
 
     # if d == 0:
-    #     return val2_0d(X, Y, Yppc, Z, Zppc, x)
+    #     return interp2_0d(x, X, Y, Yppc, Z, Zppc)
 
     if np.isnan(x) or x < X[0] or X[-1] < x:
         return np.nan, np.nan
@@ -516,8 +515,8 @@ def dval2_0d(X, Y, Yppc, Z, Zppc, x, d):
         return Yppc[0, -d] * p, Zppc[0, -d] * p
 
     i = np.searchsorted(X, x) - 1
-    y = dval_0d_i(X, Y, Yppc, x, d, i)
-    z = dval_0d_i(X, Z, Zppc, x, d, i)
+    y = dinterp_0d_i(x, X, Y, Yppc, d, i)
+    z = dinterp_0d_i(x, X, Z, Zppc, d, i)
     return y, z
 
 
@@ -525,9 +524,9 @@ def deriv(X, Y, Yppc, d=1):
     """
     Differentiate a piecewise polynomial.
 
-    It is almost always preferable to use `val` (or `val2`) with `d` > 0
+    It is almost always preferable to use `interp` (or `interp2`) with `d` > 0
     to evaluate the derivative of an input, rather than this function
-    to differentiate the entire piecewise polynomial and then `val` it.
+    to differentiate the entire piecewise polynomial and then `interp` it.
 
     Parameters
     ----------

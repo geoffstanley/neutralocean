@@ -4,7 +4,7 @@ from neutralocean.lib import find_first_nan
 from neutralocean.interp_ppc import (
     linear_coeffs,
     pchip_coeffs,
-    val,
+    interp,
     deriv,
 )
 from scipy.interpolate import PchipInterpolator
@@ -41,7 +41,7 @@ def test_linear():
 
     result_s = np.empty_like(expected_s)
     for j in range(p_targets.size):
-        result_s[:, j] = val(P, S, Sppc, p_targets[j])
+        result_s[:, j] = interp(p_targets[j], P, S, Sppc)
 
     assert np.allclose(result_s, expected_s, equal_nan=True)
 
@@ -61,7 +61,7 @@ def test_pchip():
 
     result_s = np.empty_like(expected_s)
     for j in range(p_targets.size):
-        result_s[:, j] = val(P, S, Sppc, p_targets[j])
+        result_s[:, j] = interp(p_targets[j], P, S, Sppc)
 
     assert np.allclose(result_s, expected_s, equal_nan=True)
 
@@ -81,7 +81,7 @@ def test_deriv1():
 
     result_s = np.empty_like(expected_s)
     for j in range(p_targets.size):
-        result_s[:, j] = val(P, S, Sppc, p_targets[j], num_deriv)
+        result_s[:, j] = interp(p_targets[j], P, S, Sppc, num_deriv)
 
     assert np.allclose(result_s, expected_s, equal_nan=True)
 
@@ -106,7 +106,7 @@ def test_deriv2():
 
     result_s = np.empty_like(expected_s)
     for j in range(p_midpts.size):
-        result_s[:, j] = val(P, S, Sppc, p_midpts[j], num_deriv)
+        result_s[:, j] = interp(p_midpts[j], P, S, Sppc, num_deriv)
 
     assert np.allclose(result_s, expected_s, equal_nan=True)
 
@@ -119,7 +119,7 @@ def test_ppc_deriv():
     expected_s = np.empty((ncasts, p_targets.size), dtype=float)
     result_s = np.empty_like(expected_s)
     for j in range(p_targets.size):
-        expected_s[:, j] = val(P, S, Sppc, p_targets[j], num_deriv)
-        result_s[:, j] = val(P, dS, dSppc, p_targets[j])
+        expected_s[:, j] = interp(p_targets[j], P, S, Sppc, num_deriv)
+        result_s[:, j] = interp(p_targets[j], P, dS, dSppc)
 
     assert np.allclose(result_s, expected_s, equal_nan=True)

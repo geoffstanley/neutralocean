@@ -222,7 +222,7 @@ from neutralocean.mixed_layer import mixed_layer
 from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.label import veronis_density
 from neutralocean.lib import _process_casts, find_first_nan
-from neutralocean.interp_ppc import linear_coeffs, val2
+from neutralocean.interp_ppc import linear_coeffs, interp2
 from neutralocean.eos.tools import make_eos_p
 from neutralocean.traj import ntp_bottle_to_cast, _ntp_bottle_to_cast
 
@@ -320,7 +320,7 @@ Earth_day = 86164
 # Coriolis param [s-1] on tracer grid
 f = 2 * (2 * np.pi / Earth_day) * np.sin(g["YCvec"] * (np.pi / 180))
 
-sz, tz = val2(Z, S, Sppc, T, Tppc, z, 1)  # ∂S/∂Z and ∂T/∂Z, on the surface
+sz, tz = interp2(z, Z, S, Sppc, T, Tppc, 1)  # ∂S/∂Z and ∂T/∂Z, on the surface
 rs, rt = eos_s_t(s, t, z)  # ∂ρ/∂S and ∂ρ/∂T, on the surface
 
 # ∂δ/∂z on the surface, where δ is the in-situ density anomaly

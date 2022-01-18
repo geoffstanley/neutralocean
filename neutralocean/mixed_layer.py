@@ -1,6 +1,6 @@
 """ Mixed Layer """
 
-from neutralocean.interp_ppc import linear_coeffs, val
+from neutralocean.interp_ppc import linear_coeffs, interp
 from neutralocean.eos.tools import vectorize_eos
 from neutralocean.lib import _process_casts, _process_vert_dim
 
@@ -113,4 +113,4 @@ def mixed_layer(
     # Find the pressure or depth at which the potential density difference
     # exceeds the threshold pot_dens_diff
     Pppc = interp_fn(DD, P)
-    return val(DD, P, Pppc, pot_dens_diff)
+    return interp(pot_dens_diff, DD, P, Pppc)
