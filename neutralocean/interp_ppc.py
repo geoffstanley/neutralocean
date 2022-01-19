@@ -1,9 +1,8 @@
 """
-Functions for linear or PCHIP interpolation of one or two dependent
-variables in terms of one independent variable, done serially over an
-arbitrary number of such interpolation problems.  In the Neutral
-Surfaces Toolbox, this is used to build interpolants for salinity and
-temperature in terms of either pressure or depth in each water
+Functions for linear or PCHIP interpolation of one or two dependent variables
+in terms of one independent variable, done serially over an arbitrary number
+of such interpolation problems.  This is used to build interpolants for
+salinity and temperature in terms of either pressure or depth in each water
 column. 
 """
 
@@ -255,7 +254,7 @@ def diff_1d(x):
 
 
 @numba.njit
-def pchip_coeffs_0d(X, Y):
+def pchip_coeffs_1d(X, Y):
     """
     Coefficients for a single PCHIP
 
@@ -340,13 +339,13 @@ def pchip_coeffs_nd(X, Y):
 
     C = np.full((*Y.shape[0:-1], Y.shape[-1] - 1, 3), np.nan)
     for n in np.ndindex(Y.shape[0:-1]):
-        C[n] = pchip_coeffs_0d(X[n], Y[n])
+        C[n] = pchip_coeffs_1d(X[n], Y[n])
 
     return C
 
 
 @numba.njit
-def interp_0d(x, X, Y, Yppc):
+def interp_1d(x, X, Y, Yppc):
     """
     Evaluate a single interpolant.
     """
@@ -365,7 +364,7 @@ def interp_0d(x, X, Y, Yppc):
     # Subtract 1 so X[i] < x <= X[i+1]  and  0 <= i <= len(X)-2
     i = np.searchsorted(X, x) - 1
 
-    return interp_0d_i(x, X, Y, Yppc, i)
+    return interp_1d_i(x, X, Y, Yppc, i)
 
 
 @numba.njit
@@ -376,15 +375,15 @@ def interp_nd(x, X, Y, Yppc, d):
     y = np.empty(x.shape, dtype=np.float64)
     if d == 0:
         for n in np.ndindex(x.shape):
-            y[n] = interp_0d(x[n], X[n], Y[n], Yppc[n])
+            y[n] = interp_1d(x[n], X[n], Y[n], Yppc[n])
     else:
         for n in np.ndindex(x.shape):
-            y[n] = dinterp_0d(x[n], X[n], Y[n], Yppc[n], d)
+            y[n] = dinterp_1d(x[n], X[n], Y[n], Yppc[n], d)
     return y
 
 
 @numba.njit
-def dinterp_0d(x, X, Y, Yppc, d):
+def dinterp_1d(x, X, Y, Yppc, d):
     """
     Evaluate a single interpolant's derivative.
 
@@ -392,7 +391,7 @@ def dinterp_0d(x, X, Y, Yppc, d):
     """
 
     # if d == 0:
-    #     return interp_0d(x, X, Y, Yppc)
+    #     return interp_1d(x, X, Y, Yppc)
 
     if np.isnan(x) or x < X[0] or X[-1] < x:
         return np.nan
@@ -406,11 +405,11 @@ def dinterp_0d(x, X, Y, Yppc, d):
 
     i = np.searchsorted(X, x) - 1
 
-    return dinterp_0d_i(x, X, Y, Yppc, d, i)
+    return dinterp_1d_i(x, X, Y, Yppc, d, i)
 
 
 @numba.njit
-def interp_0d_i(x, X, Y, Yppc, i):
+def interp_1d_i(x, X, Y, Yppc, i):
     """
     Evaluate a single interpolant, knowing where the evaluation site lies.
 
@@ -431,7 +430,7 @@ def interp_0d_i(x, X, Y, Yppc, i):
 
 
 @numba.njit
-def dinterp_0d_i(x, X, Y, Yppc, d, i):
+def dinterp_1d_i(x, X, Y, Yppc, d, i):
     """
     Evaluate a single interpolant's derivative, knowing where the evaluation site lies.
 
@@ -440,7 +439,7 @@ def dinterp_0d_i(x, X, Y, Yppc, d, i):
     """
 
     # if d == 0:
-    #     return interp_0d_i(x, X, Y, Yppc, i)
+    #     return interp_1d_i(x, X, Y, Yppc, i)
 
     degree = Yppc.shape[1]
 
@@ -461,7 +460,7 @@ def dinterp_0d_i(x, X, Y, Yppc, d, i):
 
 
 @numba.njit
-def interp2_0d(x, X, Y, Yppc, Z, Zppc):
+def interp2_1d(x, X, Y, Yppc, Z, Zppc):
     """
     Evaluate two single interpolants
     """
@@ -472,8 +471,8 @@ def interp2_0d(x, X, Y, Yppc, Z, Zppc):
         return Y[0], Z[0]
 
     i = np.searchsorted(X, x) - 1
-    y = interp_0d_i(x, X, Y, Yppc, i)
-    z = interp_0d_i(x, X, Z, Zppc, i)
+    y = interp_1d_i(x, X, Y, Yppc, i)
+    z = interp_1d_i(x, X, Z, Zppc, i)
     return y, z
 
 
@@ -486,15 +485,15 @@ def interp2_nd(x, X, Y, Yppc, Z, Zppc, d):
     z = np.empty(x.shape, dtype=np.float64)
     if d == 0:
         for n in np.ndindex(x.shape):
-            y[n], z[n] = interp2_0d(x[n], X[n], Y[n], Yppc[n], Z[n], Zppc[n])
+            y[n], z[n] = interp2_1d(x[n], X[n], Y[n], Yppc[n], Z[n], Zppc[n])
     else:
         for n in np.ndindex(x.shape):
-            y[n], z[n] = dinterp2_0d(x[n], X[n], Y[n], Yppc[n], Z[n], Zppc[n], d)
+            y[n], z[n] = dinterp2_1d(x[n], X[n], Y[n], Yppc[n], Z[n], Zppc[n], d)
     return y, z
 
 
 @numba.njit
-def dinterp2_0d(x, X, Y, Yppc, Z, Zppc, d):
+def dinterp2_1d(x, X, Y, Yppc, Z, Zppc, d):
     """
     Evaluate two single interpolants' derivatives
 
@@ -502,7 +501,7 @@ def dinterp2_0d(x, X, Y, Yppc, Z, Zppc, d):
     """
 
     # if d == 0:
-    #     return interp2_0d(x, X, Y, Yppc, Z, Zppc)
+    #     return interp2_1d(x, X, Y, Yppc, Z, Zppc)
 
     if np.isnan(x) or x < X[0] or X[-1] < x:
         return np.nan, np.nan
@@ -515,8 +514,8 @@ def dinterp2_0d(x, X, Y, Yppc, Z, Zppc, d):
         return Yppc[0, -d] * p, Zppc[0, -d] * p
 
     i = np.searchsorted(X, x) - 1
-    y = dinterp_0d_i(x, X, Y, Yppc, d, i)
-    z = dinterp_0d_i(x, X, Z, Zppc, d, i)
+    y = dinterp_1d_i(x, X, Y, Yppc, d, i)
+    z = dinterp_1d_i(x, X, Z, Zppc, d, i)
     return y, z
 
 
