@@ -8,7 +8,7 @@ import numpy as np
 from time import time
 
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.interp_ppc import linear_coeffs, interp2_0d
+from neutralocean.interp_ppc import linear_coeffs, interp2_1d
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (
     _xr_in,
@@ -406,7 +406,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
         # pressure / depth.  This fixes small deviations of order `TOL_P_SOLVER`
         n0 = pin_cast
         p[n0] = pin_p
-        s[n0], t[n0] = interp2_0d(pin_p, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0])
+        s[n0], t[n0] = interp2_1d(pin_p, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0])
 
     d = dict()
     if diags:
@@ -500,7 +500,7 @@ def _choose_ref_isoval(
     # >>> _traditional_surf(ans_type, S, T, P, pin_cast, pin_p)
     if isoval is None:  # => pin_cast and pin_p are both not None
         n0 = pin_cast  # evaluate S and T on the surface at the chosen location
-        s0, t0 = interp2_0d(pin_p, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0])
+        s0, t0 = interp2_1d(pin_p, P[n0], S[n0], Sppc[n0], T[n0], Tppc[n0])
 
         if ans_type == "potential":
             if ref is None:
