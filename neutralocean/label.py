@@ -1,6 +1,6 @@
 import numpy as np
 
-from neutralocean.interp_ppc import linear_coeffs, interp2_0d, interp_0d_i, dinterp_0d_i
+from neutralocean.interp_ppc import linear_coeffs, interp2_1d, interp_1d_i, dinterp_1d_i
 
 # CHECK VALUE from MATLAB:
 # >> veronis_density(0, S(:,i0,j0), T(:,i0,j0), Z, 10, 1500, 1, @ppc_linterp)
@@ -162,7 +162,7 @@ def veronis_density(
     d1 -= _int_x_k(p1, k1, dp, P, S, T, Sppc, Tppc, eos_s_t)
 
     # Calculate potential density, referenced to p_ref, at p0
-    s0, t0 = interp2_0d(p0, P, S, Sppc, T, Tppc)
+    s0, t0 = interp2_1d(p0, P, S, Sppc, T, Tppc)
     d0 = eos(s0, t0, p_ref)
 
     return d0 + d1
@@ -182,10 +182,10 @@ def _int_x_k(p, k, dp, P, S, T, Sppc, Tppc, eos_s_t):
     dsdp_ = np.zeros(n)
     dtdp_ = np.zeros(n)
     for i in range(n):
-        s_[i] = interp_0d_i(p_[i], P, S, Sppc, k - 1)
-        t_[i] = interp_0d_i(p_[i], P, T, Tppc, k - 1)
-        dsdp_[i] = dinterp_0d_i(p_[i], P, S, Sppc, 1, k - 1)
-        dtdp_[i] = dinterp_0d_i(p_[i], P, T, Tppc, 1, k - 1)
+        s_[i] = interp_1d_i(p_[i], P, S, Sppc, k - 1)
+        t_[i] = interp_1d_i(p_[i], P, T, Tppc, k - 1)
+        dsdp_[i] = dinterp_1d_i(p_[i], P, S, Sppc, 1, k - 1)
+        dtdp_[i] = dinterp_1d_i(p_[i], P, T, Tppc, 1, k - 1)
 
     # To use linear interpolation internally, replace the above lines with the following 7 lines
     # dp = P[k] - P[k-1]
