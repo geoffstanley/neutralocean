@@ -121,11 +121,11 @@ def interp(x, X, Y, Yppc, d=0):
     ----------
     x : ndarray
 
-        Sites of the independent variable at which to evaluate.
+        Sites at which to evaluate the independent variable.
 
         Must be the same size as `X` or `Y` less their final dimension,
         with any dimension possibly a singleton: that is, must be
-        broadcastable to the size of `X` and `Y` less their final
+        broadcastable to the size of `X` or `Y` less their final
         dimension.
 
     X : ndarray
@@ -134,8 +134,8 @@ def interp(x, X, Y, Yppc, d=0):
         dimension possibly a singleton: that is, must be broadcastable
         to the size of `Y`.
 
-        `X` should be monotonically increasing in its last dimension.
-        That is, `X[*i,:]` should be monotonically increasing for any
+        `X` must be monotonically increasing in its last dimension.
+        That is, `X[*i,:]` must be monotonically increasing for any
         `i` tuple indexing all but the last dimension.  NaN's in `X`
         are treated as +Inf.
 
@@ -161,8 +161,13 @@ def interp(x, X, Y, Yppc, d=0):
     y : ndarray
 
         Value of the piecewise polynomial interpolant (or its `d`'th
-        derivative) at `x`.  The size of `y` matches the largest of the
-        sizes of `x`, or `X` or `Y` less their last dimension.
+        derivative) at `x`.
+
+        If `x` is float and `X` and `Y` are both 1 dimensional, `y` is float.
+        
+        Otherwise, `y` is ndarray with size matching the largest of the sizes
+        of `x`, the size of `X` less its last dimension, or the size of `Y`
+        less its last dimension.
 
     Notes
     -----
@@ -183,6 +188,8 @@ def interp(x, X, Y, Yppc, d=0):
         shape = Y.shape[0:-1]
         # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match those of Y"
         # assert np.ndim(x) == 0 or len(x) == 1 or x.shape == shape, "x must be scalar or match leading dimensions of X"
+    elif np.isscalar(x):
+        shape = ()
     else:
         shape = x.shape
         # assert X.ndim == 1 or X.shape[0:-1] == shape, "X must be 1D or its leading dimensions must match the shape of x"
@@ -193,7 +200,13 @@ def interp(x, X, Y, Yppc, d=0):
     x = np.broadcast_to(x, shape)
     Yppc = np.broadcast_to(Yppc, (*shape, nk - 1, Yppc.shape[-1]))
 
-    return interp_nd(x, X, Y, Yppc, d)
+    y = interp_nd(x, X, Y, Yppc, d)
+
+    if shape == ():
+        # Convert 0d array to scalar
+        y = y[()]
+
+    return y
 
 
 def interp2(x, X, Y, Yppc, Z, Zppc, d=0):
