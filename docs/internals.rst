@@ -1,15 +1,17 @@
 Internal functions
 ==================
 
-interp_ppc
-~~~~~~~~~~
-.. autofunction:: neutralocean.interp_ppc.linear_coeffs
+interp
+~~~~~~
+.. autofunction:: neutralocean.interp.interp
 
-.. autofunction:: neutralocean.interp_ppc.pchip_coeffs
+.. autofunction:: neutralocean.interp.interp_nd
 
-.. autofunction:: neutralocean.interp_ppc.val
+.. autofunction:: neutralocean.interp.interp_1d
 
-.. autofunction:: neutralocean.interp_ppc.val2
+.. autofunction:: neutralocean.interp.linterp_i
+
+.. autofunction:: neutralocean.interp.pchip_i
 
 fzero
 -----

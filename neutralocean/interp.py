@@ -7,7 +7,6 @@ temperature in terms of either pressure or depth in each water column.
 
 import numpy as np
 import numba
-import functools
 
 
 @numba.njit

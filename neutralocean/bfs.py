@@ -86,7 +86,7 @@ def bfs_conncomp1(G, A, r):
 
 
 @numba.njit
-def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_ml):
+def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, interp_fn, p_ml):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting
 
@@ -113,14 +113,6 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
         3D practical / Absolute salinity and potential / Conservative
         temperature and pressure / depth in the ocean
 
-    Sppc, Tppc : ndarray
-
-        Pre-computed Piecewise Polynomial Coefficients for `S` and `T` as
-        functions of `P`. These should be computed as ``Sppc = interp_fn
-        (S, P)`` and ``Tppc = interp_fn(T,P)`` where `interp_fn` is an
-        interpolation function from ``interp_ppc.py``, e.g. ``linear_coeffs``
-        or ``pchip_coeffs``
-
     n_good : ndarray
 
         Pre-computed number of ocean data points in each water column.
@@ -144,6 +136,12 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
 
         This should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
+
+    interp_fn : function, Default ``linterp_i``
+
+        Interpolation function.
+        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
+        ``pchip_i`` for PCHIP interpolation.
 
     p_ml : ndarray
 
@@ -187,8 +185,6 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
     S = np.reshape(S, (N, nk))
     T = np.reshape(T, (N, nk))
     P = np.reshape(P, (N, nk))
-    Sppc = np.reshape(Sppc, (N, nk - 1, -1))
-    Tppc = np.reshape(Tppc, (N, nk - 1, -1))
     n_good = np.reshape(n_good, -1)
 
     p_ml = np.reshape(p_ml, -1)  # flatten
@@ -222,10 +218,9 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, Sppc, Tppc, n_good, A, r, tol_p, eos, p_
                         S[n],
                         T[n],
                         P[n],
-                        Sppc[n],
-                        Tppc[n],
                         n_good[n],
                         eos,
+                        interp_fn,
                         tol_p,
                     )
 

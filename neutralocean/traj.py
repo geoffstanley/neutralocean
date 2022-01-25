@@ -3,19 +3,19 @@
 import numpy as np
 import numba
 
-from neutralocean.interp_ppc import linear_coeffs, interp2_1d
+from neutralocean.interp import linterp_i, interp2_1d
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.lib import find_first_nan
 
 
 @numba.njit
-def _func(p, sB, tB, pB, S, T, P, Sppc, Tppc, eos):
+def _func(p, sB, tB, pB, S, T, P, eos, interp_fn):
     # Evaluate difference between (a) eos at location on the cast (S, T, P)
     # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB)
     # here, eos is always evaluated at the average pressure or depth, (p +
     # pB)/2.
-    s, t = interp2_1d(p, P, S, Sppc, T, Tppc)
+    s, t = interp2_1d(p, P, S, T, interp_fn)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
 
@@ -28,7 +28,7 @@ def ntp_bottle_to_cast(
     T,
     P,
     tol_p=1e-4,
-    interp_fn=linear_coeffs,
+    interp_fn=linterp_i,
     eos="gsw",
     grav=None,
     rho_c=None,
@@ -71,11 +71,11 @@ def ntp_bottle_to_cast(
         Error tolerance in terms of pressure or depth when searching for a root
         of the nonlinear equation.  Units are the same as `P`.
 
-    interp_fn : function, Default ``linear_coeffs``
+    interp_fn : function, Default ``linterp_i``
 
-        Function that calculates coefficients of piecewise polynomial
-        interpolants of `S` and `T` as functions of `P`.  Options include
-        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+        Interpolation function.
+        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
+        ``pchip_i`` for PCHIP interpolation.
 
     eos : str or function, Default 'gsw'
 
@@ -105,15 +105,13 @@ def ntp_bottle_to_cast(
     """
 
     eos = make_eos(eos, grav, rho_c)
-    Sppc = interp_fn(P, S)
-    Tppc = interp_fn(P, T)
     n_good = find_first_nan(S)
 
-    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p)
+    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, eos, interp_fn, tol_p)
 
 
 @numba.njit
-def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p):
+def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, eos, interp_fn, tol_p):
     """Find the neutral tangent plane from a bottle to a cast
 
     Fast version of `ntp_bottle_to_cast`, with all inputs supplied.  See
@@ -126,13 +124,6 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p):
 
     S, T, P : ndarray
         See ntp_bottle_to_cast
-
-    Sppc, Tppc : ndarray
-
-        Piecewise Polynomial Coefficients for `S` and `T` as functions of `P`.
-        Computed these as ``Sppc = interp_fn(P, S)`` and ``Tppc
-        = interp_fn(P, T)`` where `interp_fn` is ``linear_coeffs`` or
-        ``pchip_coeffs`` from ``interp_ppc.py``.
 
     n_good : int
 
@@ -147,6 +138,12 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p):
         This function should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
+    interp_fn : function, Default ``linterp_i``
+
+        Interpolation function.
+        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
+        ``pchip_i`` for PCHIP interpolation.
+
     tol_p : float, Default 1e-4
         See ntp_bottle_to_cast
 
@@ -158,7 +155,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p):
 
     if n_good > 1:
 
-        args = (sB, tB, pB, S, T, P, Sppc, Tppc, eos)
+        args = (sB, tB, pB, S, T, P, eos, interp_fn)
 
         # Search for a sign-change, expanding outward from an initial guess
         lb, ub = guess_to_bounds(_func, pB, P[0], P[n_good - 1], args)
@@ -169,7 +166,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, Sppc, Tppc, n_good, eos, tol_p):
             p = brent(_func, lb, ub, tol_p, args)
 
             # Interpolate S and T onto the updated surface
-            s, t = interp2_1d(p, P, S, Sppc, T, Tppc)
+            s, t = interp2_1d(p, P, S, T, interp_fn)
 
         else:
             s, t, p = np.nan, np.nan, np.nan
@@ -189,7 +186,7 @@ def neutral_trajectory(
     s0=None,
     t0=None,
     tol_p=1e-4,
-    interp_fn=linear_coeffs,
+    interp_fn=linterp_i,
     eos="gsw",
     grav=None,
     rho_c=None,
@@ -232,11 +229,11 @@ def neutral_trajectory(
         Error tolerance when root-finding to update the pressure / depth of
         the surface in each water column. Units are the same as `P`.
 
-    interp_fn : function, Default ``linear_coeffs``
+    interp_fn : function, Default ``linterp_i``
 
-        Function that calculates coefficients of piecewise polynomial
-        interpolants of `S` and `T` as functions of `P`.  Options include
-        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+        Interpolation function.
+        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
+        ``pchip_i`` for PCHIP interpolation.
 
     eos : str or function, Default 'gsw'
 
@@ -276,9 +273,7 @@ def neutral_trajectory(
     Sc = S[:, 0]
     Tc = T[:, 0]
     Pc = P[:, 0]
-    Sppc = interp_fn(Pc, Sc)
-    Tppc = interp_fn(Pc, Tc)
-    s[0], t[0] = interp2_1d(p0, Pc, Sppc, Tppc)
+    s[0], t[0] = interp2_1d(p0, Pc, Sc, Tc, interp_fn)
     p[0] = p0
 
     # Loop over remaining casts
@@ -288,14 +283,10 @@ def neutral_trajectory(
         Tc = T[:, c]
         Pc = P[:, c]
 
-        # Interpolate Sc and Tc as piecewise polynomials of P
-        Sppc = interp_fn(Pc, Sc)
-        Tppc = interp_fn(Pc, Tc)
-
         # Make a neutral connection from previous bottle (s0,t0,p0) to the cast (S[:,c], T[:,c], P[:,c])
         K = np.sum(np.isfinite(Sc))
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
-            s[c - 1], t[c - 1], p[c - 1], Sc, Tc, Pc, Sppc, Tppc, K, eos, tol_p
+            s[c - 1], t[c - 1], p[c - 1], Sc, Tc, Pc, Sc, Tc, K, eos, interp_fn, tol_p
         )
 
         if np.isnan(p[c]):
