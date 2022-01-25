@@ -212,22 +212,21 @@ def interp(x, X, Y, fcn=linterp_i):
             Z = np.broadcast_to(Z, (*shape, Yshape[-1]))
 
             y, z = interp2_nd(x, X, Y, Z, fcn)
+            if shape == ():
+                y, z = y[()], z[()]
             return y, z
+        elif len(Y) > 2:
+            raise TypeError(
+                "If Y is a tuple, its length must be <= 2."
+                "Support for longer Y is not yet complete."
+            )
+        else:  # len(Y) == 1
+            # Extract the single element and proceed.
+            Y = Y[0]
 
-        else:
-            # This part is in development!  It seems to work, provided each
-            # element of Y is the same size and full (no broadcasting needed).
-            # However, it seems to be slower than just calling interp() several times...
+    Y = np.broadcast_to(Y, (*shape, Yshape[-1]))
 
-            # Numba fails typing if I do this broadcasting:
-            # Y = tuple(np.broadcast_to(Y1, (*shape, Yshape[-1])) for Y1 in Y)
-            # so we are just leave Y unbroadcasted... assume it is filled out!
-            y = interpm_nd(x, X, Y, fcn)
-
-    else:
-        Y = np.broadcast_to(Y, (*shape, Yshape[-1]))
-
-        y = interp_nd(x, X, Y, fcn)
+    y = interp_nd(x, X, Y, fcn)
 
     if shape == ():
         # Convert 0d array to scalar
@@ -286,7 +285,7 @@ def interp_1d(x, X, Y, fcn=linterp_i):
 @numba.njit
 def interp2_nd(x, X, Y, Z, fcn=linterp_i):
     """
-    Repeated interpolation with all inputs' dimensions agreeable
+    Repeated interpolation with all inputs' dimensions agreeable, twice.
     """
     y = np.empty(x.shape, dtype=np.float64)
     z = np.empty(x.shape, dtype=np.float64)
@@ -300,7 +299,7 @@ def interp2_nd(x, X, Y, Z, fcn=linterp_i):
 @numba.njit
 def interp2_1d(x, X, Y, Z, fcn=linterp_i):
     """
-    Do one interpolation problem.
+    Do one interpolation problem, twice.
     """
 
     # Check for edge cases
@@ -331,163 +330,26 @@ def interp2_1d(x, X, Y, Z, fcn=linterp_i):
     return fcn(x, X, Y, i), fcn(x, X, Z, i)
 
 
-# Like interp1_nd but Y is a tuple of things like Y from interp1_nd.
-@numba.njit
-def interpm_nd(x, X, Y, fcn=linterp_i):
-
-    y = [np.empty(x.shape, dtype=np.float64) for Y1 in Y]
-    Yn = [np.empty(X.shape[-1], dtype=np.float64) for Y1 in Y]
-    for n in np.ndindex(x.shape):
-        for i in range(len(Y)):
-            Yn[i] = Y[i][n]
-        yn = interpm_1d(x[n], X[n], Yn, fcn)
-        for i in range(len(Y)):
-            y[i][n] = yn[i]
-
-    return y
-
-
-# Like interp1_1d but Y is a tuple of things like Y from interp1_1d.
-@numba.njit
-def interpm_1d(x, X, Y, fcn=linterp_i):
-    """
-    Do one interpolation problem.
-    """
-
-    # Check for edge cases
-    if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
-        # return [np.nan for Y_ in Y]
-        return [np.nan for Y_ in Y]
-        # return [np.nan] * len(Y)
-
-    # i = searchsorted(X,x) is such that:
-    #   i = 0                   if x <= X[0] or all(isnan(X))
-    #   i = len(X)              if X[-1] < x or isnan(x)
-    #   X[i-1] < x <= X[i]      otherwise
-    #
-    # Having guaranteed above that
-    # x is not nan, and X[0] is not nan hence not all(isnan(X)),
-    # and X[0] <= x <= X[-1],
-    # then either
-    # (a) i == 0  and x == X[0], or
-    # (b) 1 <= i <= len(X)-1  and  X[i-1] < x <= X[i]
-    i = np.searchsorted(X, x)
-
-    # Next, merge (a) and (b) cases so that
-    #   1 <= i <= len(X) - 1
-    # is guaranteed, and
-    #   X[0 ] <= x <= X[1]  when  i == 1
-    #   X[i-1] < x <= X[i]  when  i > 1
-    i = max(1, i)
-
-    # Interpolate within the given interval
-    # return [fcn(x, X, Y_, i) for Y_ in Y]
-    # y = [0] * len(Y)
-    # for i in range(len(Y)):
-    #    y[i] = fcn(x, X, Y[i], i)
-    # return y
-    return [fcn(x, X, Y_, i) for Y_ in Y]
-
-
-# @numba.njit
-# def minterp_nd(x, X, *Y):
-
-#     y = [np.empty(x.shape, dtype=np.float64) for Y1 in Y]
-#     Yn = [np.empty(X.shape[-1], dtype=np.float64) for Y1 in Y]
-#     for n in np.ndindex(x.shape):
-#         for i in range(len(Y)):
-#             Yn[i] = Y[i][n]
-#         yn = minterp_1d(x[n], X[n], Yn)
-#         for i in range(len(Y)):
-#             y[i][n] = yn[i]
-
-#     return y
-
-
-# @numba.njit
-# def minterp_1d(x, X, *Y):
-#     """
-#     Do one interpolation problem.
-#     """
-
-#     # Check for edge cases
-#     if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
-#         # return [np.nan for Y_ in Y]
-#         # return tuple(np.nan for Y_ in Y)
-#         return [np.nan] * len(Y)
-
-#     # i = searchsorted(X,x) is such that:
-#     #   i = 0                   if x <= X[0] or all(isnan(X))
-#     #   i = len(X)              if X[-1] < x or isnan(x)
-#     #   X[i-1] < x <= X[i]      otherwise
-#     #
-#     # Having guaranteed above that
-#     # x is not nan, and X[0] is not nan hence not all(isnan(X)),
-#     # and X[0] <= x <= X[-1],
-#     # then either
-#     # (a) i == 0  and x == X[0], or
-#     # (b) 1 <= i <= len(X)-1  and  X[i-1] < x <= X[i]
-#     i = np.searchsorted(X, x)
-
-#     # Next, merge (a) and (b) cases so that
-#     #   1 <= i <= len(X) - 1
-#     # is guaranteed, and
-#     #   X[0 ] <= x <= X[1]  when  i == 1
-#     #   X[i-1] < x <= X[i]  when  i > 1
-#     i = max(1, i)
-
-#     # Interpolate within the given interval
-#     # return [fcn(x, X, Y_, i) for Y_ in Y]
-#     # y = [0] * len(Y)
-#     # for i in range(len(Y)):
-#     #    y[i] = fcn(x, X, Y[i], i)
-#     # return y
-#     return [linterp_i(x, X, Y_, i) for Y_ in Y]
-#     # return tuple(linterp_i(x, X, Y_, i) for Y_ in Y)
-
-
-# The following make_* functions aim to accelerate the interp, interp_nd, and
-# interp_1d routines by encapsulating `fcn`, and so avoiding passing the
-# function as an argument through their layers.   However, it seems that they
-# offer no speed-up at all!
-# @functools.lru_cache(maxsize=10)
-# def make_interp(fcn):
-#     def f(x, X, Y):
-#         return interp(x, X, Y, fcn)
-
-#     return f
-
-
-# @functools.lru_cache(maxsize=10)
-# def make_interp_nd(fcn):
-#     @numba.njit
-#     def f(x, X, Y):
-#         return interp_nd(x, X, Y, fcn)
-
-#     return f
-
-
-# @functools.lru_cache(maxsize=10)
-# def make_interp_1d(fcn):
-#     @numba.njit
-#     def f(x, X, Y):
-#         return interp_1d(x, X, Y, fcn)
-
-#     return f
-
-
-# linterp = make_interp(linterp_i)
-# pchip = make_interp(pchip_i)
-
-# lin_nd = make_interp_nd(linterp_i)
-# pchip_nd = make_interp_nd(pchip_i)
-
-# linterp_1d = make_interp_1d(linterp_i)
-# pchip_1d = make_interp_1d(pchip_i)
-
-
 @numba.njit
 def _pchip_coeffs(x, X, Y, i):
+    """
+    Calculate the coefficients of a cubic interpolant
+
+    Parameters
+    ----------
+    x, X, Y, i :
+        As in `pchip_i`
+
+    Returns
+    -------
+    s : float
+        Distance from the evaluation site to the nearest knot in `X` to the left.
+    dY, cY, bY : float
+        The first, second, and third order coefficients of the cubic interpolant,
+        such that the value of the interpolant at `x` is
+        `y = Y[i - 1] + s * (dY + s * (cY + s * bY))`
+
+    """
 
     # Pre-assign sizes for PCHIP variables.
     h = [0.0, 0.0, 0.0]
@@ -602,52 +464,3 @@ def _pchip_coeffs(x, X, Y, i):
         # return y
 
     return s, dY[0], cY, bY
-
-
-# These *_thru functions are like their counterparts above but they don't
-# pass the function through as an argument.  We could code everything like this,
-# but it would require creating new functions like these for each interpolation
-# type (linear, pchip, etc).  Passing a function through that codes just the
-# "atom" of interpolation is cleaner, and not really any slower.  These here
-# just for a speed test comparison.  And, it turns out, these are essentially
-# the same speed as using the interp functions above that do pass `fcn` around.
-@numba.njit
-def linterp_nd_thru(x, X, Y):
-    """
-    Linear interpolation with all inputs' dimensions agreeable
-    """
-    y = np.empty(x.shape, dtype=np.float64)
-    for n in np.ndindex(x.shape):
-        y[n] = linterp_1d_thru(x[n], X[n], Y[n])
-
-    return y
-
-
-@numba.njit
-def linterp_1d_thru(x, X, Y):
-    """
-    Evaluate a single interpolant.
-    """
-    if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
-        return np.nan
-
-    # i = searchsorted(X,x) is such that:
-    #   i = 0                   if x <= X[0]
-    #   i = len(X)              if X[-1] < x or np.isnan(x)
-    #   X[i-1] < x <= X[i]      otherwise
-    # Having guaranteed X[0] < x <= X[-1] and x is not nan, then
-    #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases.
-    # i = np.searchsorted(X, x)
-
-    # Having guaranteed X[0] <= x <= X[-1] and x is not nan, then
-    # (a) i == 0  and x == X[0], or
-    # (b) 1 <= i <= len(X)-1  and  X[i-1] < x <= X[i]
-    i = np.searchsorted(X, x)
-
-    # Change the i == 0 and x == x[0] condition so that after this,
-    # 1 <= i <= len(X)-1  and
-    # X[i-1] < x <= X[i] when i > 1
-    # X[0 ] <= x <= X[1] when i == 1
-    i = max(1, i)
-
-    return linterp_i(x, X, Y, i)
