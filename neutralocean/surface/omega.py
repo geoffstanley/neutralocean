@@ -9,7 +9,7 @@ from sksparse.cholmod import cholesky
 
 from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.interp import interp, linterp_i
+from neutralocean.interp1d import interp, linterp_i
 from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (

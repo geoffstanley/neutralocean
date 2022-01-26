@@ -8,96 +8,7 @@ temperature in terms of either pressure or depth in each water column.
 import numpy as np
 import numba
 
-
-@numba.njit
-def linterp_i(x, X, Y, i):
-    """
-    The "atom" of linear interpolation.
-
-    Parameters
-    ----------
-    x : float
-        The evaluation site
-
-    X : ndarray(float, 1d)
-        The independent data.
-
-    Y : ndarray(float, 1d)
-        The dependent data.
-
-    i : int
-        The interval of `X` that contains `x`.  Specifically,
-            (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
-            (b) `2 <= i <= len(X) - 1`  and  X[i-1] < x <= X[i]`.
-        These facts about `i` are assumed true; they are not checked.
-        (This function will not be called if `x < X[0]` or `X[-1] < x` or
-        `x` is nan or `X` are all nan.)
-
-    Returns
-    -------
-    y : float
-        The value of `Y` linearly interpolated to `X` at `x`.
-
-    """
-
-    # dx = (x - X[i-1]) => 0 guaranteed (and == 0 only if x == X[0])
-    return Y[i - 1] + (x - X[i - 1]) / (X[i] - X[i - 1]) * (Y[i] - Y[i - 1])
-
-
-@numba.njit
-def linterp_dx_i(x, X, Y, i):
-    """
-    The "atom" of the 1st derivative of linear interpolation.
-
-    Inputs and outputs analogous to `linterp_i`.
-    """
-
-    return (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
-
-
-@numba.njit
-def pchip_i(x, X, Y, i):
-    """
-    The "atom" of Piecewise Cubic Hermite Interpolating Polynomial (PCHIP) interpolation.
-
-    Inputs and outputs analogous to `linterp_i`.
-    """
-
-    s, dY, cY, bY = _pchip_coeffs(x, X, Y, i)
-    return Y[i - 1] + s * (dY + s * (cY + s * bY))
-
-
-@numba.njit
-def pchip_dx_i(x, X, Y, i):
-    """
-    The "atom" of the 1st derivative of PCHIP interpolation.
-
-    Inputs and outputs analogous to `linterp_i`.
-    """
-    s, dY, cY, bY = _pchip_coeffs(x, X, Y, i)
-    return dY + s * (2 * cY + 3 * s * bY)
-
-
-@numba.njit
-def pchip_dxx_i(x, X, Y, i):
-    """
-    The "atom" of the 2nd derivative of PCHIP interpolation.
-
-    Inputs and outputs analogous to `linterp_i`.
-    """
-    s, _, cY, bY = _pchip_coeffs(x, X, Y, i)
-    return 2 * cY + 6 * s * bY
-
-
-@numba.njit
-def pchip_dxxx_i(x, X, Y, i):
-    """
-    The "atom" of the 3rd derivative of PCHIP interpolation.
-
-    Inputs and outputs analogous to `linterp_i`.
-    """
-    _, _, _, bY = _pchip_coeffs(x, X, Y, i)
-    return 6 * bY
+from .linear import linterp_i
 
 
 def interp(x, X, Y, fcn=linterp_i):
@@ -210,7 +121,7 @@ def interp(x, X, Y, fcn=linterp_i):
             Y = np.broadcast_to(Y, (*shape, Yshape[-1]))
             Z = np.broadcast_to(Z, (*shape, Yshape[-1]))
 
-            y, z = interp2_nd(x, X, Y, Z, fcn)
+            y, z = interp_n_twice(x, X, Y, Z, fcn)
             if shape == ():
                 y, z = y[()], z[()]
             return y, z
@@ -225,7 +136,7 @@ def interp(x, X, Y, fcn=linterp_i):
 
     Y = np.broadcast_to(Y, (*shape, Yshape[-1]))
 
-    y = interp_nd(x, X, Y, fcn)
+    y = interp_n(x, X, Y, fcn)
 
     if shape == ():
         # Convert 0d array to scalar
@@ -235,19 +146,19 @@ def interp(x, X, Y, fcn=linterp_i):
 
 
 @numba.njit
-def interp_nd(x, X, Y, fcn=linterp_i):
+def interp_n(x, X, Y, fcn=linterp_i):
     """
     Repeated interpolation with all inputs' dimensions agreeable
     """
     y = np.empty(x.shape, dtype=np.float64)
     for n in np.ndindex(x.shape):
-        y[n] = interp_1d(x[n], X[n], Y[n], fcn)
+        y[n] = interp_1(x[n], X[n], Y[n], fcn)
 
     return y
 
 
 @numba.njit
-def interp_1d(x, X, Y, fcn=linterp_i):
+def interp_1(x, X, Y, fcn=linterp_i):
     """
     Do one interpolation problem.
     """
@@ -280,23 +191,23 @@ def interp_1d(x, X, Y, fcn=linterp_i):
     return fcn(x, X, Y, i)
 
 
-# Like interp1_nd but takes another argument, Z, that is like Y.
+# Like interp_n but takes another argument, Z, that is like Y.
 @numba.njit
-def interp2_nd(x, X, Y, Z, fcn=linterp_i):
+def interp_n_twice(x, X, Y, Z, fcn=linterp_i):
     """
     Repeated interpolation with all inputs' dimensions agreeable, twice.
     """
     y = np.empty(x.shape, dtype=np.float64)
     z = np.empty(x.shape, dtype=np.float64)
     for n in np.ndindex(x.shape):
-        y[n], z[n] = interp2_1d(x[n], X[n], Y[n], Z[n], fcn)
+        y[n], z[n] = interp_1_twice(x[n], X[n], Y[n], Z[n], fcn)
 
     return y, z
 
 
-# Like interp1_1d but takes another argument, Z, that is like Y.
+# Like interp_1 but takes another argument, Z, that is like Y.
 @numba.njit
-def interp2_1d(x, X, Y, Z, fcn=linterp_i):
+def interp_1_twice(x, X, Y, Z, fcn=linterp_i):
     """
     Do one interpolation problem, twice.
     """
@@ -329,137 +240,48 @@ def interp2_1d(x, X, Y, Z, fcn=linterp_i):
     return fcn(x, X, Y, i), fcn(x, X, Z, i)
 
 
-@numba.njit
-def _pchip_coeffs(x, X, Y, i):
-    """
-    Calculate the coefficients of a cubic interpolant
+# def interp1d(x, X, Y, interp_fns, d=0, i=None):
+#     """
+#     Interpolation in one dimension
 
-    Parameters
-    ----------
-    x, X, Y, i :
-        As in `pchip_i`
+#     Parameters
+#     ----------
+#     x : float
+#         The evaluation site
 
-    Returns
-    -------
-    s : float
-        Distance from the evaluation site to the nearest knot in `X` to the left.
-    dY, cY, bY : float
-        The first, second, and third order coefficients of the cubic interpolant,
-        such that the value of the interpolant at `x` is
-        `y = Y[i - 1] + s * (dY + s * (cY + s * bY))`
+#     X : ndarray(float, 1d)
+#         The independent data.
 
-    """
+#     Y : ndarray(float, 1d)
+#         The dependent data.
 
-    # Pre-assign sizes for PCHIP variables.
-    h = [0.0, 0.0, 0.0]
-    DY = [0.0, 0.0, 0.0]
-    dY = [0.0, 0.0]
+#     interpolant : tuple of functions
 
-    # Check whether x is adjacent to the start or end of this X
-    at_start = i == 1
-    at_end = (i == len(X) - 1) or np.isnan(X[i + 1]) or np.isnan(Y[i + 1])
+#     d : int, Default 0
+#         Evaluate the `d`'th derivative of the interpolant.
+#         If 0, this simply evaluates the interpolant.
 
-    if at_start and at_end:
-        # ||| X[0] <= x <= X[1] |||   Revert to Linear Interpolation
-        s = x - X[i - 1]
-        dY[0] = (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
-        # leave cY, bY = 0, 0
+#     i : int, Default None
+#         The interval of `X` that contains `x`.  Specifically,
+#             (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
+#             (b) `2 <= i <= len(X) - 1`  and  X[i-1] < x <= X[i]`.
+#         These facts about `i` are assumed true; they are not checked.
+#         (This function will not be called if `x < X[0]` or `X[-1] < x` or
+#         `x` is nan or `X` are all nan.)
+#         If None, the correct value will be determined internally.
 
-        # The following code evaluates the cubic interpolant, given `d` that
-        # specifies the number of derivatives to take.
-        # r = (x - X[i - 1]) / (X[i] - X[i - 1])
-        # if d == 0:
-        #     y = Y[i - 1] * (1 - r) + Y[i] * r
-        # elif d == 1:
-        #     y = (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
-        # else:
-        #     y = 0.0
+#     Returns
+#     -------
+#     y : float
+#         The value (if `d==0`) or the derivative (if `d==1`) of the interpolant
+#         for `Y` in terms of `X` evaluated at `x`.
+#     """
 
-    else:
-        if at_start:
-            #  ||| X[0] <= x <= X[1] < X[2] --->
-            h[1] = X[i] - X[i - 1]
-            h[2] = X[i + 1] - X[i]
-            DY[1] = (Y[i] - Y[i - 1]) / h[1]
-            DY[2] = (Y[i + 1] - Y[i]) / h[2]
-
-            #  Noncentered, shape-preserving, three-point formula:
-            dY[0] = ((2.0 * h[1] + h[2]) * DY[1] - h[1] * DY[2]) / (h[1] + h[2])
-            if np.sign(dY[0]) != np.sign(DY[1]):
-                dY[0] = 0.0
-            elif (np.sign(DY[1]) != np.sign(DY[2])) and (
-                np.abs(dY[0]) > np.abs(3.0 * DY[1])
-            ):
-                dY[0] = 3.0 * DY[1]
-
-            # Standard PCHIP formula
-            if np.sign(DY[1]) * np.sign(DY[2]) > 0.0:
-                w1 = 2.0 * h[2] + h[1]
-                w2 = h[2] + 2.0 * h[1]
-                dY[1] = (w1 + w2) / (w1 / DY[1] + w2 / DY[2])
-            else:
-                dY[1] = 0.0
-
-        elif at_end:
-            # <--- X[i-2] < X[i-1] < x <= X[i] |||
-            h[0] = X[i - 1] - X[i - 2]
-            h[1] = X[i] - X[i - 1]
-            DY[0] = (Y[i - 1] - Y[i - 2]) / h[0]
-            DY[1] = (Y[i] - Y[i - 1]) / h[1]
-
-            # Standard PCHIP formula
-            if np.sign(DY[0]) * np.sign(DY[1]) > 0.0:
-                w1 = 2.0 * h[1] + h[0]
-                w2 = h[1] + 2.0 * h[0]
-                dY[0] = (w1 + w2) / (w1 / DY[0] + w2 / DY[1])
-            else:
-                dY[0] = 0.0
-
-            #  Noncentered, shape-preserving, three-point formula:
-            dY[1] = ((h[0] + 2.0 * h[1]) * DY[1] - h[1] * DY[0]) / (h[0] + h[1])
-            if np.sign(dY[1]) != np.sign(DY[1]):
-                dY[1] = 0.0
-            elif (np.sign(DY[1]) != np.sign(DY[0])) and (
-                np.abs(dY[1]) > np.abs(3 * DY[1])
-            ):
-
-                dY[1] = 3.0 * DY[1]
-
-        else:
-            # <--- X[i-2] < X[i-1] < x <= X[i] < X[i+1] --->
-            h[0] = X[i - 1] - X[i - 2]  # Way faster to do this
-            h[1] = X[i] - X[i - 1]  # than
-            h[2] = X[i + 1] - X[i]  # diff(X(i-2:i+1))
-            DY[0] = (Y[i - 1] - Y[i - 2]) / h[0]
-            DY[1] = (Y[i] - Y[i - 1]) / h[1]
-            DY[2] = (Y[i + 1] - Y[i]) / h[2]
-
-            # Standard PCHIP formula
-            for j in range(2):
-                if np.sign(DY[j]) * np.sign(DY[j + 1]) > 0.0:
-                    w1 = 2.0 * h[j + 1] + h[j]
-                    w2 = h[j + 1] + 2.0 * h[j]
-                    dY[j] = (w1 + w2) / (w1 / DY[j] + w2 / DY[j + 1])
-                else:
-                    dY[j] = 0.0
-
-        # Polynomial coefficients for this piece
-        s = x - X[i - 1]
-        cY = (3.0 * DY[1] - 2.0 * dY[0] - dY[1]) / h[1]
-        bY = (dY[0] - 2.0 * DY[1] + dY[1]) / h[1] ** 2
-
-        # The following code evaluates the cubic interpolant, given `d` that
-        # specifies the number of derivatives to take.
-        # if d == 0:
-        #     y = Y[i - 1] + s * (dY[0] + s * (cY + s * bY))
-        # elif d == 1:  # first derivative
-        #     y = dY[0] + s * (2 * cY + 3 * s * bY)
-        # elif d == 2:  # second derivative
-        #     y = 2 * cY + 6 * s * bY
-        # elif d == 3:  # third derivative
-        #     y = 6 * bY
-        # else:
-        #     y = 0.0
-        # return y
-
-    return s, dY[0], cY, bY
+#     if d < len(interp_fns):
+#         fcn = interp_fns[d]
+#     else:
+#         return 0.0
+#     if i is None:
+#         return interp_1d(x, X, Y, fcn)
+#     else:
+#         return fcn(x, X, Y, i)

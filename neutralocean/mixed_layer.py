@@ -1,6 +1,6 @@
 """ Mixed Layer """
 
-from neutralocean.interp import interp, linterp_i
+from neutralocean.interp1d import interp, linterp_i
 from neutralocean.eos.tools import vectorize_eos
 from neutralocean.lib import _process_casts, _process_vert_dim
 

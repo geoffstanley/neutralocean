@@ -1,7 +1,7 @@
 # %% Imports
 
 # Functions to make the Equation of State
-from neutralocean.eos.tools import make_eos, make_eos_s_t
+from neutralocean import make_eos, make_eos_s_t
 
 # Functions to compute various approximately neutral surfaces
 from neutralocean import potential_surf, anomaly_surf, omega_surf
@@ -222,16 +222,15 @@ from neutralocean.mixed_layer import mixed_layer
 from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.label import veronis_density
 from neutralocean.lib import _process_casts, find_first_nan
-from neutralocean.interp_ppc import linear_coeffs, interp2
+from neutralocean.interp1d import interp, linterp_i, linterp_dx_i
 from neutralocean.eos.tools import make_eos_p
 from neutralocean.traj import ntp_bottle_to_cast, _ntp_bottle_to_cast
 
 # %% Veronis Density, used to label an approx neutral surface
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
-ρ_v = veronis_density(
-    S_ref_cast, T_ref_cast, Z, z0, eos=eos, eos_s_t=eos_s_t
-)  # 1027.7700462375435
+ρ_v = veronis_density(S_ref_cast, T_ref_cast, Z, z0, eos=eos, eos_s_t=eos_s_t)
+# check value for above: 1027.7700462375435
 print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
     f" has Veronis density {ρ_v} kg m-3"
@@ -279,9 +278,7 @@ s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # Or the more manual version:
 n_good = find_first_nan(S1)[()]
-S1ppc = linear_coeffs(Z, S1)
-T1ppc = linear_coeffs(Z, T1)
-s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z, S1ppc, T1ppc, n_good, eos, 1e-4)
+s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z, n_good, eos, linterp_i, 1e-4)
 
 
 # %% Work with Numpy arrays instead of xarrays
@@ -310,17 +307,13 @@ s, t, z, d = anomaly_surf(
 # Create function for partial deriv of equation of state with respect to depth z
 eos_z = make_eos_p("jmd95", g["grav"], g["ρ_c"])
 
-# Pre-compute linear interpolants for S and T in terms of Z
-Sppc = linear_coeffs(Z, S)
-Tppc = linear_coeffs(Z, T)
-
 # Earth sidereal day period [s]
 Earth_day = 86164
 
 # Coriolis param [s-1] on tracer grid
 f = 2 * (2 * np.pi / Earth_day) * np.sin(g["YCvec"] * (np.pi / 180))
 
-sz, tz = interp2(z, Z, S, Sppc, T, Tppc, 1)  # ∂S/∂Z and ∂T/∂Z, on the surface
+sz, tz = interp(z, Z, (S, T), linterp_dx_i)  # ∂S/∂Z and ∂T/∂Z, on the surface
 rs, rt = eos_s_t(s, t, z)  # ∂ρ/∂S and ∂ρ/∂T, on the surface
 
 # ∂δ/∂z on the surface, where δ is the in-situ density anomaly

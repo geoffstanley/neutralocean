@@ -5,7 +5,7 @@ import numba
 import functools
 
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.interp import interp2_1d
+from neutralocean.interp1d import interp_1_twice
 
 
 @functools.lru_cache(maxsize=10)
@@ -67,7 +67,7 @@ def _vertsolve(S, T, P, n_good, ref, d0, tol_p, eos, interp_fn, zero_func):
                 p[n] = brent(zero_func, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = interp2_1d(p[n], Pn, Sn, Tn)
+                s[n], t[n] = interp_1_twice(p[n], Pn, Sn, Tn, interp_fn)
 
     return s, t, p
 
@@ -106,7 +106,7 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, interp_fn):
                 p[n] = brent(_zero_potential, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = interp2_1d(p[n], Pn, Sn, Tn, interp_fn)
+                s[n], t[n] = interp_1_twice(p[n], Pn, Sn, Tn, interp_fn)
 
             else:
                 # Ensure s,t,p all have the same nan structure
@@ -123,7 +123,7 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, interp_fn):
 @numba.njit
 def _zero_potential(p, S, T, P, ref_p, isoval, eos, interp_fn):
     # Evaluate the potential density in a given cast, minus a given isovalue
-    s, t = interp2_1d(p, P, S, T, interp_fn)
+    s, t = interp_1_twice(p, P, S, T, interp_fn)
     return eos(s, t, ref_p) - isoval
 
 
@@ -131,5 +131,5 @@ def _zero_potential(p, S, T, P, ref_p, isoval, eos, interp_fn):
 def _zero_anomaly(p, S, T, P, ref, isoval, eos, interp_fn):
     # Evaluate the specific volume (or in-situ density) anomaly in a given cast,
     # minus a given isovalue
-    s, t = interp2_1d(p, P, S, T, interp_fn)
+    s, t = interp_1_twice(p, P, S, T, interp_fn)
     return eos(s, t, p) - eos(ref[0], ref[1], p) - isoval

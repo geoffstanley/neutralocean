@@ -1,6 +1,7 @@
 import numpy as np
 
-from neutralocean.interp_ppc import linear_coeffs, interp2_1d, interp_1d_i, dinterp_1d_i
+from neutralocean.interp1d import interp_1_twice, linterp_i, linterp_dx_i
+
 
 # CHECK VALUE from MATLAB:
 # >> veronis_density(0, S(:,i0,j0), T(:,i0,j0), Z, 10, 1500, 1, @ppc_linterp)
@@ -14,7 +15,7 @@ def veronis_density(
     p_ref=0.0,
     p0=None,
     dp=1.0,
-    interp_fn=linear_coeffs,
+    interp_fns=(linterp_i, linterp_dx_i),
     eos="gsw",
     eos_s_t=None,
     grav=None,
@@ -120,30 +121,32 @@ def veronis_density(
     if p0 is None:
         p0 = P[0]
 
-    # Interpolate S and T as piecewise polynomials of P
-    Sppc = interp_fn(P, S)
-    Tppc = interp_fn(P, T)
-
-    # i = np.searchsorted(X,x) is such that:
-    #   i = 0                   if x <= X[0]
-    #   i = len(X)              if X[-1] < x or np.isnan(x)
-    #   X[i-1] < x <= X[i]      otherwise
-    # Having guaranteed X[0] < x <= X[-1] and x is not nan, then
-    #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases,
     if (
         np.isnan(p0)
+        or np.isnan(p1)
+        or np.isnan(P[0])
         or p0 < P[0]
         or P[-1] < p0
-        or np.isnan(p1)
         or p1 < P[0]
         or P[-1] < p1
     ):
         return np.nan
 
+    # i = np.searchsorted(X,x) is such that:
+    #   i = 0                   if x <= X[0] or all(isnan(X))
+    #   i = len(X)              if X[-1] < x or isnan(x)
+    #   X[i-1] < x <= X[i]      otherwise
+    # Having guaranteed X[0] < x <= X[-1] and x is not nan, then
+    #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases,
     if p0 == P[0]:
         k0 = 0  # p0 == P[0]
     else:
         k0 = np.searchsorted(P, p0)  # P[k0-1] < p0 <= P[k0]
+
+    # P[k0-1] <= p0 <= P[k0]  when  k0 == 1
+    # P[k0-1] <  p0 <= P[k0]  when  k0 > 1
+    k0 = max(1, np.searchsorted(P, p0))
+    k1 = max(1, np.searchsorted(P, p1))
 
     if p1 == P[0]:
         k1 = 0
@@ -151,25 +154,27 @@ def veronis_density(
         k1 = np.searchsorted(P, p1)
 
     # Integrate from p0 to P[k0]
-    d1 = _int_x_k(p0, k0, dp, P, S, T, Sppc, Tppc, eos_s_t)
+    d1 = _int_x_k(p0, k0, dp, P, S, T, eos_s_t, interp_fns)
 
     # Integrate from P[k0] to P[k1]
     for k in range(k0, k1):
-        # Integrate from P[k] to P[k+1]
-        d1 += _int_x_k(P[k], k + 1, dp, P, S, T, Sppc, Tppc, eos_s_t)
+        # Integrate from P[k] to P[k+1], for k=k0 to k=k1-1
+        d1 += _int_x_k(P[k], k + 1, dp, P, S, T, eos_s_t, interp_fns)
 
     # Integrate from p1 to P[k1], and subtract this
-    d1 -= _int_x_k(p1, k1, dp, P, S, T, Sppc, Tppc, eos_s_t)
+    d1 -= _int_x_k(p1, k1, dp, P, S, T, eos_s_t, interp_fns)
 
     # Calculate potential density, referenced to p_ref, at p0
-    s0, t0 = interp2_1d(p0, P, S, Sppc, T, Tppc)
+    s0, t0 = interp_1_twice(p0, P, S, T, interp_fns[0])
     d0 = eos(s0, t0, p_ref)
 
     return d0 + d1
 
 
-def _int_x_k(p, k, dp, P, S, T, Sppc, Tppc, eos_s_t):
+def _int_x_k(p, k, dp, P, S, T, eos_s_t, interp_fns):
     # Integrate from p to P[k] using trapezoidal integration with spacing dp or smaller
+
+    # If p == P[k], this returns 0.0
 
     n = np.int(np.ceil((P[k] - p) / dp)) + 1  # points between p and P[k], inclusive
     p_ = np.linspace(p, P[k], n)  # intervals are not larger than dp
@@ -182,10 +187,10 @@ def _int_x_k(p, k, dp, P, S, T, Sppc, Tppc, eos_s_t):
     dsdp_ = np.zeros(n)
     dtdp_ = np.zeros(n)
     for i in range(n):
-        s_[i] = interp_1d_i(p_[i], P, S, Sppc, k - 1)
-        t_[i] = interp_1d_i(p_[i], P, T, Tppc, k - 1)
-        dsdp_[i] = dinterp_1d_i(p_[i], P, S, Sppc, 1, k - 1)
-        dtdp_[i] = dinterp_1d_i(p_[i], P, T, Tppc, 1, k - 1)
+        s_[i] = interp_fns[0](p_[i], P, S, k)
+        t_[i] = interp_fns[0](p_[i], P, T, k)
+        dsdp_[i] = interp_fns[1](p_[i], P, S, k)
+        dtdp_[i] = interp_fns[1](p_[i], P, T, k)
 
     # To use linear interpolation internally, replace the above lines with the following 7 lines
     # dp = P[k] - P[k-1]
