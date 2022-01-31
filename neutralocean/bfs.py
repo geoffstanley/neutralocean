@@ -1,10 +1,10 @@
 import numpy as np
-import numba
+import numba as nb
 
 from neutralocean.traj import _ntp_bottle_to_cast
 
 
-@numba.njit
+@nb.njit
 def bfs_conncomp1(G, A, r):
     """
     Find the Connected Component containing 1 reference location using
@@ -85,7 +85,7 @@ def bfs_conncomp1(G, A, r):
     return qu, qt
 
 
-@numba.njit
+@nb.njit
 def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, interp_fn, p_ml):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting
@@ -137,11 +137,12 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, interp_fn, p_m
         This should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
-    interp_fn : function, Default ``linterp_i``
+    interp_fn : function
 
-        Interpolation function.
-        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
-        ``pchip_i`` for PCHIP interpolation.
+        Function to interpolate two dependent variables at once. Construct this as
+        `neutralocean.interp1d.interp1d.make_interpolator("linear", kind="1", twice=True)`
+        for linear interpolation.  For other interpolants, replace "linear"
+        (see `make_interpolator` documentation).
 
     p_ml : ndarray
 
@@ -219,9 +220,9 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, interp_fn, p_m
                         T[n],
                         P[n],
                         n_good[n],
+                        tol_p,
                         eos,
                         interp_fn,
-                        tol_p,
                     )
 
                     if np.isfinite(p[n]) and p[n] > p_ml[n]:

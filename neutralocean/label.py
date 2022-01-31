@@ -1,12 +1,11 @@
 import numpy as np
 
-from neutralocean.interp1d import interp_1_twice, linterp_i, linterp_dx_i
+from neutralocean.interp1d import make_interpolator, make_kernel
 
 
 # CHECK VALUE from MATLAB:
 # >> veronis_density(0, S(:,i0,j0), T(:,i0,j0), Z, 10, 1500, 1, @ppc_linterp)
 # 1027.770044499011
-# def veronis_density(S, T, P, p1, **kwargs):
 def veronis_density(
     S,
     T,
@@ -15,7 +14,7 @@ def veronis_density(
     p_ref=0.0,
     p0=None,
     dp=1.0,
-    interp_fns=(linterp_i, linterp_dx_i),
+    interp="linear",
     eos="gsw",
     eos_s_t=None,
     grav=None,
@@ -68,11 +67,12 @@ def veronis_density(
         Maximum interval of pressure or depth in trapezoidal numerical
         integration
 
-    interp_fn : function, Default ``linear_coeffs``
+    interp : str, Default ``linear''
 
-        Function that calculates coefficients of piecewise polynomial
-        interpolants of `S` and `T` as functions of `P`.  Options include
-        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+        Method for vertical interpolation.  Use ``linear'' for linear
+        interpolation, and ``pchip'' for Piecewise Cubic Hermite Interpolating
+        Polynomials.  Other interpolants can be added through the subpackage,
+        `interp1d`.
 
     eos : function
 
@@ -118,6 +118,11 @@ def veronis_density(
     # assert(isscalar(p0), 'p0 must be a scalar')
     # assert(isscalar(p1), 'p1 must be a scalar')
 
+    # Get interpolation kernels for 0th and 1st derivative
+    interp_kers = make_kernel(interp, (0, 1))
+
+    interp_1_twice = make_interpolator(interp, 0, "1", True)
+
     if p0 is None:
         p0 = P[0]
 
@@ -132,46 +137,31 @@ def veronis_density(
     ):
         return np.nan
 
-    # i = np.searchsorted(X,x) is such that:
-    #   i = 0                   if x <= X[0] or all(isnan(X))
-    #   i = len(X)              if X[-1] < x or isnan(x)
-    #   X[i-1] < x <= X[i]      otherwise
-    # Having guaranteed X[0] < x <= X[-1] and x is not nan, then
-    #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases,
-    if p0 == P[0]:
-        k0 = 0  # p0 == P[0]
-    else:
-        k0 = np.searchsorted(P, p0)  # P[k0-1] < p0 <= P[k0]
-
     # P[k0-1] <= p0 <= P[k0]  when  k0 == 1
     # P[k0-1] <  p0 <= P[k0]  when  k0 > 1
+    # Similarly for k1.
     k0 = max(1, np.searchsorted(P, p0))
     k1 = max(1, np.searchsorted(P, p1))
 
-    if p1 == P[0]:
-        k1 = 0
-    else:
-        k1 = np.searchsorted(P, p1)
-
     # Integrate from p0 to P[k0]
-    d1 = _int_x_k(p0, k0, dp, P, S, T, eos_s_t, interp_fns)
+    d1 = _int_x_k(p0, k0, dp, P, S, T, eos_s_t, interp_kers)
 
     # Integrate from P[k0] to P[k1]
     for k in range(k0, k1):
         # Integrate from P[k] to P[k+1], for k=k0 to k=k1-1
-        d1 += _int_x_k(P[k], k + 1, dp, P, S, T, eos_s_t, interp_fns)
+        d1 += _int_x_k(P[k], k + 1, dp, P, S, T, eos_s_t, interp_kers)
 
     # Integrate from p1 to P[k1], and subtract this
-    d1 -= _int_x_k(p1, k1, dp, P, S, T, eos_s_t, interp_fns)
+    d1 -= _int_x_k(p1, k1, dp, P, S, T, eos_s_t, interp_kers)
 
     # Calculate potential density, referenced to p_ref, at p0
-    s0, t0 = interp_1_twice(p0, P, S, T, interp_fns[0])
+    s0, t0 = interp_1_twice(p0, P, S, T)
     d0 = eos(s0, t0, p_ref)
 
     return d0 + d1
 
 
-def _int_x_k(p, k, dp, P, S, T, eos_s_t, interp_fns):
+def _int_x_k(p, k, dp, P, S, T, eos_s_t, interp_kers):
     # Integrate from p to P[k] using trapezoidal integration with spacing dp or smaller
 
     # If p == P[k], this returns 0.0
@@ -187,10 +177,10 @@ def _int_x_k(p, k, dp, P, S, T, eos_s_t, interp_fns):
     dsdp_ = np.zeros(n)
     dtdp_ = np.zeros(n)
     for i in range(n):
-        s_[i] = interp_fns[0](p_[i], P, S, k)
-        t_[i] = interp_fns[0](p_[i], P, T, k)
-        dsdp_[i] = interp_fns[1](p_[i], P, S, k)
-        dtdp_[i] = interp_fns[1](p_[i], P, T, k)
+        s_[i] = interp_kers[0](p_[i], P, S, k)
+        t_[i] = interp_kers[0](p_[i], P, T, k)
+        dsdp_[i] = interp_kers[1](p_[i], P, S, k)
+        dtdp_[i] = interp_kers[1](p_[i], P, T, k)
 
     # To use linear interpolation internally, replace the above lines with the following 7 lines
     # dp = P[k] - P[k-1]

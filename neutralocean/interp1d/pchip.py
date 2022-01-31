@@ -1,5 +1,6 @@
+"""Kernels for Piecewise Cubic Hermite Interpolating Polynomials (PCHIPs)"""
 import numpy as np
-import numba
+import numba as nb
 
 # from .interp import interp1d
 
@@ -42,8 +43,8 @@ import numba
 #     return interp1d(x, X, Y, (pchip_i, pchip_dx_i, pchip_dxx_i, pchip_dxxx_i), d, i)
 
 
-@numba.njit
-def pchip_i(x, X, Y, i):
+@nb.njit
+def _pchip(x, X, Y, i):
     """
     The "atom" of Piecewise Cubic Hermite Interpolating Polynomial (PCHIP) interpolation.
 
@@ -54,8 +55,8 @@ def pchip_i(x, X, Y, i):
     return Y[i - 1] + s * (dY + s * (cY + s * bY))
 
 
-@numba.njit
-def pchip_dx_i(x, X, Y, i):
+@nb.njit
+def _pchip1(x, X, Y, i):
     """
     The "atom" of the 1st derivative of PCHIP interpolation.
 
@@ -65,8 +66,8 @@ def pchip_dx_i(x, X, Y, i):
     return dY + s * (2 * cY + 3 * s * bY)
 
 
-@numba.njit
-def pchip_dxx_i(x, X, Y, i):
+@nb.njit
+def _pchip2(x, X, Y, i):
     """
     The "atom" of the 2nd derivative of PCHIP interpolation.
 
@@ -76,8 +77,8 @@ def pchip_dxx_i(x, X, Y, i):
     return 2 * cY + 6 * s * bY
 
 
-@numba.njit
-def pchip_dxxx_i(x, X, Y, i):
+@nb.njit
+def _pchip3(x, X, Y, i):
     """
     The "atom" of the 3rd derivative of PCHIP interpolation.
 
@@ -87,22 +88,22 @@ def pchip_dxxx_i(x, X, Y, i):
     return 6 * bY
 
 
-@numba.njit
-def pchip_i_d(x, X, Y, i, d):
+@nb.njit
+def _pchipd(x, X, Y, i, d):
 
     if d == 0:
-        return pchip_i(x, X, Y, i)
+        return _pchip(x, X, Y, i)
     elif d == 1:
-        return pchip_dx_i(x, X, Y, i)
+        return _pchip1(x, X, Y, i)
     elif d == 2:
-        return pchip_dxx_i(x, X, Y, i)
+        return _pchip2(x, X, Y, i)
     elif d == 3:
-        return pchip_dxxx_i(x, X, Y, i)
+        return _pchip3(x, X, Y, i)
     else:
         return 0.0
 
 
-@numba.njit
+@nb.njit
 def _pchip_coeffs(x, X, Y, i):
     """
     Calculate the coefficients of a cubic interpolant

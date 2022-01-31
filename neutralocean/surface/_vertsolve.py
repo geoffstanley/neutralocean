@@ -1,11 +1,10 @@
 """Functions to handle updating the pressure / depth of a surface, by 
 solving a nonlinear equation in the vertical dimension of each water column"""
 import numpy as np
-import numba
+import numba as nb
 import functools
 
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.interp1d import interp_1_twice
 
 
 @functools.lru_cache(maxsize=10)
@@ -13,20 +12,20 @@ def _make_vertsolve(eos, interp_fn, ans_type):
 
     if ans_type == "omega":
 
-        @numba.njit
+        @nb.njit
         def f(*args):
             _vertsolve_omega(*args, eos, interp_fn)
             return None
 
     elif ans_type == "potential":
 
-        @numba.njit
+        @nb.njit
         def f(*args):
             return _vertsolve(*args, eos, interp_fn, _zero_potential)
 
     elif ans_type == "anomaly":
 
-        @numba.njit
+        @nb.njit
         def f(*args):
             return _vertsolve(*args, eos, interp_fn, _zero_anomaly)
 
@@ -36,7 +35,7 @@ def _make_vertsolve(eos, interp_fn, ans_type):
     return f
 
 
-@numba.njit
+@nb.njit
 def _vertsolve(S, T, P, n_good, ref, d0, tol_p, eos, interp_fn, zero_func):
 
     s = np.full(n_good.shape, np.nan)
@@ -67,12 +66,12 @@ def _vertsolve(S, T, P, n_good, ref, d0, tol_p, eos, interp_fn, zero_func):
                 p[n] = brent(zero_func, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = interp_1_twice(p[n], Pn, Sn, Tn, interp_fn)
+                s[n], t[n] = interp_fn(p[n], Pn, Sn, Tn)
 
     return s, t, p
 
 
-@numba.njit
+@nb.njit
 def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, interp_fn):
     # Note!  mutates s, t, p
 
@@ -106,7 +105,7 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, interp_fn):
                 p[n] = brent(_zero_potential, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = interp_1_twice(p[n], Pn, Sn, Tn, interp_fn)
+                s[n], t[n] = interp_fn(p[n], Pn, Sn, Tn)
 
             else:
                 # Ensure s,t,p all have the same nan structure
@@ -120,16 +119,16 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, interp_fn):
     return None
 
 
-@numba.njit
+@nb.njit
 def _zero_potential(p, S, T, P, ref_p, isoval, eos, interp_fn):
     # Evaluate the potential density in a given cast, minus a given isovalue
-    s, t = interp_1_twice(p, P, S, T, interp_fn)
+    s, t = interp_fn(p, P, S, T)
     return eos(s, t, ref_p) - isoval
 
 
-@numba.njit
+@nb.njit
 def _zero_anomaly(p, S, T, P, ref, isoval, eos, interp_fn):
     # Evaluate the specific volume (or in-situ density) anomaly in a given cast,
     # minus a given isovalue
-    s, t = interp_1_twice(p, P, S, T, interp_fn)
+    s, t = interp_fn(p, P, S, T)
     return eos(s, t, p) - eos(ref[0], ref[1], p) - isoval

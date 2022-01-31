@@ -1,21 +1,21 @@
 """Neutral Trajectory and related functions"""
 
 import numpy as np
-import numba
+import numba as nb
 
-from neutralocean.interp1d import linterp_i, interp_1_twice
+from neutralocean.interp1d import make_interpolator
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.lib import find_first_nan
 
 
-@numba.njit
+@nb.njit
 def _func(p, sB, tB, pB, S, T, P, eos, interp_fn):
     # Evaluate difference between (a) eos at location on the cast (S, T, P)
     # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB)
     # here, eos is always evaluated at the average pressure or depth, (p +
     # pB)/2.
-    s, t = interp_1_twice(p, P, S, T, interp_fn)
+    s, t = interp_fn(p, P, S, T)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
 
@@ -28,7 +28,7 @@ def ntp_bottle_to_cast(
     T,
     P,
     tol_p=1e-4,
-    interp_fn=linterp_i,
+    interp="linear",
     eos="gsw",
     grav=None,
     rho_c=None,
@@ -71,11 +71,12 @@ def ntp_bottle_to_cast(
         Error tolerance in terms of pressure or depth when searching for a root
         of the nonlinear equation.  Units are the same as `P`.
 
-    interp_fn : function, Default ``linterp_i``
+    interp : str, Default 'linear'
 
-        Interpolation function.
-        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
-        ``pchip_i`` for PCHIP interpolation.
+        Method for vertical interpolation.  Use 'linear' for linear
+        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Polynomials.  Other interpolants can be added through the subpackage,
+        `interp1d`.
 
     eos : str or function, Default 'gsw'
 
@@ -105,13 +106,14 @@ def ntp_bottle_to_cast(
     """
 
     eos = make_eos(eos, grav, rho_c)
+    interp_fn = make_interpolator(interp, 0, "1", True)
     n_good = find_first_nan(S)
 
-    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, eos, interp_fn, tol_p)
+    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, tol_p, eos, interp_fn)
 
 
-@numba.njit
-def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, eos, interp_fn, tol_p):
+@nb.njit
+def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, tol_p, eos, interp_fn):
     """Find the neutral tangent plane from a bottle to a cast
 
     Fast version of `ntp_bottle_to_cast`, with all inputs supplied.  See
@@ -138,11 +140,12 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, eos, interp_fn, tol_p):
         This function should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
-    interp_fn : function, Default ``linterp_i``
+    interp_fn : function
 
-        Interpolation function.
-        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
-        ``pchip_i`` for PCHIP interpolation.
+        Function to interpolate two dependent variables at once. Construct this as
+        `neutralocean.interp1d.make_interpolator("linear", kind="1", twice=True)`
+        for linear interpolation.  For other interpolants, replace "linear"
+        (see `make_interpolator` documentation).
 
     tol_p : float, Default 1e-4
         See ntp_bottle_to_cast
@@ -166,7 +169,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, eos, interp_fn, tol_p):
             p = brent(_func, lb, ub, tol_p, args)
 
             # Interpolate S and T onto the updated surface
-            s, t = interp_1_twice(p, P, S, T, interp_fn)
+            s, t = interp_fn(p, P, S, T)
 
         else:
             s, t, p = np.nan, np.nan, np.nan
@@ -186,7 +189,7 @@ def neutral_trajectory(
     s0=None,
     t0=None,
     tol_p=1e-4,
-    interp_fn=linterp_i,
+    interp="linear",
     eos="gsw",
     grav=None,
     rho_c=None,
@@ -229,11 +232,12 @@ def neutral_trajectory(
         Error tolerance when root-finding to update the pressure / depth of
         the surface in each water column. Units are the same as `P`.
 
-    interp_fn : function, Default ``linterp_i``
+    interp : str, Default 'linear'
 
-        Interpolation function.
-        From ``interp.py``, use ``linterp_i`` for linear interpolation, and
-        ``pchip_i`` for PCHIP interpolation.
+        Method for vertical interpolation.  Use 'linear' for linear
+        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Polynomials.  Other interpolants can be added through the subpackage,
+        `interp1d`.
 
     eos : str or function, Default 'gsw'
 
@@ -260,6 +264,7 @@ def neutral_trajectory(
     """
 
     eos = make_eos(eos, grav, rho_c)
+    interp = make_interpolator(interp, 0, "1", True)
 
     nk, nc = S.shape
     # assert(all(size(T) == size(S)), 'T must be same size as S')
@@ -273,7 +278,7 @@ def neutral_trajectory(
     Sc = S[:, 0]
     Tc = T[:, 0]
     Pc = P[:, 0]
-    s[0], t[0] = interp_1_twice(p0, Pc, Sc, Tc, interp_fn)
+    s[0], t[0] = interp(p0, Pc, Sc, Tc)
     p[0] = p0
 
     # Loop over remaining casts
@@ -286,7 +291,7 @@ def neutral_trajectory(
         # Make a neutral connection from previous bottle (s0,t0,p0) to the cast (S[:,c], T[:,c], P[:,c])
         K = np.sum(np.isfinite(Sc))
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
-            s[c - 1], t[c - 1], p[c - 1], Sc, Tc, Pc, Sc, Tc, K, eos, interp_fn, tol_p
+            s[c - 1], t[c - 1], p[c - 1], Sc, Tc, Pc, Sc, Tc, K, eos, interp, tol_p
         )
 
         if np.isnan(p[c]):
