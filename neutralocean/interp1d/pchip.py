@@ -51,7 +51,9 @@ def _pchip(x, X, Y, i):
     Inputs and outputs analogous to `linterp_i`.
     """
 
-    s, dY, cY, bY = _pchip_coeffs(x, X, Y, i)
+    # s, dY, cY, bY = _pchip_coeffs(x, X, Y, i)
+    s = x - X[i - 1]
+    dY, cY, bY = _pchip_coeffs(X, Y, i)
     return Y[i - 1] + s * (dY + s * (cY + s * bY))
 
 
@@ -62,7 +64,8 @@ def _pchip1(x, X, Y, i):
 
     Inputs and outputs analogous to `linterp_i`.
     """
-    s, dY, cY, bY = _pchip_coeffs(x, X, Y, i)
+    s = x - X[i - 1]
+    dY, cY, bY = _pchip_coeffs(X, Y, i)
     return dY + s * (2 * cY + 3 * s * bY)
 
 
@@ -73,7 +76,8 @@ def _pchip2(x, X, Y, i):
 
     Inputs and outputs analogous to `linterp_i`.
     """
-    s, _, cY, bY = _pchip_coeffs(x, X, Y, i)
+    s = x - X[i - 1]
+    _, cY, bY = _pchip_coeffs(X, Y, i)
     return 2 * cY + 6 * s * bY
 
 
@@ -84,7 +88,7 @@ def _pchip3(x, X, Y, i):
 
     Inputs and outputs analogous to `linterp_i`.
     """
-    _, _, _, bY = _pchip_coeffs(x, X, Y, i)
+    _, _, bY = _pchip_coeffs(X, Y, i)
     return 6 * bY
 
 
@@ -104,19 +108,17 @@ def _pchipd(x, X, Y, i, d):
 
 
 @nb.njit
-def _pchip_coeffs(x, X, Y, i):
+def _pchip_coeffs(X, Y, i):
     """
     Calculate the coefficients of a cubic interpolant
 
     Parameters
     ----------
-    x, X, Y, i :
+    X, Y, i :
         As in `pchip_i`
 
     Returns
     -------
-    s : float
-        Distance from the evaluation site to the nearest knot in `X` to the left.
     dY, cY, bY : float
         The first, second, and third order coefficients of the cubic interpolant,
         such that the value of the interpolant at `x` is
@@ -135,7 +137,7 @@ def _pchip_coeffs(x, X, Y, i):
 
     if at_start and at_end:
         # ||| X[0] <= x <= X[1] |||   Revert to Linear Interpolation
-        s = x - X[i - 1]
+
         dY[0] = (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
         # leave cY, bY = 0, 0
 
@@ -218,7 +220,6 @@ def _pchip_coeffs(x, X, Y, i):
                     dY[j] = 0.0
 
         # Polynomial coefficients for this piece
-        s = x - X[i - 1]
         cY = (3.0 * DY[1] - 2.0 * dY[0] - dY[1]) / h[1]
         bY = (dY[0] - 2.0 * DY[1] + dY[1]) / h[1] ** 2
 
@@ -236,4 +237,4 @@ def _pchip_coeffs(x, X, Y, i):
         #     y = 0.0
         # return y
 
-    return s, dY[0], cY, bY
+    return dY[0], cY, bY
