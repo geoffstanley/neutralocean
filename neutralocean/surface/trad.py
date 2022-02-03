@@ -8,7 +8,7 @@ import numpy as np
 from time import time
 
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.interp1d import make_interpolator
+from neutralocean.ppinterp import ppval1_two, select_ppc
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (
     _xr_in,
@@ -371,7 +371,8 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
-    interp_1_twice = make_interpolator(interp, 0, "1", True)
+    # interp_1_twice = make_interpolator(interp, 0, "1", True)
+    ppc_fn = select_ppc(interp, "1")
 
     # Process arguments
     sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
@@ -386,11 +387,11 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     # selection to (ref, isoval) pair
     _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj)
     ref, isoval = _choose_ref_isoval(
-        ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, interp_1_twice
+        ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
     )
 
     # Solve non-linear root finding problem in each cast
-    vertsolve = _make_vertsolve(eos, interp_1_twice, ans_type)
+    vertsolve = _make_vertsolve(eos, ppc_fn, ans_type)
     timer = time()
     s, t, p = vertsolve(S, T, P, n_good, ref, isoval, TOL_P_SOLVER)
 
@@ -399,7 +400,9 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
         # pressure / depth.  This fixes small deviations of order `TOL_P_SOLVER`
         n0 = pin_cast
         p[n0] = pin_p
-        s[n0], t[n0] = interp_1_twice(pin_p, P[n0], S[n0], T[n0])
+        Sppcn0 = ppc_fn(P[n0], S[n0])
+        Tppcn0 = ppc_fn(P[n0], T[n0])
+        s[n0], t[n0] = ppval1_two(pin_p, P[n0], Sppcn0, Tppcn0)
 
     d = dict()
     if diags:
@@ -484,14 +487,18 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
         raise TypeError('If provided, "pin_p" must be a float')
 
 
-def _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, interp_fn):
+def _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn):
     # Handle the three valid calls in the following order of precedence:
     # >>> _traditional_surf(ans_type, S, T, P, ref, isoval)
     # >>> _traditional_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
     # >>> _traditional_surf(ans_type, S, T, P, pin_cast, pin_p)
     if isoval is None:  # => pin_cast and pin_p are both not None
         n0 = pin_cast  # evaluate S and T on the surface at the chosen location
-        s0, t0 = interp_fn(pin_p, P[n0], S[n0], T[n0])
+        # s0, t0 = interp_fn(pin_p, P[n0], S[n0], T[n0])
+
+        Sppc = ppc_fn(P[n0], S[n0])
+        Tppc = ppc_fn(P[n0], T[n0])
+        s0, t0 = ppval1_two(pin_p, P[n0], Sppc, Tppc)
 
         if ans_type == "potential":
             if ref is None:

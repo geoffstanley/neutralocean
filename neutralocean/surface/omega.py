@@ -10,6 +10,7 @@ from sksparse.cholmod import cholesky
 from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
+from neutralocean.ppinterp import select_ppc
 from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (
@@ -258,8 +259,8 @@ def omega_surf(S, T, P, **kwargs):
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
-    interp_1_twice = make_interpolator(interp, 0, "1", True)
-    interp_u_twice = make_interpolator(interp, 0, "u", True)
+    ppc_fn = select_ppc(interp, "1")
+    interp_u_two = make_interpolator(interp, 0, "u", True)
 
     sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
@@ -339,7 +340,7 @@ def omega_surf(S, T, P, **kwargs):
         p = p_init.copy()
 
         # Interpolate S and T onto the surface
-        s, t = interp_u_twice(p, P, S, T)
+        s, t = interp_u_two(p, P, S, T)
 
     pin_p = p[pin_cast]
 
@@ -386,7 +387,7 @@ def omega_surf(S, T, P, **kwargs):
                 f" {d['timer'][0]:.3f}"
             )
 
-    vertsolve = _make_vertsolve(eos, interp_1_twice, "omega")
+    vertsolve = _make_vertsolve(eos, ppc_fn, "omega")
 
     # --- Begin iterations
     # Note: the surface exists wherever p is non-nan.  The nan structure of s
@@ -414,7 +415,7 @@ def omega_surf(S, T, P, **kwargs):
                 pin_cast_1,
                 TOL_P_SOLVER,
                 eos,
-                interp_1_twice,
+                ppc_fn,
                 p_ml=p_ml,
             )
         else:

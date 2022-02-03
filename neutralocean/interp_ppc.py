@@ -20,6 +20,18 @@ import numpy as np
 import numba
 
 
+def make_ppc(interpolant="linear", kind="u"):
+    if interpolant == "linear":
+        f = linear_coeffs
+    elif interpolant == "pchip":
+        f = pchip_coeffs_1d
+    else:
+        raise ValueError(
+            f"Expected `interpolant` in ('linear', 'pchip'); got {interpolant}"
+        )
+    return f
+
+
 def linear_coeffs(X, Y):
     """
     Coefficients for a linear interpolant.
@@ -164,7 +176,7 @@ def interp(x, X, Y, Yppc, d=0):
         derivative) at `x`.
 
         If `x` is float and `X` and `Y` are both 1 dimensional, `y` is float.
-        
+
         Otherwise, `y` is ndarray with size matching the largest of the sizes
         of `x`, the size of `X` less its last dimension, or the size of `Y`
         less its last dimension.
@@ -365,8 +377,8 @@ def interp_1d(x, X, Y, Yppc):
     if np.isnan(x) or x < X[0] or X[-1] < x:
         return np.nan
 
-    if x == X[0]:
-        return Y[0]
+    # if x == X[0]:
+    #     return Y[0]
 
     # i = searchsorted(X,x) is such that:
     #   i = 0                   if x <= X[0]
@@ -375,7 +387,12 @@ def interp_1d(x, X, Y, Yppc):
     # Having guaranteed X[0] < x <= X[-1] and x is not nan, then
     #   X[i-1] < x <= X[i]  and  1 <= i <= len(X)-1  in all cases.
     # Subtract 1 so X[i] < x <= X[i+1]  and  0 <= i <= len(X)-2
-    i = np.searchsorted(X, x) - 1
+    # i = np.searchsorted(X, x) - 1
+
+    # new approach:
+    #   X[0 ] <= x <= X[1]  when  i == 0
+    #   X[i-1] < x <= X[i]  when  i > 0
+    i = max(0, np.searchsorted(X, x) - 1)
 
     return interp_1d_i(x, X, Y, Yppc, i)
 
@@ -440,6 +457,29 @@ def interp_1d_i(x, X, Y, Yppc, i):
     y = y * dx + Y[i]
 
     return y
+
+
+# @numba.njit
+# def interp_1d_im(x, X, Y, Yppc, i):
+#     """
+#     Evaluate a single interpolant, knowing where the evaluation site lies.
+
+#     Provides `i` such that  `X[i-1] <= x <= X[i]`
+#     """
+#     dx = x - X[i]  # dx > 0 guaranteed
+
+#     # dx = (x - X[i-1]) => 0 guaranteed (and == 0 only if x == X[0])
+
+#     # Evaluate polynomial, using nested multiplication.
+#     # E.g. the cubic case is:
+#     # y = dx^3 * Yppc[i,0] + dx^2 * Yppc[i,1] + dx * Yppc[i,2] + Y[i]
+#     #   = dx * (dx * (dx * Yppc[i,0] + Yppc[i,1]) + Yppc[i,2]) + Y[i]
+#     y = 0.0
+#     for o in range(0, Yppc.shape[-1]):
+#         y = y * dx + Yppc[i, o]
+#     y = y * dx + Y[i]
+
+#     return y
 
 
 @numba.njit

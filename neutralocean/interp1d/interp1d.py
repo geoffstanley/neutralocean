@@ -8,6 +8,13 @@ can be).  Rather, they are used by factory functions that return a new function
 with the interpolation kernel (the input `f`) enclosed, thereby accelerating the
 code.  See `.tools/make_interpolator`.
 
+This subpackage is useful for interpolation when the evaluation site is known,
+so that only one or a few interpolations are needed.  However, when 
+interpolation must be repeated many times, such as when solving a nonlinear
+equation involving the interpolants, the `ppinterp` subpackage is preferred, as 
+that subpackage pre-computes the piecewise polynomial coefficients once, and then
+interpolation to a given evaluation site is fast.
+
 Note: In theory, many of these functions could be collapsed down to a single 
 function.  For example, `_interp_1` and `_interp_1_YZ` could be replaced by
 a single function that accepts a tuple as its fourth `Y` parameter; then it 

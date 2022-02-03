@@ -3,19 +3,19 @@
 import numpy as np
 import numba as nb
 
-from neutralocean.interp1d import make_interpolator
+from neutralocean.ppinterp import select_ppc, ppval1_two
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.lib import find_first_nan
 
 
 @nb.njit
-def _func(p, sB, tB, pB, S, T, P, eos, interp_fn):
+def _func(p, sB, tB, pB, Sppc, Tppc, P, eos):
     # Evaluate difference between (a) eos at location on the cast (S, T, P)
     # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB)
     # here, eos is always evaluated at the average pressure or depth, (p +
     # pB)/2.
-    s, t = interp_fn(p, P, S, T)
+    s, t = ppval1_two(p, P, Sppc, Tppc)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
 
@@ -106,32 +106,40 @@ def ntp_bottle_to_cast(
     """
 
     eos = make_eos(eos, grav, rho_c)
-    interp_fn = make_interpolator(interp, 0, "1", True)
+    ppc_fn = select_ppc(interp, "1")
     n_good = find_first_nan(S)
 
-    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, tol_p, eos, interp_fn)
+    Sppc = ppc_fn(P, S)
+    Tppc = ppc_fn(P, T)
+
+    return _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos)
 
 
 @nb.njit
-def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, tol_p, eos, interp_fn):
+def _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos):
     """Find the neutral tangent plane from a bottle to a cast
 
-    Fast version of `ntp_bottle_to_cast`, with all inputs supplied.  See
-    documentation for `ntp_bottle_to_cast`.
+    Fast version of `ntp_bottle_to_cast`, with all inputs supplied.
 
     Parameters
     ----------
     sB, tB, pB : float
         See ntp_bottle_to_cast
 
-    S, T, P : ndarray
+    Sppc, Tppc : ndarray
+        Piecewise Polynomial Coefficients for interpolants of Salinity and
+        Temperature in terms of `P`.
+
+    P : ndarray
         See ntp_bottle_to_cast
 
     n_good : int
 
         Number of valid (non-NaN) data points on the cast.  That is,
         ``S[0:n_good-1]``, ``T[0:n_good-1]``, and ``P[0:n_good-1]`` should all
-        be non-NaN.  Compute this as ``n_good = find_first_nan(S)``
+        be non-NaN.  Compute this as ``n_good = find_first_nan(S)``, where `S`
+        and `T` are the salinity and temperature on the cast, from which `Sppc`
+        and `Tppc` were constucted.
 
     eos : function
         Equation of state for the density or specific volume as a function of
@@ -139,13 +147,6 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, tol_p, eos, interp_fn):
 
         This function should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
-
-    interp_fn : function
-
-        Function to interpolate two dependent variables at once. Construct this as
-        `neutralocean.interp1d.make_interpolator("linear", kind="1", twice=True)`
-        for linear interpolation.  For other interpolants, replace "linear"
-        (see `make_interpolator` documentation).
 
     tol_p : float, Default 1e-4
         See ntp_bottle_to_cast
@@ -158,7 +159,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, tol_p, eos, interp_fn):
 
     if n_good > 1:
 
-        args = (sB, tB, pB, S, T, P, eos, interp_fn)
+        args = (sB, tB, pB, Sppc, Tppc, P, eos)
 
         # Search for a sign-change, expanding outward from an initial guess
         lb, ub = guess_to_bounds(_func, pB, P[0], P[n_good - 1], args)
@@ -169,7 +170,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, n_good, tol_p, eos, interp_fn):
             p = brent(_func, lb, ub, tol_p, args)
 
             # Interpolate S and T onto the updated surface
-            s, t = interp_fn(p, P, S, T)
+            s, t = ppval1_two(p, P, Sppc, Tppc)
 
         else:
             s, t, p = np.nan, np.nan, np.nan
@@ -186,8 +187,6 @@ def neutral_trajectory(
     T,
     P,
     p0,
-    s0=None,
-    t0=None,
     tol_p=1e-4,
     interp="linear",
     eos="gsw",
@@ -212,12 +211,6 @@ def neutral_trajectory(
 
         The pressure / depth at which to begin the neutral trajectory on the first cast
 
-    s0, t0 : float, optional
-
-        If provided, the first step of the neutral trajectory is a neutral
-        connection a bottle with salinity s0, temperature t0, and pressure /
-        depth p0 to the first cast.
-
     Returns
     -------
     s, t, p : 1D ndarray
@@ -236,8 +229,7 @@ def neutral_trajectory(
 
         Method for vertical interpolation.  Use 'linear' for linear
         interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
-        Polynomials.  Other interpolants can be added through the subpackage,
-        `interp1d`.
+        Polynomials.
 
     eos : str or function, Default 'gsw'
 
@@ -264,7 +256,7 @@ def neutral_trajectory(
     """
 
     eos = make_eos(eos, grav, rho_c)
-    interp = make_interpolator(interp, 0, "1", True)
+    ppc_fn = select_ppc(interp, "1")
 
     nk, nc = S.shape
     # assert(all(size(T) == size(S)), 'T must be same size as S')
@@ -278,7 +270,9 @@ def neutral_trajectory(
     Sc = S[:, 0]
     Tc = T[:, 0]
     Pc = P[:, 0]
-    s[0], t[0] = interp(p0, Pc, Sc, Tc)
+    Sppc = ppc_fn(Sc, Pc)
+    Tppc = ppc_fn(Tc, Pc)
+    s[0], t[0] = interp(p0, Pc, Sppc, Tppc)
     p[0] = p0
 
     # Loop over remaining casts
@@ -287,11 +281,13 @@ def neutral_trajectory(
         Sc = S[:, c]
         Tc = T[:, c]
         Pc = P[:, c]
+        Sppc = ppc_fn(Sc, Pc)
+        Tppc = ppc_fn(Tc, Pc)
 
-        # Make a neutral connection from previous bottle (s0,t0,p0) to the cast (S[:,c], T[:,c], P[:,c])
+        # Make a neutral connection from previous bottle to the cast (S[:,c], T[:,c], P[:,c])
         K = np.sum(np.isfinite(Sc))
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
-            s[c - 1], t[c - 1], p[c - 1], Sc, Tc, Pc, Sc, Tc, K, eos, interp, tol_p
+            s[c - 1], t[c - 1], p[c - 1], Sppc, Tppc, Pc, Sc, Tc, K, tol_p, eos
         )
 
         if np.isnan(p[c]):

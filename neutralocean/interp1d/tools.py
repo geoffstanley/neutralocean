@@ -182,6 +182,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                         (f8, f8[:], f8[:], f8[:]),
                     ],
                     "(),(n),(n)->()",
+                    nopython=True,
                 )
                 def fcn(x, X, Y, y):
                     y[0] = _interp_1(ker0, x, X, Y)
@@ -194,6 +195,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                         (f8, f8[:], f8[:], f8[:], f8[:], f8[:]),
                     ],
                     "(),(n),(n),(n)->(),()",
+                    nopython=True,
                 )
                 def fcn(x, X, Y, Z, y, z):
                     y[0], z[0] = _interp_1_YZ(ker0, x, X, Y, Z)
@@ -207,6 +209,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                         (f8, f8[:], f8[:], f8[:], f8[:]),
                     ],
                     "(),(n),(n)->(),()",
+                    nopython=True,
                 )
                 def fcn(x, X, Y, yf, yg):
                     yf[0], yg[0] = _interp_1_fg(ker0, ker1, x, X, Y)
@@ -219,6 +222,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                         (f8, f8[:], f8[:], f8[:], f8[:], f8[:], f8[:], f8[:]),
                     ],
                     "(),(n),(n),(n)->(),()",
+                    nopython=True,
                 )
                 def fcn(x, X, Y, Z, yf, zf, yg, zg):
                     yf[0], zf[0], yg[0], zg[0] = _interp_1_fg_YZ(ker0, ker1, x, X, Y, Z)

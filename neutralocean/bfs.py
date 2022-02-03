@@ -86,7 +86,7 @@ def bfs_conncomp1(G, A, r):
 
 
 @nb.njit
-def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, interp_fn, p_ml):
+def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, ppc_fn, p_ml):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting
 
@@ -137,12 +137,13 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, interp_fn, p_m
         This should be @numba.njit decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
-    interp_fn : function
+    ppc_fn : function
 
-        Function to interpolate two dependent variables at once. Construct this as
-        `neutralocean.interp1d.interp1d.make_interpolator("linear", kind="1", twice=True)`
+        Function to compute piecewise polynomial coefficients for an interpolator.
+        Construct this as
+        `neutralocean.ppinterp.select_ppc("linear", kind="1")`
         for linear interpolation.  For other interpolants, replace "linear"
-        (see `make_interpolator` documentation).
+        (see `select_ppc` documentation).
 
     p_ml : ndarray
 
@@ -212,17 +213,19 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, interp_fn, p_m
                 elif dry[n]:
                     # n is "dry".  Try wetting.
 
+                    Sppc = ppc_fn(P[n], S[n])
+                    Tppc = ppc_fn(P[n], T[n])
+
                     s[n], t[n], p[n] = _ntp_bottle_to_cast(
                         s[m],
                         t[m],
                         p[m],
-                        S[n],
-                        T[n],
+                        Sppc,
+                        Tppc,
                         P[n],
                         n_good[n],
                         tol_p,
                         eos,
-                        interp_fn,
                     )
 
                     if np.isfinite(p[n]) and p[n] > p_ml[n]:

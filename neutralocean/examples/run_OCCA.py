@@ -40,6 +40,12 @@ geom = {
 
 # %% Potential Density surfaces
 
+# fmt: off
+# s, t, z, d = potential_surf(S, T, Z, eos=eos, wrap="Longitude_t", vert_dim="Depth_c", ref=0.0, isoval=1027.5, **geom, diags=False)
+# s, t, z, d = potential_surf(S, T, Z, interp="pchip", eos=eos, wrap="Longitude_t", vert_dim="Depth_c", ref=0.0, isoval=1027.5, **geom, diags=False)
+# fmt: on
+
+
 # Provide reference pressure (actually depth, in Boussinesq) and isovalue
 s, t, z, d = potential_surf(
     S,
@@ -83,6 +89,7 @@ print(
 # Provide just the location to intersect `(pin_cast, pin_p)`.
 # This takes the reference depth `ref` to match `pin_p`.
 # Also illustrate using xarray coordinates for pin_cast
+# Also use PCHIPs as the vertical interpolants
 s, t, z, d = potential_surf(
     S,
     T,
@@ -93,6 +100,7 @@ s, t, z, d = potential_surf(
     vert_dim="Depth_c",
     pin_cast={"Longitude_t": 180.5, "Latitude_t": 0.5},
     pin_p=z0,
+    interp="pchip",
 )
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
@@ -190,7 +198,7 @@ print(
 
 # Initialize omega surface with a (locally referenced) in-situ density anomaly surface.
 # Use PCHIP interpolation rather than the default, linear interpolation.
-# Remove the layer, calculated internally according to the given parameters --
+# Remove the mixed layer, calculated internally according to the given parameters --
 #   see `mixed_layer` for details on these parameters.
 s, t, z, d = omega_surf(
     S,
