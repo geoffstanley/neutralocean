@@ -46,12 +46,11 @@ import numba as nb
 @nb.njit
 def _pchip(x, X, Y, i):
     """
-    The "atom" of Piecewise Cubic Hermite Interpolating Polynomial (PCHIP) interpolation.
+    The "kernel" of Piecewise Cubic Hermite Interpolating Polynomial (PCHIP) interpolation.
 
-    Inputs and outputs analogous to `linterp_i`.
+    Inputs and outputs analogous to `_linterp`.
     """
 
-    # s, dY, cY, bY = _pchip_coeffs(x, X, Y, i)
     s = x - X[i - 1]
     dY, cY, bY = _pchip_coeffs(X, Y, i)
     return Y[i - 1] + s * (dY + s * (cY + s * bY))
@@ -60,9 +59,9 @@ def _pchip(x, X, Y, i):
 @nb.njit
 def _pchip1(x, X, Y, i):
     """
-    The "atom" of the 1st derivative of PCHIP interpolation.
+    The "kernel" of the 1st derivative of PCHIP interpolation.
 
-    Inputs and outputs analogous to `linterp_i`.
+    Inputs and outputs analogous to `_linterp`.
     """
     s = x - X[i - 1]
     dY, cY, bY = _pchip_coeffs(X, Y, i)
@@ -72,9 +71,9 @@ def _pchip1(x, X, Y, i):
 @nb.njit
 def _pchip2(x, X, Y, i):
     """
-    The "atom" of the 2nd derivative of PCHIP interpolation.
+    The "kernel" of the 2nd derivative of PCHIP interpolation.
 
-    Inputs and outputs analogous to `linterp_i`.
+    Inputs and outputs analogous to `_linterp`.
     """
     s = x - X[i - 1]
     _, cY, bY = _pchip_coeffs(X, Y, i)
@@ -84,9 +83,9 @@ def _pchip2(x, X, Y, i):
 @nb.njit
 def _pchip3(x, X, Y, i):
     """
-    The "atom" of the 3rd derivative of PCHIP interpolation.
+    The "kernel" of the 3rd derivative of PCHIP interpolation.
 
-    Inputs and outputs analogous to `linterp_i`.
+    Inputs and outputs analogous to `_linterp`.
     """
     _, _, bY = _pchip_coeffs(X, Y, i)
     return 6 * bY

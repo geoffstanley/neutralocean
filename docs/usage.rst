@@ -113,3 +113,24 @@ rho_s_t
 rho_p
 ~~~~~
 .. autofunction:: neutralocean.eos.gsw.rho_p
+
+
+Vertical Interpolation
+----------------------
+
+make_interpolator
+~~~~~~~~~~~~~~~~~
+.. autofunction:: neutralocean.interp1d.make_interpolator
+
+
+select_ppc
+~~~~~~~~~~
+.. autofunction:: neutralocean.ppinterp.select_ppc
+
+ppval
+~~~~~
+.. autofunction:: neutralocean.ppinterp.ppval
+
+ppval_two
+~~~~~~~~~
+.. autofunction:: neutralocean.ppinterp.ppval_two

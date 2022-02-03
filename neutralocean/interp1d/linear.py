@@ -42,7 +42,7 @@ def _linterp1(x, X, Y, i):
     """
     The "kernel" of the 1st derivative of linear interpolation.
 
-    Inputs and outputs analogous to `ker`.
+    Inputs and outputs analogous to `_linterp`.
     """
 
     return (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
