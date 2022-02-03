@@ -33,10 +33,10 @@ Code adapted from MOM5.1 (Griffies et al) originally written in Fortran
 """
 
 import numpy as np
-from numba import njit, float64
+import numba as nb
 
 
-@njit(float64(float64, float64, float64))
+@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
 def rho(s, t, p):
     """
     Parameters
@@ -107,7 +107,7 @@ def rho(s, t, p):
     return num * inv_den
 
 
-@njit
+@nb.njit
 def rho_s_t(s, t, p):
     """
     Parameters
@@ -207,7 +207,7 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
-@njit(float64(float64, float64, float64))
+@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
 def rho_p(s, t, p):
     """
     Parameters

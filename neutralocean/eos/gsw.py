@@ -1,5 +1,31 @@
+"""
+Density of Sea Water using the TEOS-10 Gibbs Seawater [1]_ function
+
+Functions:
+
+rho :: computes in-situ density from salinity, potential temperature and
+    pressure
+
+rho_s_t :: compute the partial derivatives of in-situ density with
+    respect to salinity and potential temperature
+
+rho_p :: compute the partial derivative of in-situ density with
+    respect to pressure
+
+Notes:
+To make Boussinesq versions of these functions, see 
+`neutralocean.eos.tools.make_eos_bsq`.
+
+To make vectorized versions of these functions, see
+`neutralocean.eos.tools.vectorize_eos`.
+
+.. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
+the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
+ISBN 978-0-646-55621-5. 
+"""
+
 import ctypes
-import numba
+import numba as nb
 import gsw
 
 
@@ -16,7 +42,7 @@ rho_gsw_ctypes.argtypes = (ctypes.c_double, ctypes.c_double, ctypes.c_double)
 # Wrapping the ctypes function with njit reduces call overhead and makes it
 # hashable, which is required for the caching we do via the lru_cache
 # decorator.
-@numba.njit
+@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
 def rho(s, t, p):
     """
     The TEOS-10 GSW equation of state for in-situ density.
@@ -39,6 +65,8 @@ def rho(s, t, p):
     return rho_gsw_ctypes(s, t, p)
 
 
+# Can't use nb.njit on functions wrapping gsw.rho_first_derivatives:
+# "Unknown attribute 'rho_first_derivatives' of type Module(<module 'gsw' from ..."
 # For the partial derivatives, we only call these on the entire surface,
 # so the Python ufunc wrappers are okay.
 def rho_s_t(s, t, p):

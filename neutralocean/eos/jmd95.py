@@ -23,11 +23,14 @@ To make vectorized versions of these functions, see
 """
 
 import numpy as np
-from numba import njit, float64
+import numba as nb
 
-
-@njit(float64(float64, float64, float64))
-def rho(s, t, p):
+# Specify scalar inputs and output.  If ndarray inputs are needed, then apply
+# @nb.vectorize, as in `.tools.vectorize_eos`.  A vectorized function specified
+# for scalars is about twice as fast as a signatureless njit'ed function
+# applied to ndarrays.
+@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
+def rho1(s, t, p):
     """Fast JMD95 [1]_ in-situ density.
 
     Parameters
@@ -113,8 +116,18 @@ def rho(s, t, p):
     return rho
 
 
-# @njit(numba.typeof((1.0, 1.0))(float64, float64, float64))  # GJS: cannot use numba.vectorize on this because of tuple output
-@njit
+# If we specified a signature for scalar inputs and outputs, such as
+#   @nb.njit(nb.typeof((1.0, 1.0))(nb.f8, nb.f8, nb.f8))
+# then we would not be able to make a function that uses @numba.vectorize to
+# wrap this function.  The tuple output messes that up.  However, we could
+# make a function that uses @numba.guvectorize to wrap this function, e.g.
+#   @nb.guvectorize([(nb.f8, nb.f8, nb.f8, nb.f8[:], nb.f8[:])], "(),(),()->(),()")
+#   def eos_vec(s, t, p, eos_s, eos_t):
+#       eos_s[0], eos_t[0] = rho_s_t(s, t, p)
+# However, this appears to be about two times slower than just using @numba.njit
+# without a signature specification, and calling the rho_s_t function with ndarray
+# objects.  So, we'll just use @nb.njit with no signature.
+@nb.njit
 def rho_s_t(s, t, p):
     """
     Fast salinity and potential temperature partial derivatives of JMD95 in-situ density
@@ -302,7 +315,7 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
-@njit
+@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
 def rho_p(s, t, p):
     """
     Fast pressure derivative of JMD95 in-situ density.
