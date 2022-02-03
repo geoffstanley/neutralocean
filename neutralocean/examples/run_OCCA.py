@@ -1,10 +1,10 @@
 # %% Imports
 
 # Functions to make the Equation of State
-from neutralocean.eos.tools import make_eos, make_eos_s_t
+from neutralocean.eos import make_eos, make_eos_s_t
 
 # Functions to compute various approximately neutral surfaces
-from neutralocean import potential_surf, anomaly_surf, omega_surf
+from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 
 # Functions to load OCCA data
 from neutralocean.examples.load_OCCA import load_OCCA
@@ -39,6 +39,12 @@ geom = {
 
 
 # %% Potential Density surfaces
+
+# fmt: off
+# s, t, z, d = potential_surf(S, T, Z, eos=eos, wrap="Longitude_t", vert_dim="Depth_c", ref=0.0, isoval=1027.5, **geom, diags=False)
+# s, t, z, d = potential_surf(S, T, Z, interp="pchip", eos=eos, wrap="Longitude_t", vert_dim="Depth_c", ref=0.0, isoval=1027.5, **geom, diags=False)
+# fmt: on
+
 
 # Provide reference pressure (actually depth, in Boussinesq) and isovalue
 s, t, z, d = potential_surf(
@@ -83,6 +89,7 @@ print(
 # Provide just the location to intersect `(pin_cast, pin_p)`.
 # This takes the reference depth `ref` to match `pin_p`.
 # Also illustrate using xarray coordinates for pin_cast
+# Also use PCHIPs as the vertical interpolants
 s, t, z, d = potential_surf(
     S,
     T,
@@ -93,6 +100,7 @@ s, t, z, d = potential_surf(
     vert_dim="Depth_c",
     pin_cast={"Longitude_t": 180.5, "Latitude_t": 0.5},
     pin_p=z0,
+    interp="pchip",
 )
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
@@ -166,7 +174,8 @@ print(
 
 # %% Omega surfaces
 
-# Initialize omega surface with a (locally referenced) potential density surface
+# Initialize omega surface with a (locally referenced) potential density surface.
+# Provide grid distances.
 s, t, z, d = omega_surf(
     S,
     T,
@@ -188,10 +197,9 @@ print(
 )
 
 # Initialize omega surface with a (locally referenced) in-situ density anomaly surface.
-# Also remove the pre-computed mixed layer.  Could also pass
-# p_ml={"bottle_index" : 1, "ref_p" : 0.0}
-# for example, to compute mixed layer internally with the given parameters.
-# Also provide grid distances.
+# Use PCHIP interpolation rather than the default, linear interpolation.
+# Remove the mixed layer, calculated internally according to the given parameters --
+#   see `mixed_layer` for details on these parameters.
 s, t, z, d = omega_surf(
     S,
     T,
@@ -202,6 +210,8 @@ s, t, z, d = omega_surf(
     pin_cast=(i0, j0),
     pin_p=z0,
     eos=eos,
+    interp="pchip",
+    p_ml={"bottle_index": 1, "ref_p": 0.0},
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
@@ -222,16 +232,15 @@ from neutralocean.mixed_layer import mixed_layer
 from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.label import veronis_density
 from neutralocean.lib import _process_casts, find_first_nan
-from neutralocean.interp_ppc import linear_coeffs, val2
-from neutralocean.eos.tools import make_eos_p
+from neutralocean.interp1d import make_interpolator
+from neutralocean.eos import make_eos_p
 from neutralocean.traj import ntp_bottle_to_cast, _ntp_bottle_to_cast
 
 # %% Veronis Density, used to label an approx neutral surface
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
-ρ_v = veronis_density(
-    S_ref_cast, T_ref_cast, Z, z0, eos=eos, eos_s_t=eos_s_t
-)  # 1027.7700462375435
+ρ_v = veronis_density(S_ref_cast, T_ref_cast, Z, z0, eos=eos, eos_s_t=eos_s_t)
+# check value for above: 1027.7700462375435
 print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
     f" has Veronis density {ρ_v} kg m-3"
@@ -252,6 +261,7 @@ s, t, z, d = omega_surf(
     pin_cast=(i0, j0),
     pin_p=z0,
     eos=eos,
+    eos_s_t=eos_s_t,
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
@@ -279,9 +289,8 @@ s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # Or the more manual version:
 n_good = find_first_nan(S1)[()]
-S1ppc = linear_coeffs(Z, S1)
-T1ppc = linear_coeffs(Z, T1)
-s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z, S1ppc, T1ppc, n_good, eos, 1e-4)
+linterp_1two = make_interpolator("linear", 0, "1", True)
+s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z, n_good, 1e-4, eos, linterp_1two)
 
 
 # %% Work with Numpy arrays instead of xarrays
@@ -310,17 +319,14 @@ s, t, z, d = anomaly_surf(
 # Create function for partial deriv of equation of state with respect to depth z
 eos_z = make_eos_p("jmd95", g["grav"], g["ρ_c"])
 
-# Pre-compute linear interpolants for S and T in terms of Z
-Sppc = linear_coeffs(Z, S)
-Tppc = linear_coeffs(Z, T)
-
 # Earth sidereal day period [s]
 Earth_day = 86164
 
 # Coriolis param [s-1] on tracer grid
 f = 2 * (2 * np.pi / Earth_day) * np.sin(g["YCvec"] * (np.pi / 180))
 
-sz, tz = val2(Z, S, Sppc, T, Tppc, z, 1)  # ∂S/∂Z and ∂T/∂Z, on the surface
+linterp_dx_utwo = make_interpolator("linear", deriv=1, kind="u", two=True)
+sz, tz = linterp_dx_utwo(z, Z, S.values, T.values)  # ∂S/∂Z and ∂T/∂Z, on the surface
 rs, rt = eos_s_t(s, t, z)  # ∂ρ/∂S and ∂ρ/∂T, on the surface
 
 # ∂δ/∂z on the surface, where δ is the in-situ density anomaly

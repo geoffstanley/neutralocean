@@ -1,6 +1,6 @@
 """ Mixed Layer """
 
-from neutralocean.interp_ppc import linear_coeffs, val
+from neutralocean.interp1d import make_interpolator
 from neutralocean.eos.tools import vectorize_eos
 from neutralocean.lib import _process_casts, _process_vert_dim
 
@@ -13,7 +13,7 @@ def mixed_layer(
     pot_dens_diff=0.03,
     ref_p=100.0,
     bottle_index=1,
-    interp_fn=linear_coeffs,
+    interp="linear",
     vert_dim=-1,
 ):
     """Calculate the pressure or depth at the bottom of the mixed layer
@@ -64,11 +64,12 @@ def mixed_layer(
         density is calculated.  Note this index is 0-based.  The Default of 1
         therefore indexes the second bottle in each cast.
 
-    interp_fn : function, Default `linear_coeffs`
+    interp : str, Default 'linear'
 
-        Function that calculates coefficients of piecewise polynomial
-        interpolants of `S` and `T` as functions of `P`.  Options include
-        ``linear_coeffs`` and ``pchip_coeffs`` from ``interp_ppc.py``.
+        Method for vertical interpolation.  Use 'linear' for linear
+        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Polynomials.  Other interpolants can be added through the subpackage,
+        `interp1d`.
 
     vert_dim : int or str, Default -1
 
@@ -94,6 +95,9 @@ def mixed_layer(
     # Ensure eos is vectorized. It's okay if eos already was.
     eos = vectorize_eos(eos)
 
+    # Make universal interpolator from the interpolation kernel
+    interp_fn = make_interpolator(interp, 0, "u", False)
+
     # Convert vert_dim from str to int if needed
     vert_dim = _process_vert_dim(vert_dim, S)
 
@@ -112,5 +116,4 @@ def mixed_layer(
 
     # Find the pressure or depth at which the potential density difference
     # exceeds the threshold pot_dens_diff
-    Pppc = interp_fn(DD, P)
-    return val(DD, P, Pppc, pot_dens_diff)
+    return interp_fn(pot_dens_diff, DD, P)

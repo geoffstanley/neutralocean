@@ -1,125 +1,80 @@
 import numpy as np
+import pytest
 
 from neutralocean.lib import find_first_nan
-from neutralocean.interp_ppc import (
-    linear_coeffs,
-    pchip_coeffs,
-    val,
-    deriv,
+from neutralocean.interp import (
+    interp,
+    linterp_i,
+    linterp_dx_i,
+    pchip_i,
+    pchip_dx_i,
+    pchip_dxx_i,
 )
-from scipy.interpolate import PchipInterpolator
+from scipy.interpolate import UnivariateSpline, PchipInterpolator
 
-# Monotonic but non-uniform pressure grid.
-npg = 10
-P = np.linspace(0, 1000, npg) ** 1.2
+N = 3  # number of 1D interpolation problems
+K = 10  # number of grid points in each interpolation problem
 
-ncasts = 3
-S = np.empty((ncasts, npg), dtype=np.float64)
-S[0] = np.ones(npg) * (P / P[-1]) ** 2  # steadily increasing
-S[1] = np.sin(P / P[-1] * 2 * np.pi)  # smooth wave
-S[2] = S[1] * np.cos(P / P[-1] * 10 * np.pi)  # crazy wave, with some NaN's
-S[2, -3:] = np.nan
+# Monotonic but non-uniform independent data
+X1 = np.linspace(0, 10, K) ** 1.2
+X = np.tile(X1, (N, 1))
+
+# Build dependent data
+Y = np.empty((N, K), dtype=np.float64)
+Y[0] = np.ones(K) * (X1 / X1[-1]) ** 2  # steadily increasing
+Y[1] = np.sin(X1 / X1[-1] * 2 * np.pi)  # smooth wave
+Y[2] = Y[1] * np.cos(X1 / X1[-1] * 10 * np.pi)  # crazy wave, with some NaN's
+Y[2, -3:] = np.nan
 
 
-# Interpolate between each point, but do not include the knots
-p_midpts = P[0:-1] + np.diff(P) / 2
+# X[0,1:] = np.nan   # need to test this kind of case out!
+
+
+# Interpolate between each knot
+x_midpts = X1[0:-1] + np.diff(X1) / 2
 
 # Interpolate to each knot point and each midpoint
-p_targets = np.sort(np.concatenate((P, p_midpts)))
+x_targets = np.sort(np.concatenate((X1, x_midpts)))
 
 
-def test_linear():
+# %%
 
-    Sppc = linear_coeffs(P, S)
+# Note re: lhs vs rhs:
+# Our code won't agree with SciPy when evaluating a function that is piecewise
+# discontinuous (e.g. first derivative of a linear interpolant or second
+# derivative of a PHCIP) at the knots, because we evaluate using the "left"
+# side whereas SciPy evaluates using the "right" side.
+@pytest.mark.parametrize(
+    "interp_fn,num_deriv,x",
+    [
+        (linterp_i, 0, x_targets),
+        (linterp_dx_i, 1, x_midpts),  # see "Note re: lhs vs rhs"
+        (pchip_i, 0, x_targets),
+        (pchip_dx_i, 1, x_targets),
+        (pchip_dxx_i, 2, x_midpts),  # see "Note re: lhs vs rhs"
+    ],
+)
+def test_interp(interp_fn, num_deriv, x):
 
-    d_vert = S.ndim - 1  # index to vertical dimension
-    assert Sppc.shape[d_vert] == S.shape[d_vert] - 1
+    # Interpolate with SciPy
+    y = np.empty((N, x.size), dtype=float)
+    for i in range(N):
+        k = find_first_nan(Y[i])
+        if interp_fn.__name__.startswith("linterp"):
+            fn = UnivariateSpline(X[i, 0:k], Y[i, 0:k], k=1, s=0, ext="raise")
+        elif interp_fn.__name__.startswith("pchip"):
+            fn = PchipInterpolator(X[i, 0:k], Y[i, 0:k], extrapolate=False)
+        fn = fn.derivative(num_deriv)
+        for j in range(x.size):
+            try:
+                y[i, j] = fn(x[j])
+            except:
+                # extrapolation was needed (only for UnivariateSpline)
+                y[i, j] = np.nan
 
-    expected_s = np.empty((ncasts, p_targets.size), dtype=float)
-    for i in range(ncasts):
-        expected_s[i] = np.interp(p_targets, P, S[i])
+    # Interpolate with our methods
+    y_ = np.empty_like(y)
+    for j in range(x.size):
+        y_[:, j] = interp(x[j], X, Y, interp_fn)
 
-    result_s = np.empty_like(expected_s)
-    for j in range(p_targets.size):
-        result_s[:, j] = val(P, S, Sppc, p_targets[j])
-
-    assert np.allclose(result_s, expected_s, equal_nan=True)
-
-
-def test_pchip():
-    Sppc = pchip_coeffs(P, S)
-
-    d_vert = S.ndim - 1  # index to vertical dimension
-    assert Sppc.shape[d_vert] == S.shape[d_vert] - 1
-
-    expected_s = np.empty((ncasts, p_targets.size), dtype=float)
-    for i in range(ncasts):
-        k = find_first_nan(S[i])
-        SfnP = PchipInterpolator(P[0:k], S[i, 0:k], extrapolate=False)
-        for j in range(p_targets.size):
-            expected_s[i, j] = SfnP(p_targets[j])
-
-    result_s = np.empty_like(expected_s)
-    for j in range(p_targets.size):
-        result_s[:, j] = val(P, S, Sppc, p_targets[j])
-
-    assert np.allclose(result_s, expected_s, equal_nan=True)
-
-
-def test_deriv1():
-    num_deriv = 1
-    Sppc = pchip_coeffs(P, S)
-
-    expected_s = np.empty((ncasts, p_targets.size), dtype=float)
-    for i in range(ncasts):
-        k = find_first_nan(S[i])
-        SPfnP = PchipInterpolator(P[0:k], S[i, 0:k], extrapolate=False).derivative(
-            num_deriv
-        )
-        for j in range(p_targets.size):
-            expected_s[i, j] = SPfnP(p_targets[j])
-
-    result_s = np.empty_like(expected_s)
-    for j in range(p_targets.size):
-        result_s[:, j] = val(P, S, Sppc, p_targets[j], num_deriv)
-
-    assert np.allclose(result_s, expected_s, equal_nan=True)
-
-
-def test_deriv2():
-    # Note, our code won't agree with SciPy when evaluating the second
-    # derivative of a PHCIP at the knots, because this second derivative is
-    # discontinuous and we evaluate using the "left" side whereas SciPy
-    # evaluates using the "right" side.
-    num_deriv = 2
-    Sppc = pchip_coeffs(P, S)
-
-    expected_s = np.empty((ncasts, p_midpts.size), dtype=float)
-    for i in range(ncasts):
-        k = find_first_nan(S[i])
-        SPfnP = PchipInterpolator(P[0:k], S[i, 0:k], extrapolate=False).derivative(
-            num_deriv
-        )
-
-        for j in range(p_midpts.size):
-            expected_s[i, j] = SPfnP(p_midpts[j])
-
-    result_s = np.empty_like(expected_s)
-    for j in range(p_midpts.size):
-        result_s[:, j] = val(P, S, Sppc, p_midpts[j], num_deriv)
-
-    assert np.allclose(result_s, expected_s, equal_nan=True)
-
-
-def test_ppc_deriv():
-    num_deriv = 2
-    Sppc = pchip_coeffs(P, S)
-    dS, dSppc = deriv(P, S, Sppc, num_deriv)
-
-    expected_s = np.empty((ncasts, p_targets.size), dtype=float)
-    result_s = np.empty_like(expected_s)
-    for j in range(p_targets.size):
-        expected_s[:, j] = val(P, S, Sppc, p_targets[j], num_deriv)
-        result_s[:, j] = val(P, dS, dSppc, p_targets[j])
-
-    assert np.allclose(result_s, expected_s, equal_nan=True)
+    assert np.allclose(y, y_, equal_nan=True)

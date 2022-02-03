@@ -9,7 +9,8 @@ from sksparse.cholmod import cholesky
 
 from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.interp_ppc import linear_coeffs, val2
+from neutralocean.interp1d import make_interpolator
+from neutralocean.ppinterp import select_ppc
 from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (
@@ -20,7 +21,6 @@ from neutralocean.lib import (
     _process_wrap,
     _process_casts,
     _process_n_good,
-    _interp_casts,
 )
 from neutralocean.mixed_layer import mixed_layer
 from neutralocean.eos.gsw import rho, rho_s_t
@@ -139,7 +139,7 @@ def omega_surf(S, T, P, **kwargs):
     Other Parameters
     ----------------
     wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, eos_s_t, grav,
-    rho_c, interp_fn, Sppc, Tppc, n_good, diags, output, TOL_P_SOLVER :
+    rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
 
         See `sigma_surf`
 
@@ -257,15 +257,15 @@ def omega_surf(S, T, P, **kwargs):
     ]
 
     n_good = kwargs.get("n_good")
-    Sppc = kwargs.get("Sppc")
-    Tppc = kwargs.get("Tppc")
-    interp_fn = kwargs.get("interp_fn", linear_coeffs)
+    interp = kwargs.get("interp", "linear")
+
+    ppc_fn = select_ppc(interp, "1")
+    interp_u_two = make_interpolator(interp, 0, "u", True)
 
     sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
-    Sppc, Tppc = _interp_casts(S, T, P, interp_fn, Sppc, Tppc)  # after _process_casts
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     ni, nj = n_good.shape
 
@@ -315,8 +315,6 @@ def omega_surf(S, T, P, **kwargs):
             ans_type = "potential"
 
         # Update arguments with pre-processed values
-        kwargs["Sppc"] = Sppc
-        kwargs["Tppc"] = Tppc
         kwargs["n_good"] = n_good
         kwargs["wrap"] = wrap
         kwargs["vert_dim"] = -1  # Since S, T, P already reordered
@@ -342,7 +340,7 @@ def omega_surf(S, T, P, **kwargs):
         p = p_init.copy()
 
         # Interpolate S and T onto the surface
-        s, t = val2(P, S, Sppc, T, Tppc, p)
+        s, t = interp_u_two(p, P, S, T)
 
     pin_p = p[pin_cast]
 
@@ -389,7 +387,7 @@ def omega_surf(S, T, P, **kwargs):
                 f" {d['timer'][0]:.3f}"
             )
 
-    vertsolve = _make_vertsolve(eos, "omega")
+    vertsolve = _make_vertsolve(eos, ppc_fn, "omega")
 
     # --- Begin iterations
     # Note: the surface exists wherever p is non-nan.  The nan structure of s
@@ -412,13 +410,12 @@ def omega_surf(S, T, P, **kwargs):
                 S,
                 T,
                 P,
-                Sppc,
-                Tppc,
                 n_good,
                 A4,
                 pin_cast_1,
                 TOL_P_SOLVER,
                 eos,
+                ppc_fn,
                 p_ml=p_ml,
             )
         else:
@@ -436,7 +433,7 @@ def omega_surf(S, T, P, **kwargs):
         # --- Update the surface (mutating s, t, p by vertsolve)
         timer_loc = time()
         p_old = p.copy()  # Record old surface for pinning and diagnostics
-        vertsolve(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, TOL_P_SOLVER)
+        vertsolve(s, t, p, S, T, P, n_good, ϕ, TOL_P_SOLVER)
 
         # DEV:  time seems indistinguishable from using factory function as above
         # _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, TOL_P_SOLVER, eos)
