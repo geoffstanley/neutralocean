@@ -52,7 +52,7 @@ def pchip_coeffs(X, Y):
 
 
 @nb.njit
-def pchip_coeffs_1d(X, Y):
+def pchip_coeffs_1(X, Y):
     """
     Coefficients for a single PCHIP
 
@@ -134,4 +134,4 @@ def pchip_coeffs_1d(X, Y):
 
 @nb.guvectorize([(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)")
 def _pchip_coeffs(X, Y, dummy, Yppc):
-    Yppc[:, :] = pchip_coeffs_1d(X, Y)
+    Yppc[:, :] = pchip_coeffs_1(X, Y)

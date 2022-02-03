@@ -45,7 +45,7 @@ def linear_coeffs(X, Y):
 
 
 @nb.njit
-def linear_coeffs_1d(X, Y):
+def linear_coeffs_1(X, Y):
     """
     Coefficients for a single linear interpolant
 
@@ -60,4 +60,4 @@ def linear_coeffs_1d(X, Y):
 
 @nb.guvectorize([(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)")
 def _linear_coeffs(X, Y, two, C):
-    C[:, :] = linear_coeffs_1d(X, Y)
+    C[:, :] = linear_coeffs_1(X, Y)

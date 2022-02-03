@@ -1,5 +1,5 @@
-from .linear import linear_coeffs, linear_coeffs_1d
-from .pchip import pchip_coeffs, pchip_coeffs_1d
+from .linear import linear_coeffs, linear_coeffs_1
+from .pchip import pchip_coeffs, pchip_coeffs_1
 
 
 def select_ppc(interpolant="linear", kind="u"):
@@ -9,12 +9,12 @@ def select_ppc(interpolant="linear", kind="u"):
 
     if interpolant == "linear":
         if kind == "1":
-            return linear_coeffs_1d
+            return linear_coeffs_1
         elif kind == "u":
             return linear_coeffs
     elif interpolant == "pchip":
         if kind == "1":
-            return pchip_coeffs_1d
+            return pchip_coeffs_1
         elif kind == "u":
             return pchip_coeffs
     else:
