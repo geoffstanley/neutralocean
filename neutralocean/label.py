@@ -1,13 +1,13 @@
 import numpy as np
 
-from neutralocean.ppinterp import select_ppc, ppval1_two, ppval_i
-
+from .ppinterp import select_ppc, ppval1_two, ppval_i
+from .lib import _process_eos
 
 # CHECK VALUE from MATLAB, with densjmd95 (non-Boussinesq) as the eos:
 # >> S = linspace(34, 35.5, 20)';
 # >> T = linspace(18, 0, 20)';
 # >> P = linspace(0, 4000, 20)';
-# >> veronis_density(0, S, T, P, 0, 2000) % 1027.099568892480
+# >> veronis_density(0, S, T, P, 0, 2000) % 1027.098197160422
 def veronis_density(
     S,
     T,
@@ -18,7 +18,6 @@ def veronis_density(
     dp=1.0,
     interp="linear",
     eos="gsw",
-    eos_s_t=None,
     grav=None,
     rho_c=None,
 ):
@@ -87,9 +86,6 @@ def veronis_density(
         volume with respect to `S` and `T`.  The inputs are `S`, `T`, and
         pressure (if non-Boussinesq) or depth (if Boussinesq).
 
-        This need not be @numba.njit decorated but should be vectorized, as it
-        will be called a few times with ndarray inputs.
-
     Notes
     -----
     The result of this function can serve as a density label for an
@@ -108,10 +104,14 @@ def veronis_density(
 
     Examples
     --------
-    S = np.linspace(34, 35.5, 20)
-    T = np.linspace(18, 0, 20)
-    P = np.linspace(0, 4000, 20)
-    veronis_density(S, T, P, 2000, eos="jmd95")
+    >>> S = np.linspace(34, 35.5, 20)
+    >>> T = np.linspace(18, 0, 20)
+    >>> P = np.linspace(0, 4000, 20)
+    >>> veronis_density(S, T, P, 2000, eos="jmd95")
+    1027.098197160422
+
+    Calculate the Veronis density at 2000 dbar on a water column of linearly
+    varying salinity and potential temperature.
 
     .. [1] Veronis, G. (1972). On properties of seawater defined by temperature,
     salinity, and pressure. Journal of Marine Research, 30(2), 227.
@@ -140,6 +140,8 @@ def veronis_density(
         or P[-1] < p1
     ):
         return np.nan
+
+    eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
 
     # P[k0-1] <= p0 <= P[k0]  when  k0 == 1
     # P[k0-1] <  p0 <= P[k0]  when  k0 > 1
