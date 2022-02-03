@@ -21,9 +21,9 @@ from neutralocean.lib import (
     _process_wrap,
     _process_casts,
     _process_n_good,
+    _process_eos,
 )
 from neutralocean.mixed_layer import mixed_layer
-from neutralocean.eos.gsw import rho, rho_s_t
 
 
 def omega_surf(S, T, P, **kwargs):
@@ -36,37 +36,38 @@ def omega_surf(S, T, P, **kwargs):
     Parameters
     ----------
     S, T, P : ndarray or xarray.DataArray
-        See `sigma_surf`
+        See `potential_surf`
 
     p_init : ndarray, Default None
 
         Pressure or depth on the initial approximately neutral surface.
-        Omit to initialize with a "sigma" or "delta" surface.
 
         See Examples section.
 
     ref : float, or tuple of float of length 2
 
-        If `p_init` is None, the reference value(s) for the initial "sigma"
-        surface or "delta" surface that begins the iterations. If `ref` is a
-        scalar, a "sigma" surface is used, and if `ref` is None, the
-        reference pressure is `pin_p` (i.e. taken local to the pinning
-        location). If `ref` is a tuple of length two, a "delta" surface is
-        used, and if `ref` is(None, None), then the reference `S` and `T`
-        values are taken local to the pinning location (pressure or depth
-        `pin_p` on the pinning cast `pin_cast`).
+        If `p_init` is None, the reference value(s) for the initial potential
+        density surface or in-situ density (specific volume) anomaly surface
+        that initializes the omega surface algorithm. If `ref` is a scalar, a
+        potential density urface is used, and if `ref` is None, the reference
+        `P` is `pin_p` (i.e. taken local to the pinning location). If `ref`
+        is a tuple of length two, a in-situ density anomaly surface is used,
+        and if `ref` is (None, None), then the reference `S` and `T` values
+        are taken local to the pinning location (pressure or depth `pin_p` on
+        the pinning cast `pin_cast`).
 
         See Examples section.
 
     isoval : float
 
-        Isovalue for the initial "sigma" or "delta" surface if `p_init` is not
-        given.  Units are same as returned by `eos`.
+        Isovalue for the initial potential density or in-situ density anomaly
+        surface when `p_init` is not given.  Units are same as returned by
+        the function specified by `eos`.
 
         See Examples section.
 
     pin_p, pin_cast :
-        See `sigma_surf`
+        See `potential_surf`
 
     Returns
     -------
@@ -138,10 +139,17 @@ def omega_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, eos_s_t, grav,
-    rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
+    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, grav, rho_c,
+    interp, n_good, diags, output, TOL_P_SOLVER :
 
-        See `sigma_surf`
+        See `potential_surf`
+
+    eos : str or tuple of functions, Default 'gsw'
+
+        As in `potential_surf`, excluding the option to pass a single function.
+        The omega surface algorithm relies on knowing the partial derivatives
+        of the equation of state with respect to salinity and temperature, so
+        the `eos_s_t` function is also required.
 
     ITER_MIN : int, Default 1
 
@@ -201,21 +209,25 @@ def omega_surf(S, T, P, **kwargs):
 
     >>> omega_surf(S, T, P, pin_cast, p_init, ...)
 
-    Alternatively, a "sigma" or "delta" surface can be used as the initial
+    Alternatively, a
+    potential density surface
+    or a
+    in-situ density (specific volume) anomaly surface
+    can be used as the initial
     surface.  To do this, use one of the following two methods
 
     >>> omega_surf(S, T, P, ref, isoval, pin_cast, ...)
 
     >>> omega_surf(S, T, P, ref, pin_p, pin_cast, ...)
 
-    For more info on these methods, see the Examples section of "sigma_surf".
+    For more info on these methods, see the Examples section of `potential_surf`.
     Note that `pin_cast` is always a required input.  Note that `ref` is
-    needed to distinguish if the initial surface will be a "sigma" or "delta"
-    surface.
+    needed to distinguish which of the two types of traditional surfaces will
+    be used as the initial surface.
 
     Notes
     -----
-    See `sigma_surf` Notes.
+    See `potential_surf` Notes.
 
     .. [1] Stanley, McDougall, Barker 2021, Algorithmic improvements to finding
      approximately neutral surfaces, Journal of Advances in Earth System
@@ -234,8 +246,9 @@ def omega_surf(S, T, P, **kwargs):
     wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
-    eos = kwargs.get("eos", rho)
-    eos_s_t = kwargs.get("eos_s_t", rho_s_t)
+    eos = kwargs.get("eos", "gsw")
+    rho_c = kwargs.get("rho_c")
+    grav = kwargs.get("grav")
     ITER_MIN = kwargs.get("ITER_MIN", 1)
     ITER_MAX = kwargs.get("ITER_MAX", 10)
     ITER_START_WETTING = kwargs.get("ITER_START_WETTING", 1)
@@ -267,6 +280,7 @@ def omega_surf(S, T, P, **kwargs):
     wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
+    eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
     ni, nj = n_good.shape
 
     # Prepare grid ratios for matrix problem.
@@ -319,6 +333,7 @@ def omega_surf(S, T, P, **kwargs):
         kwargs["wrap"] = wrap
         kwargs["vert_dim"] = -1  # Since S, T, P already reordered
         kwargs["diags"] = False  # Will make our own diags next
+        kwargs["eos"] = eos
         s, t, p, _ = _traditional_surf(ans_type, S, T, P, **kwargs)
 
     else:

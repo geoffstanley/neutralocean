@@ -1,7 +1,6 @@
 """Tools for handling the Equation of State"""
-import numpy as np
-import functools
-import numba
+import functools as ft
+import numba as nb
 
 from .jmd95 import rho as rho_jmd95
 from .jmd95 import rho_s_t as rho_s_t_jmd95
@@ -20,13 +19,13 @@ def _make_eos(eos, eos_dict, grav=None, rho_c=None, num_p_derivs=0):
     if isinstance(eos, str) and eos in eos_dict.keys():
         eos = eos_dict[eos]
 
+        if grav != None and rho_c != None:
+            eos = make_bsq(eos, grav, rho_c, num_p_derivs)
+
     if not callable(eos):
         raise TypeError(
             f'First input must be a function, "gsw", "jmd95", or "jmdfwg06"; found {eos}'
         )
-
-    if grav != None and rho_c != None:
-        eos = make_bsq(eos, grav, rho_c, num_p_derivs)
 
     return eos
 
@@ -45,7 +44,7 @@ def make_eos(eos, grav=None, rho_c=None):
 
         If a function, should be an equation of state as a function of
         practical / Absolute salinity, potential / Conservative temperature,
-        and pressure.
+        and pressure (for non-Boussesinq) / depth (for Boussinesq).
 
     grav, rho_c : float
 
@@ -119,7 +118,7 @@ def make_eos_p(eos, grav=None, rho_c=None):
     return _make_eos(eos, eos_dict, grav, rho_c, 1)
 
 
-@functools.lru_cache(maxsize=10)
+@ft.lru_cache(maxsize=10)
 def make_bsq(fn, grav, rho_c, num_p_derivs=0):
     """Make a Boussinesq version of a given equation of state (or its partial derivative(s))
 
@@ -155,22 +154,22 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
     z_to_p = 1e-4 * grav * rho_c
 
     if num_p_derivs == 0:
-        # Slight optimization for later: don't multiply by 1
-        @numba.njit
+        # Slight optimization for later: don't multiply by factor when factor == 1
+        @nb.njit
         def fn_bsq(s, t, z):
             return fn(s, t, z * z_to_p)
 
     else:
         factor = z_to_p ** num_p_derivs
 
-        @numba.njit
+        @nb.njit
         def fn_bsq(s, t, z):
             return fn(s, t, z * z_to_p) * factor
 
     return fn_bsq
 
 
-@functools.lru_cache(maxsize=10)
+@ft.lru_cache(maxsize=10)
 def vectorize_eos(eos):
     """Convert an eos function that takes scalar inputs into one taking arrays
 
@@ -190,7 +189,7 @@ def vectorize_eos(eos):
         exactly, but must be broadcastable to each other.
     """
 
-    @numba.vectorize
+    @nb.vectorize
     def eos_vec(s, t, p):
         return eos(s, t, p)
 

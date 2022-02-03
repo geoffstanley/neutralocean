@@ -1,7 +1,7 @@
 """ Mixed Layer """
 
 from neutralocean.interp1d import make_interpolator
-from neutralocean.eos.tools import vectorize_eos
+from neutralocean.eos.tools import make_eos, vectorize_eos
 from neutralocean.lib import _process_casts, _process_vert_dim
 
 
@@ -9,7 +9,9 @@ def mixed_layer(
     S,
     T,
     P,
-    eos,
+    eos="gsw",
+    grav=None,
+    rho_c=None,
     pot_dens_diff=0.03,
     ref_p=100.0,
     bottle_index=1,
@@ -41,13 +43,30 @@ def mixed_layer(
 
         Must increase monotonically along the first dimension (i.e. downwards).
 
-    eos : function
+    eos : str or function, Default 'gsw'
 
-        Equation of state for the density or specific volume as a function of
-        `S`, `T`, and `P` inputs.
+        Specification for the equation of state.
 
-        This function should be @numba.njit decorated and need not be
-        vectorized, as it will be called many times with scalar inputs.
+        If a str, can be any of the strings accepted by
+        `neutralocean.eos.tools.make_eos`,
+        e.g. 'jmd95', 'jmdfwg06', 'gsw'.
+
+        If a function, must take three inputs corresponding to `S`, `T`, and
+        `P`, and output the density (or specific volume).  This form is not
+        allowed when `diags` is True.  This can be made as, e.g.,
+        `eos = neutralocean.eos.make_eos('gsw')`
+        for a non-Boussinesq ocean, or as
+        `eos = neutralocean.eos.make_eos('gsw', grav, rho_c)`
+        for a Boussinesq ocean with `grav` and `rho_c` (see inputs below).
+
+        The function should be @numba.njit decorated and need not be vectorized
+        -- it will be called many times with scalar inputs.
+
+    grav : float, Default None
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+
+    rho_c : float, Default None
+        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
 
     pot_dens_diff : float, Default 0.03
 
@@ -82,7 +101,7 @@ def mixed_layer(
         If `S` and `T` are `xarray.DataArray`, then `vert_dim` is a `str`
         naming the vertical dimension of `S` and `T`.
 
-        Ideally, `vert_dim` is -1.  See `Notes`.
+        Ideally, `vert_dim` is -1.  See `Notes` section of `potential_surf`.
 
 
     Returns
@@ -91,6 +110,9 @@ def mixed_layer(
 
         A 2D array giving the pressure [dbar] or depth [m, positive] of the mixed layer
     """
+
+    # Make the equation of state, if given a str
+    eos = make_eos(eos, grav, rho_c)
 
     # Ensure eos is vectorized. It's okay if eos already was.
     eos = vectorize_eos(eos)

@@ -17,8 +17,8 @@ from neutralocean.lib import (
     _process_wrap,
     _process_casts,
     _process_n_good,
+    _process_eos,
 )
-from neutralocean.eos.gsw import rho, rho_s_t
 
 
 def potential_surf(S, T, P, **kwargs):
@@ -151,57 +151,46 @@ def potential_surf(S, T, P, **kwargs):
         (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
         between cells (5,3) and (5,2).
 
-    eos : function, Default gsw.rho
 
-        Equation of state for the density or specific volume as a function of
-        `S`, `T`, and `P` inputs.
+    eos : str or function or tuple of functions, Default 'gsw'
 
-        For non-Boussinesq models, construct this as
-        `eos = neutral_surfaces.make_eos(x)`
-        where `x` is either "gsw" to use the TEOS-10 in-situ density or
-        "jmd95" to use the Jackett and McDougall (1995) in-situ density [1]_.
-        In this case, the third input to `eos` is pressure.
+        Specification for the equation of state.
 
-        For Boussinesq models, construct this as
-        `eos = neutral_surfaces.make_eos(x, grav, rho_c)`
-        with `x` as above,
-        `grav` the gravitational acceleration [m s-2], and
-        Boussinesq reference desnity [kg m-3].
-        In this case, the third input to `eos` is depth, not pressure.
+        If a str, can be any of the strings accepted by
+        `neutralocean.eos.tools.make_eos`,
+        e.g. 'jmd95', 'jmdfwg06', 'gsw'.
 
-        Alternatively, you may pass your own function.  It should be
-        @numba.njit decorated and need not be vectorized, as it will be called
+        If a function, must take three inputs corresponding to `S`, `T`, and
+        `P`, and output the density (or specific volume).  This form is not
+        allowed when `diags` is True.  This can be made as, e.g.,
+        `eos = neutralocean.eos.make_eos('gsw')`
+        for a non-Boussinesq ocean, or as
+        `eos = neutralocean.eos.make_eos('gsw', grav, rho_c)`
+        for a Boussinesq ocean with `grav` and `rho_c` (see inputs below).
+
+        If a tuple of functions, the first element must be a function for the
+        equation of state as above, and the second element must be a function
+        taking the same three inputs as above and returning two outputs, namely
+        the partial derivatives of the equation of state with respect to `S`
+        and `T`.  The second element can be made as, e.g.,
+        `eos = neutralocean.eos.make_eos_s_t('gsw', grav, rho_c)`
+
+        The function (or the first element of the tuple of functions) should be
+        @numba.njit decorated and need not be vectorized -- it will be called
         many times with scalar inputs.
 
-    eos_s_t : function, Default gsw.rho_s_t
+    grav : float, Default None
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
 
-        Equation of state for the partial derivatives of density or specific
-        volume with respect to `S` and `T` as a function of `S`, `T`, and `P`
-        inputs.
-
-        For non-Boussinesq models, construct this as
-        `eos = neutral_surfaces.make_eos_s_t(x)`
-        where `x` is either "gsw" to use the TEOS-10 in-situ density or
-        "jmd95" to use the Jackett and McDougall (1995) in-situ density [1]_.
-        In this case, the third input to `eos` is pressure.
-
-        For Boussinesq models, construct this as
-        `eos = neutral_surfaces.make_eos_s_t(x, grav, rho_c)`
-        with `x` as above,
-        `grav` the gravitational acceleration [m s-2], and
-        Boussinesq reference desnity [kg m-3].
-        In this case, the third input to `eos` is depth, not pressure.
-
-        Alternatively, pass your own function.  It need not be @numba.njit
-        decorated but should be vectorized, as it will be called a few times
-        with ndarray inputs.
+    rho_c : float, Default None
+        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
 
     interp : str, Default 'linear'
 
         Method for vertical interpolation.  Use 'linear' for linear
         interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
-        `interp1d`.
+        `ppinterp`.
 
     n_good : ndarray, Default None
 
@@ -259,12 +248,8 @@ def potential_surf(S, T, P, **kwargs):
     This code will internally re-arrange `S`, `T`, `P` to have the vertical
     dimension last, so that the data for an individual water column is
     contiguous in memory.  If you call this function many times, consider
-    using ``neutral_surfaces._process_casts`` to pre-process your `S`, `T`,
-    `P` inputs to have the vertical dimension last.  Also consider
-    pre-computing `Sppc`, `Tppc`, and `n_good` (see the documentation for
-    these inputs).
-
-    .. [1] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+    using ``lib._process_casts`` to pre-process your `S`, `T`, `P` inputs to
+    have the vertical dimension last.
     """
 
     return _traditional_surf("potential", S, T, P, **kwargs)
@@ -310,8 +295,8 @@ def anomaly_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, eos_s_t, grav,
-    rho_c, interp_fn, n_good, diags, output, TOL_P_SOLVER :
+    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, grav, rho_c,
+    interp, n_good, diags, output, TOL_P_SOLVER :
         See `potential_surf`
 
     Examples
@@ -357,10 +342,9 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     pin_p = kwargs.get("pin_p")
     vert_dim = kwargs.get("vert_dim", -1)
     TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
-    eos = kwargs.get("eos", rho)
-    eos_s_t = kwargs.get("eos_s_t", rho_s_t)
-    # rho_c = kwargs.get("rho_c")
-    # grav = kwargs.get("grav")
+    eos = kwargs.get("eos", "gsw")
+    rho_c = kwargs.get("rho_c")
+    grav = kwargs.get("grav")
     wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
@@ -380,6 +364,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     wrap = _process_wrap(wrap, sxr, diags)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
+    eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
 
     ni, nj = n_good.shape
 

@@ -51,8 +51,7 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
-    eos=eos,
-    eos_s_t=eos_s_t,
+    eos="jmd95",
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=0.0,
@@ -70,8 +69,7 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
-    eos=eos,
-    eos_s_t=eos_s_t,
+    eos="jmd95",
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=0.0,
@@ -88,14 +86,14 @@ print(
 
 # Provide just the location to intersect `(pin_cast, pin_p)`.
 # This takes the reference depth `ref` to match `pin_p`.
-# Also illustrate using xarray coordinates for pin_cast
-# Also use PCHIPs as the vertical interpolants
+# Also illustrate using xarray coordinates for pin_cast.
+# Also use PCHIPs as the vertical interpolants.
+# Also provide the equation of state and its partial derivatives w.r.t S and T.
 s, t, z, d = potential_surf(
     S,
     T,
     Z,
-    eos=eos,
-    eos_s_t=eos_s_t,
+    eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
     pin_cast={"Longitude_t": 180.5, "Latitude_t": 0.5},
@@ -117,7 +115,7 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
-    eos=eos,
+    eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=(s0, t0),
@@ -135,8 +133,7 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
-    eos=eos,
-    eos_s_t=eos_s_t,
+    eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=(s0, t0),
@@ -157,8 +154,7 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
-    eos=eos,
-    eos_s_t=eos_s_t,
+    eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
@@ -184,7 +180,7 @@ s, t, z, d = omega_surf(
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
-    eos=eos,
+    eos=(eos, eos_s_t),
     ITER_MAX=10,
     ITER_START_WETTING=1,
     **geom,
@@ -209,7 +205,7 @@ s, t, z, d = omega_surf(
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
-    eos=eos,
+    eos=(eos, eos_s_t),
     interp="pchip",
     p_ml={"bottle_index": 1, "ref_p": 0.0},
     ITER_MAX=10,
@@ -233,14 +229,14 @@ from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.label import veronis_density
 from neutralocean.lib import _process_casts, find_first_nan
 from neutralocean.interp1d import make_interpolator
+from neutralocean.ppinterp import select_ppc
 from neutralocean.eos import make_eos_p
 from neutralocean.traj import ntp_bottle_to_cast, _ntp_bottle_to_cast
 
 # %% Veronis Density, used to label an approx neutral surface
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
-ρ_v = veronis_density(S_ref_cast, T_ref_cast, Z, z0, eos=eos, eos_s_t=eos_s_t)
-# check value for above: 1027.7700462375435
+ρ_v = veronis_density(S_ref_cast, T_ref_cast, Z, z0, eos="jmd95")
 print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
     f" has Veronis density {ρ_v} kg m-3"
@@ -289,8 +285,9 @@ s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # Or the more manual version:
 n_good = find_first_nan(S1)[()]
-linterp_1two = make_interpolator("linear", 0, "1", True)
-s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z, n_good, 1e-4, eos, linterp_1two)
+ppc_fn = select_ppc("linear", "1")
+S1ppc, T1ppc = (ppc_fn(Z, C) for C in (S1, T1))
+s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1ppc, T1ppc, Z, n_good, 1e-4, eos)
 
 
 # %% Work with Numpy arrays instead of xarrays
@@ -305,8 +302,7 @@ s, t, z, d = anomaly_surf(
     Snp,
     Tnp,
     Znp,
-    eos=eos,
-    eos_s_t=eos_s_t,
+    eos=(eos, eos_s_t),
     wrap=(True, False),
     vert_dim=-1,
     ref=(s0, t0),
