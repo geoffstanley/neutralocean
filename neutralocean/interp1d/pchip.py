@@ -74,7 +74,7 @@ def _pchip_coeffs(X, Y, i):
     Parameters
     ----------
     X, Y, i :
-        As in `pchip_i`
+        As in `_pchip`
 
     Returns
     -------
@@ -95,20 +95,26 @@ def _pchip_coeffs(X, Y, i):
     at_end = (i == len(X) - 1) or np.isnan(X[i + 1]) or np.isnan(Y[i + 1])
 
     if at_start and at_end:
-        # ||| X[0] <= x <= X[1] |||   Revert to Linear Interpolation
 
-        dY[0] = (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
-        # leave cY, bY = 0, 0
+        if np.isnan(X[i]) or np.isnan(Y[i]):
+            # Only one valid data point.  Leave the interpolant as NaN.
+            dY[0], cY, bY = np.nan, np.nan, np.nan
 
-        # The following code evaluates the cubic interpolant, given `d` that
-        # specifies the number of derivatives to take.
-        # r = (x - X[i - 1]) / (X[i] - X[i - 1])
-        # if d == 0:
-        #     y = Y[i - 1] * (1 - r) + Y[i] * r
-        # elif d == 1:
-        #     y = (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
-        # else:
-        #     y = 0.0
+        else:
+            # ||| X[0] <= x <= X[1] |||   Revert to Linear Interpolation
+
+            dY[0] = (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
+            # leave cY, bY = 0, 0
+
+            # The following code evaluates the cubic interpolant, given `d` that
+            # specifies the number of derivatives to take.
+            # r = (x - X[i - 1]) / (X[i] - X[i - 1])
+            # if d == 0:
+            #     y = Y[i - 1] * (1 - r) + Y[i] * r
+            # elif d == 1:
+            #     y = (Y[i] - Y[i - 1]) / (X[i] - X[i - 1])
+            # else:
+            #     y = 0.0
 
     else:
         if at_start:

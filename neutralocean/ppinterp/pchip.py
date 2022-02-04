@@ -127,6 +127,14 @@ def pchip_coeffs_1(X, Y):
         C[0, 1] = 0
         C[0, 2] = δ
 
+    # else:  # k == 1
+    #     leave coefficients as nans.  Ignore case of x = X[0] while
+    #     having X[1:] == np.nan and/or Y[1:] == np.nan.  That case
+    #     cannot be handled here, since setting the coefficients to
+    #     be [0, 0, 0, Y[0]], i.e. a constant function, would mean the
+    #     interpolant would be Y[0] when evaluated at x > X[0], but we
+    #     only want it to be Y[0] at x = X[0] precisely.
+
     C[:, 3] = Y
 
     return C

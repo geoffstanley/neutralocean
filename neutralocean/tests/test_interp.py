@@ -6,7 +6,7 @@ from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc, ppval
 from scipy.interpolate import UnivariateSpline, PchipInterpolator
 
-N = 3  # number of 1D interpolation problems
+N = 4  # number of 1D interpolation problems
 K = 10  # number of grid points in each interpolation problem
 
 # Monotonic but non-uniform independent data
@@ -15,13 +15,12 @@ X = np.tile(X1, (N, 1))
 
 # Build dependent data
 Y = np.empty((N, K), dtype=np.float64)
-Y[0] = np.ones(K) * (X1 / X1[-1]) ** 2  # steadily increasing
-Y[1] = np.sin(X1 / X1[-1] * 2 * np.pi)  # smooth wave
-Y[2] = Y[1] * np.cos(X1 / X1[-1] * 10 * np.pi)  # crazy wave, with some NaN's
-Y[2, -3:] = np.nan
+Y[0:2] = np.ones(K) * (X1 / X1[-1]) ** 2  # steadily increasing
+Y[2] = np.sin(X1 / X1[-1] * 2 * np.pi)  # smooth wave
+Y[3] = Y[1] * np.cos(X1 / X1[-1] * 10 * np.pi)  # crazy wave, with some NaN's
+Y[3, -3:] = np.nan
 
-
-# X[0,1:] = np.nan   # need to test this kind of case out!
+X[1, 1:] = np.nan  # test an extreme case of nan data, e.g. 1 ocean cell
 
 
 # Interpolate between each knot
@@ -48,20 +47,21 @@ x_targets = np.sort(np.concatenate((X1, x_midpts)))
 def test_interp(interp, num_deriv, x):
 
     # Interpolate with SciPy
-    y = np.empty((N, x.size), dtype=float)
+    y = np.full((N, x.size), np.nan, dtype=float)
     for i in range(N):
-        k = find_first_nan(Y[i])
-        if interp == "linear":
-            fn = UnivariateSpline(X[i, 0:k], Y[i, 0:k], k=1, s=0, ext="raise")
-        elif interp == "pchip":
-            fn = PchipInterpolator(X[i, 0:k], Y[i, 0:k], extrapolate=False)
-        fn = fn.derivative(num_deriv)
-        for j in range(x.size):
-            try:
+        k = min(find_first_nan(Y[i]), find_first_nan(X[i]))
+        try:
+            if interp == "linear":
+                fn = UnivariateSpline(X[i, 0:k], Y[i, 0:k], k=1, s=0, ext="raise")
+            elif interp == "pchip":
+                fn = PchipInterpolator(X[i, 0:k], Y[i, 0:k], extrapolate=False)
+            fn = fn.derivative(num_deriv)
+            for j in range(x.size):
                 y[i, j] = fn(x[j])
-            except:
-                # extrapolation was needed (only for UnivariateSpline)
-                y[i, j] = np.nan
+        except:
+            # extrapolation was needed (only for UnivariateSpline)
+            # or not enough valid data points (e.g. X has 1 non-nan value)
+            pass  # leave as nan
 
     # Interpolate with our methods: first, on the fly using interp1d
     interp_fn = make_interpolator(interp, num_deriv, "u")
