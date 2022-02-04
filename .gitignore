@@ -6,4 +6,3 @@ dist/
 docs/_build/
 dev/
 todo.txt
-**/*.nc

@@ -1,26 +1,12 @@
 import numpy as np
 import xarray as xr
 
-import os
-import urllib.request
-
-try:
-    import wget
-
-    have_wget = True
-except:
-    have_wget = False
+import pooch
 
 
-def load_OCCA(folder=None):
+def load_OCCA():
     """
     Load grid, salinity, and potential temperature for OCCA 2004-2006 average
-
-    Parameters
-    ----------
-    folder : str, Default None
-        Path to folder containing DDsalt.0406annclim.nc and DDtheta.0406annclim.nc
-        If None, these .nc files will be downloaded from the internet.
 
     Returns
     -------
@@ -34,9 +20,16 @@ def load_OCCA(folder=None):
         Potential temperature
     """
 
-    # First check .nc files exist, and download them if not
-    if folder is None:
-        file_salt, file_theta = download_OCCA()
+    # Use friendly pooch to download dataset, if it hasn't already done so
+    # and cached it locally.
+    url_salt = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDsalt.0406annclim.nc"
+    url_theta = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDtheta.0406annclim.nc"
+
+    hash_salt = "4d90ab2c6cf524bb56afed54a66e33172a9ed57382ab11014a46618be3e199e5"
+    hash_theta = "f9f30bda7fa006be802e4f705fc7608943945ffba4b628c8ae33310d2f696ba4"
+
+    file_salt = pooch.retrieve(url=url_salt, known_hash=hash_salt)
+    file_theta = pooch.retrieve(url=url_theta, known_hash=hash_theta)
 
     ts = 0  # Select the first time step (the only time step in these files)
 
@@ -91,80 +84,4 @@ def load_OCCA(folder=None):
     dims = ("Longitude_t", "Latitude_t", "Depth_c")
     S, T = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T))
 
-    # Remove any downloaded files that were temporary
-    urllib.request.urlcleanup()
-
     return g, S, T
-
-
-def download_OCCA(folder=None):
-    """
-    Download OCCA annual average S and T .nc files into given folder, or into
-    the folder containing this script.  If that folder is not writable, fall-
-    back to downloading to a temporary file.
-    """
-
-    if folder is None:
-        folder = local_folder()
-
-    # The dropbox links can be used for testing... they are faster:
-    # url_salt = "https://www.dropbox.com/s/q9hywvjup1mwhc9/DDsalt.0406annclim.nc?dl=1"
-    # url_theta = "https://www.dropbox.com/s/qr6bivfyk0s06ot/DDtheta.0406annclim.nc?dl=1"
-    url_salt = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDsalt.0406annclim.nc"
-    url_theta = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDtheta.0406annclim.nc"
-
-    file_salt = folder + "DDsalt.0406annclim.nc"
-    file_theta = folder + "DDtheta.0406annclim.nc"
-
-    # Check if the files are already there
-    if (
-        os.access(folder, os.R_OK)
-        and os.path.exists(file_salt)
-        and os.path.exists(file_theta)
-    ):
-        return file_salt, file_theta
-
-    # The files aren't there, so download them (using wget if available,
-    # otherwise fall-back on urllib)
-    if os.access(folder, os.W_OK):
-
-        if not os.path.exists(file_salt):
-            print(
-                "Attempt download of OCCA annual average salinity (~11mb) "
-                f"from {url_salt}"
-            )
-            if have_wget:
-                wget.download(url_salt, file_salt)
-            else:
-                _, _ = urllib.request.urlretrieve(url_salt, file_salt)
-
-        if not os.path.exists(file_theta):
-            print(
-                "Attempt download of OCCA annual average potential temperature (~11mb) "
-                f"from {url_theta}"
-            )
-            if have_wget:
-                wget.download(url_theta, file_theta)
-            else:
-                _, _ = urllib.request.urlretrieve(url_theta, file_theta)
-
-    else:
-        print(
-            "Attempt download of OCCA annual average salinity (~11mb) "
-            f"from {url_salt} to a temporary file ... standby ..."
-        )
-        file_salt, _ = urllib.request.urlretrieve(url_salt)
-        print(f"... saved as {file_salt}")
-
-        print(
-            "Attempt download of OCCA annual average potential temperature (~11mb) "
-            f"from {url_theta} to a temporary file ... standby ..."
-        )
-        file_theta, _ = urllib.request.urlretrieve(url_theta)
-        print(f"... saved as {file_theta}")
-
-    return file_salt, file_theta
-
-
-def local_folder():
-    return os.path.dirname(os.path.abspath(__file__)) + os.path.sep
