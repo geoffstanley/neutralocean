@@ -30,7 +30,7 @@ import numba as nb
 # for scalars is about twice as fast as a signatureless njit'ed function
 # applied to ndarrays.
 @nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
-def rho1(s, t, p):
+def rho(s, t, p):
     """Fast JMD95 [1]_ in-situ density.
 
     Parameters
