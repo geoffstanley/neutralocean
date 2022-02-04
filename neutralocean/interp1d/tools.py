@@ -110,14 +110,18 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
     >>> s, t = interp(p, P, S, T)
     """
 
-    ker = make_kernel(interpolant, deriv)
+    ker0 = make_kernel(interpolant, deriv)
 
-    ker0 = ker[0]  # Need to dereference these for numba
-    if len(ker) == 2:
-        ker1 = ker[1]
+    if isinstance(ker0, tuple):
+        lenker = len(ker0)
+        if lenker == 2:
+            ker1 = ker0[1]
+        ker0 = ker0[0]  # Need to dereference these for numba
+    else:
+        lenker = 1
 
     if kind == "1":
-        if len(ker) == 1:
+        if lenker == 1:
             if not two:
 
                 @nb.njit
@@ -130,7 +134,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                 def fcn(x, X, Y, Z):
                     return _interp_1_YZ(ker0, x, X, Y, Z)
 
-        elif len(ker) == 2:
+        elif lenker == 2:
             if not two:
 
                 @nb.njit
@@ -145,7 +149,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
 
     elif kind == "n":
 
-        if len(ker) == 1:
+        if lenker == 1:
             if not two:
 
                 @nb.njit
@@ -158,7 +162,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                 def fcn(x, X, Y, Z):
                     return _interp_n_YZ(ker0, x, X, Y, Z)
 
-        elif len(ker) == 2:
+        elif lenker == 2:
             if not two:
 
                 @nb.njit
@@ -173,7 +177,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
 
     elif kind == "u":
 
-        if len(ker) == 1:
+        if lenker == 1:
             if not two:
 
                 @nb.guvectorize(
@@ -200,7 +204,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                 def fcn(x, X, Y, Z, y, z):
                     y[0], z[0] = _interp_1_YZ(ker0, x, X, Y, Z)
 
-        elif len(ker) == 2:
+        elif lenker == 2:
             if not two:
 
                 @nb.guvectorize(
@@ -281,9 +285,9 @@ def make_kernel(interpolant, deriv):
             f"Expected `interpolant` in ('linear', 'pchip'); got {interpolant}"
         )
 
-    if not isinstance(deriv, tuple):
-        deriv = (deriv,)
-
-    ker = tuple(kers[d] for d in deriv)
+    if isinstance(deriv, (tuple, list)):
+        ker = tuple(kers[d] for d in deriv)
+    else:
+        ker = kers[deriv]
 
     return ker

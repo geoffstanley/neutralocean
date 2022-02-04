@@ -34,7 +34,7 @@ def _linterp(x, X, Y, i):
     """
 
     # dx = (x - X[i-1]) => 0 guaranteed (and == 0 only if x == X[0])
-    return Y[i - 1] + (x - X[i - 1]) / (X[i] - X[i - 1]) * (Y[i] - Y[i - 1])
+    return (Y[i] - Y[i - 1]) / (X[i] - X[i - 1]) * (x - X[i - 1]) + Y[i - 1]
 
 
 @nb.njit

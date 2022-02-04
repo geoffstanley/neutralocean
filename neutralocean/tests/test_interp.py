@@ -2,14 +2,8 @@ import numpy as np
 import pytest
 
 from neutralocean.lib import find_first_nan
-from neutralocean.interp import (
-    interp,
-    linterp_i,
-    linterp_dx_i,
-    pchip_i,
-    pchip_dx_i,
-    pchip_dxx_i,
-)
+from neutralocean.interp1d import make_interpolator
+from neutralocean.ppinterp import select_ppc, ppval
 from scipy.interpolate import UnivariateSpline, PchipInterpolator
 
 N = 3  # number of 1D interpolation problems
@@ -36,33 +30,30 @@ x_midpts = X1[0:-1] + np.diff(X1) / 2
 # Interpolate to each knot point and each midpoint
 x_targets = np.sort(np.concatenate((X1, x_midpts)))
 
-
-# %%
-
 # Note re: lhs vs rhs:
 # Our code won't agree with SciPy when evaluating a function that is piecewise
 # discontinuous (e.g. first derivative of a linear interpolant or second
 # derivative of a PHCIP) at the knots, because we evaluate using the "left"
 # side whereas SciPy evaluates using the "right" side.
 @pytest.mark.parametrize(
-    "interp_fn,num_deriv,x",
+    "interp,num_deriv,x",
     [
-        (linterp_i, 0, x_targets),
-        (linterp_dx_i, 1, x_midpts),  # see "Note re: lhs vs rhs"
-        (pchip_i, 0, x_targets),
-        (pchip_dx_i, 1, x_targets),
-        (pchip_dxx_i, 2, x_midpts),  # see "Note re: lhs vs rhs"
+        ("linear", 0, x_targets),
+        ("linear", 1, x_midpts),  # see "Note re: lhs vs rhs"
+        ("pchip", 0, x_targets),
+        ("pchip", 1, x_targets),
+        ("pchip", 2, x_midpts),  # see "Note re: lhs vs rhs"
     ],
 )
-def test_interp(interp_fn, num_deriv, x):
+def test_interp(interp, num_deriv, x):
 
     # Interpolate with SciPy
     y = np.empty((N, x.size), dtype=float)
     for i in range(N):
         k = find_first_nan(Y[i])
-        if interp_fn.__name__.startswith("linterp"):
+        if interp == "linear":
             fn = UnivariateSpline(X[i, 0:k], Y[i, 0:k], k=1, s=0, ext="raise")
-        elif interp_fn.__name__.startswith("pchip"):
+        elif interp == "pchip":
             fn = PchipInterpolator(X[i, 0:k], Y[i, 0:k], extrapolate=False)
         fn = fn.derivative(num_deriv)
         for j in range(x.size):
@@ -72,9 +63,23 @@ def test_interp(interp_fn, num_deriv, x):
                 # extrapolation was needed (only for UnivariateSpline)
                 y[i, j] = np.nan
 
-    # Interpolate with our methods
-    y_ = np.empty_like(y)
+    # Interpolate with our methods: first, on the fly using interp1d
+    interp_fn = make_interpolator(interp, num_deriv, "u")
+    y1 = np.empty_like(y)
     for j in range(x.size):
-        y_[:, j] = interp(x[j], X, Y, interp_fn)
+        y1[:, j] = interp_fn(x[j], X, Y)
 
-    assert np.allclose(y, y_, equal_nan=True)
+    assert np.allclose(y, y1, equal_nan=True)
+
+    # Interpolate with our methods:
+    # second, with piecewise polynomial coefficients, using ppinterp
+    ppc_fn = select_ppc(interp, "u")
+    Yppc = ppc_fn(X, Y)
+    y2 = np.empty_like(y)
+    for j in range(x.size):
+        y2[:, j] = ppval(x[j], X, Yppc, num_deriv)
+
+    # PCHIPs have machine precision differences between interp1d and ppinterp.
+    # assert np.array_equal(y1, y2, equal_nan=True)
+
+    assert np.allclose(y1, y2, equal_nan=True)
