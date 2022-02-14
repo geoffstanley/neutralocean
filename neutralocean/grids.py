@@ -1,10 +1,185 @@
 import numpy as np
 import numba as nb
+import xarray as xr
+import xgcm
+
+
+def neighbour_rectilinear(dims, conn, periodic):
+    """
+    Linear indices to each neighbour of each grid point on a regular grid
+
+    This builds a 2D array `adj` giving linear indices to each of `conn`
+    neighbours of each grid point in a regular grid.
+
+    Parameters
+    ----------
+    dims : tuple of int
+
+        The number of grid points in each dimension of the grid.  Currently
+        this must be of length 2, i.e. only 2D grids are supported.
+
+    conn : int
+        The grid connectivity: for a 2D grid, this must be 4, 5, 8, or 9.
+
+    periodic : tuple of bool
+        The periodicity of the grid.  Dimension `i` is periodic iff
+        `periodic[i] == True`.
+
+
+    Returns
+    -------
+    adj : ndarray
+
+        Linear indices to up to `conn` neighbours of each grid point.
+        When a grid point `m` is adjacent to a non-periodic boundary, some of
+        `adj[m,:]` will be `N`, where `N = np.prod(dims)` is the total number
+        of grid points.
+
+    Notes
+    -----
+    The connectivity `conn` specifies the number of neighbours to a central
+    grid point, possibly including itself.  For `n` between 1 and conn; the
+    `n`'th neighbour is located relative to the central grid point according
+    to the following diagram:
+
+    conn==4      conn==5    conn==8   conn==9
+    +------> j
+    | . 1 .       . 1 .     4 1 6     0 3 6
+    | 0 . 3       0 2 4     0 . 3     1 4 7
+    v . 2 .       . 3 .     5 2 7     2 5 8
+    i
+
+    Here, the first dimension (i) increases downward and the second dimension
+    (j) increases right.  For example, with `conn == 4`, if `m` is the linear
+    index to grid point `(i,j)`, then `n = adj[m,1]` is the linear index to
+    grid point `(i-1,j)`.
+
+    """
+
+    ndim = len(dims)  # Number of dimensions in the grid
+    assert ndim == 2, "currently only works for 2D grids."
+    assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
+
+    ni = dims[0]
+    nj = dims[1]
+
+    wallval = ni * nj
+
+    # fmt: off
+    # Build adjacency matrix and handle periodicity
+    if conn == 4:
+        # . 1 .
+        # 0 . 3
+        # . 2 .
+        order = [1, 3, 5, 7]
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+
+        if not periodic[0]:
+            adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
+            adj[ni-1, :, 2] = wallval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            adj[:, 0   , 0] = wallval # j-1 hits a wall when j = 0
+            adj[:, nj-1, 3] = wallval # j+1 hits a wall when j = nj - 1
+
+    elif conn == 5:
+        # . 1 .
+        # 0 2 4
+        # . 3 .
+        # order = [1, 3, 4, 5, 7]
+
+        # . 1 .
+        # 0 4 3
+        # . 2 .
+        order = [1, 3, 5, 7, 4]
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+
+        if not periodic[0]:
+            # adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
+            # adj[ni-1, :, 3] = wallval # i+1 hits a wall when i = ni - 1
+            adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
+            adj[ni-1, :, 2] = wallval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            # adj[:, 0   , 0] = wallval # j-1 hits a wall when j = 0
+            # adj[:, nj-1, 4] = wallval # j+1 hits a wall when j = nj - 1
+            adj[:, 0   , 0] = wallval # j-1 hits a wall when j = 0
+            adj[:, nj-1, 3] = wallval # j+1 hits a wall when j = nj - 1
+
+    elif conn == 8:
+        # 4 1 6
+        # 0 . 3
+        # 5 2 7
+        order = [1, 3, 5, 7, 0, 2, 6, 8]
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+
+        if not periodic[0]:
+            adj[0   , :, [1, 4, 6]] = wallval # i-1 hits a wall when i = 0
+            adj[ni-1, :, [2, 5, 7]] = wallval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            adj[:, 0   , [0, 4, 5]] = wallval # j-1 hits a wall when j = 0
+            adj[:, nj-1, [3, 6, 7]] = wallval # j+1 hits a wall when j = nj - 1
+
+    elif conn == 9:
+        # 0 3 6
+        # 1 4 7
+        # 2 5 8
+        order = range(9)
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+
+        if not periodic[0]:
+            adj[0   , :, [0, 3, 6]] = wallval # i-1 hits a wall when i = 0
+            adj[ni-1, :, [2, 5, 8]] = wallval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            adj[:, 0   , [0, 1, 2]] = wallval # j-1 hits a wall when j = 0
+            adj[:, nj-1, [6, 7, 8]] = wallval # j+1 hits a wall when j = nj - 1
+
+    else:
+        raise("Unknown number of neighbours.  conn must be one of 4, 5, 8, or 9.")
+    # fmt: on
+
+    # Reshape adj to a matrix of dimensions (conn, ni*nj)
+    adj = adj.reshape((ni * nj, conn))
+
+    return adj
+
+
+def _neighbour_rectilinear_helper(ni, nj, order):
+
+    D = len(order)
+
+    # Prepare to circshift linear indices to some subset of its neighbours
+    # generally ordered as follows
+    # +------> j = 2'nd dim
+    # | 0 3 6
+    # | 1 4 7
+    # | 2 5 8
+    # v
+    #  i = 1'st dim
+    spin = (
+        (1, 1),
+        (0, 1),
+        (-1, 1),
+        (1, 0),
+        (0, 0),
+        (-1, 0),
+        (1, -1),
+        (0, -1),
+        (-1, -1),
+    )  # - sign included as prep for np.roll
+
+    # Build linear index to each grid point, and repeat them D times
+    adj = np.tile(np.reshape(range(ni * nj), (ni, nj, 1)), (1, 1, D))  # ni x nj x D
+
+    # Shift these linear indices so they refer to their neighbours.
+    for d in range(D):
+        adj[:, :, d] = np.roll(adj[:, :, d], spin[order[d]], (0, 1))
+
+    return adj
 
 
 @nb.njit
 def find_first(item, vec):
-    """return the index of the first occurence of item in vec"""
+    """return the index of the first occurence of `item` in `vec`
+    If not found, return -1."""
     for i in range(len(vec)):
         if item == vec[i]:
             return i
@@ -170,3 +345,48 @@ def xgcm_faceconns_convert(face_connections):
         F[i, 3] = -1 if a is None else a[0]
 
     return F
+
+
+def neighbour4_xgcm_faceconns(face_connections, n):
+    # Access first (and only) key / value of face_connections
+    fname = next(iter(face_connections.keys()))  # name of face_connections only key
+    nf = len(next(iter(face_connections.values())))  # len(faces_connections only value)
+
+    gg = xr.Dataset(None, {"i": np.arange(n), "j": np.arange(n), fname: np.arange(nf)})
+    grid = xgcm.Grid(
+        gg,
+        periodic=False,
+        face_connections=face_connections,
+        coords={
+            "X": {"center": "i", "left": "i", "right": "i"},
+            "Y": {"center": "j", "left": "j", "right": "j"},
+        },
+    )
+
+    # Make a DataArray but filled with 0, 1, ...
+    idx = xr.DataArray(
+        np.arange(nf * n * n).reshape((nf, n, n)),
+        dims=(fname, "j", "i"),
+        coords=(np.arange(nf), np.arange(n), np.arange(n)),
+    )
+
+    # Note j is the Y axis and i is the X axis, when we write data[f, j, i]  (f the face index)
+    idx_jm1 = grid.axes["Y"]._neighbor_binary_func(
+        idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
+    )  # 940 µs
+    idx_im1 = grid.axes["X"]._neighbor_binary_func(
+        idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
+    )
+    idx_ip1 = grid.axes["X"]._neighbor_binary_func(
+        idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+    )
+    idx_jp1 = grid.axes["Y"]._neighbor_binary_func(
+        idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+    )
+
+    A4 = np.empty((n * n * nf, 4), dtype=int)
+    A4[:, 0] = idx_jm1.values.reshape(-1)
+    A4[:, 1] = idx_im1.values.reshape(-1)
+    A4[:, 2] = idx_ip1.values.reshape(-1)
+    A4[:, 3] = idx_jp1.values.reshape(-1)
+    return A4
