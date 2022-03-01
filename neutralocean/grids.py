@@ -63,7 +63,7 @@ def neighbour_rectilinear(dims, conn, periodic):
     ni = dims[0]
     nj = dims[1]
 
-    wallval = ni * nj
+    badval = ni * nj
 
     # fmt: off
     # Build adjacency matrix and handle periodicity
@@ -73,50 +73,55 @@ def neighbour_rectilinear(dims, conn, periodic):
         # . 2 .
         order = [1, 3, 5, 7]
         adj = _neighbour_rectilinear_helper(ni, nj, order)
-
         if not periodic[0]:
-            adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
-            adj[ni-1, :, 2] = wallval # i+1 hits a wall when i = ni - 1
+            adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, 2] = badval # i+1 hits a wall when i = ni - 1
         if not periodic[1]:
-            adj[:, 0   , 0] = wallval # j-1 hits a wall when j = 0
-            adj[:, nj-1, 3] = wallval # j+1 hits a wall when j = nj - 1
+            adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
 
     elif conn == 5:
-        # . 1 .
-        # 0 2 4
-        # . 3 .
-        # order = [1, 3, 4, 5, 7]
-
         # . 1 .
         # 0 4 3
         # . 2 .
         order = [1, 3, 5, 7, 4]
         adj = _neighbour_rectilinear_helper(ni, nj, order)
-
         if not periodic[0]:
-            # adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
-            # adj[ni-1, :, 3] = wallval # i+1 hits a wall when i = ni - 1
-            adj[0   , :, 1] = wallval # i-1 hits a wall when i = 0
-            adj[ni-1, :, 2] = wallval # i+1 hits a wall when i = ni - 1
+            # adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+            # adj[ni-1, :, 3] = badval # i+1 hits a wall when i = ni - 1
+            adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, 2] = badval # i+1 hits a wall when i = ni - 1
         if not periodic[1]:
-            # adj[:, 0   , 0] = wallval # j-1 hits a wall when j = 0
-            # adj[:, nj-1, 4] = wallval # j+1 hits a wall when j = nj - 1
-            adj[:, 0   , 0] = wallval # j-1 hits a wall when j = 0
-            adj[:, nj-1, 3] = wallval # j+1 hits a wall when j = nj - 1
-
+            # adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+            # adj[:, nj-1, 4] = badval # j+1 hits a wall when j = nj - 1
+            adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
+            
+        # # . 1 .
+        # # 0 2 4
+        # # . 3 .
+        # # order = [1, 3, 4, 5, 7]
+        # adj = _neighbour_rectilinear_helper(ni, nj, order)
+        # if not periodic[0]:
+        #     adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+        #     adj[ni-1, :, 3] = badval # i+1 hits a wall when i = ni - 1
+        # if not periodic[1]:
+        #     adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+        #     adj[:, nj-1, 4] = badval # j+1 hits a wall when j = nj - 1
+        #     adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
+            
     elif conn == 8:
         # 4 1 6
         # 0 . 3
         # 5 2 7
         order = [1, 3, 5, 7, 0, 2, 6, 8]
         adj = _neighbour_rectilinear_helper(ni, nj, order)
-
         if not periodic[0]:
-            adj[0   , :, [1, 4, 6]] = wallval # i-1 hits a wall when i = 0
-            adj[ni-1, :, [2, 5, 7]] = wallval # i+1 hits a wall when i = ni - 1
+            adj[0   , :, [1, 4, 6]] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, [2, 5, 7]] = badval # i+1 hits a wall when i = ni - 1
         if not periodic[1]:
-            adj[:, 0   , [0, 4, 5]] = wallval # j-1 hits a wall when j = 0
-            adj[:, nj-1, [3, 6, 7]] = wallval # j+1 hits a wall when j = nj - 1
+            adj[:, 0   , [0, 4, 5]] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, [3, 6, 7]] = badval # j+1 hits a wall when j = nj - 1
 
     elif conn == 9:
         # 0 3 6
@@ -124,13 +129,12 @@ def neighbour_rectilinear(dims, conn, periodic):
         # 2 5 8
         order = range(9)
         adj = _neighbour_rectilinear_helper(ni, nj, order)
-
         if not periodic[0]:
-            adj[0   , :, [0, 3, 6]] = wallval # i-1 hits a wall when i = 0
-            adj[ni-1, :, [2, 5, 8]] = wallval # i+1 hits a wall when i = ni - 1
+            adj[0   , :, [0, 3, 6]] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, [2, 5, 8]] = badval # i+1 hits a wall when i = ni - 1
         if not periodic[1]:
-            adj[:, 0   , [0, 1, 2]] = wallval # j-1 hits a wall when j = 0
-            adj[:, nj-1, [6, 7, 8]] = wallval # j+1 hits a wall when j = nj - 1
+            adj[:, 0   , [0, 1, 2]] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, [6, 7, 8]] = badval # j+1 hits a wall when j = nj - 1
 
     else:
         raise("Unknown number of neighbours.  conn must be one of 4, 5, 8, or 9.")
@@ -144,7 +148,7 @@ def neighbour_rectilinear(dims, conn, periodic):
 
 def _neighbour_rectilinear_helper(ni, nj, order):
 
-    D = len(order)
+    D = len(order)  # max degree
 
     # Prepare to circshift linear indices to some subset of its neighbours
     # generally ordered as follows
@@ -200,6 +204,8 @@ def find_first(item, vec):
 # 1 indexes (j, i-1)
 # 2 indexes (j, i+1)
 # 3 indexes (j+1, i)
+# In the xgcm language, that is ordered as
+# Yleft, Xleft, Xright, Yright
 def neighbour4_tiled_rectilinear(F, n):
     """
     Make linear indices to the 4 neighbours of point on a tiled rectilinear grid
@@ -324,8 +330,6 @@ def neighbour4_tiled_rectilinear(F, n):
     return A
 
 
-# In the xgcm language, that is ordered as
-# Yleft, Xleft, Xright, Yright
 def xgcm_faceconns_convert(face_connections):
     fc = tuple(face_connections.values())[0]
     nf = len(tuple(fc.keys()))
@@ -347,7 +351,7 @@ def xgcm_faceconns_convert(face_connections):
     return F
 
 
-def neighbour4_xgcm_faceconns(face_connections, n):
+def edgescompact_from_faceconns(face_connections, n):
     # Access first (and only) key / value of face_connections
     fname = next(iter(face_connections.keys()))  # name of face_connections only key
     nf = len(next(iter(face_connections.values())))  # len(faces_connections only value)
@@ -358,8 +362,10 @@ def neighbour4_xgcm_faceconns(face_connections, n):
         periodic=False,
         face_connections=face_connections,
         coords={
-            "X": {"center": "i", "left": "i", "right": "i"},
-            "Y": {"center": "j", "left": "j", "right": "j"},
+            # "X": {"center": "i", "left": "i", "right": "i"},
+            # "Y": {"center": "j", "left": "j", "right": "j"},
+            "X": {"center": "i", "left": "i"},
+            "Y": {"center": "j", "left": "j"},
         },
     )
 
@@ -371,22 +377,44 @@ def neighbour4_xgcm_faceconns(face_connections, n):
     )
 
     # Note j is the Y axis and i is the X axis, when we write data[f, j, i]  (f the face index)
-    idx_jm1 = grid.axes["Y"]._neighbor_binary_func(
-        idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
-    )  # 940 µs
     idx_im1 = grid.axes["X"]._neighbor_binary_func(
         idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
     )
-    idx_ip1 = grid.axes["X"]._neighbor_binary_func(
-        idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
-    )
-    idx_jp1 = grid.axes["Y"]._neighbor_binary_func(
-        idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+    idx_jm1 = grid.axes["Y"]._neighbor_binary_func(
+        idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
     )
 
-    A4 = np.empty((n * n * nf, 4), dtype=int)
-    A4[:, 0] = idx_jm1.values.reshape(-1)
-    A4[:, 1] = idx_im1.values.reshape(-1)
-    A4[:, 2] = idx_ip1.values.reshape(-1)
-    A4[:, 3] = idx_jp1.values.reshape(-1)
-    return A4
+    # idx_ip1 = grid.axes["X"]._neighbor_binary_func(
+    #     idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+    # )
+    # idx_jp1 = grid.axes["Y"]._neighbor_binary_func(
+    #     idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+    # )
+
+    # adj = np.empty((n * n * nf, 4), dtype=int)
+    # adj = np.empty((n * n * nf, 2), dtype=int)
+    # adj[:, 0] = idx_jm1.values.reshape(-1)
+    # adj[:, 1] = idx_im1.values.reshape(-1)
+    # adj[:, 2] = idx_ip1.values.reshape(-1)
+    # adj[:, 3] = idx_jp1.values.reshape(-1)
+    # return adj
+
+    return np.stack((idx_im1.values.reshape(-1), idx_jm1.values.reshape(-1)), axis=-1)
+
+
+# Equivalent but slower than below nb.njit'ed function.
+# def adj_to_edges(adj):
+#     N, d = adj.shape
+#     return np.stack((np.tile(np.arange(N), d), adj.T.reshape(-1)), axis=1)
+
+
+@nb.njit
+def adj_to_edges(adj):
+    N, D = adj.shape
+    edges = np.empty((N * D, 2), dtype=type(0))
+    for d in range(D):
+        for n in range(N):
+            # edges[n * D + d, 0] = n
+            # edges[n * D + d, 1] = adj[n,d]
+            edges[d * N + n, :] = (n, adj[n, d])
+    return edges

@@ -345,7 +345,6 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     eos = kwargs.get("eos", "gsw")
     rho_c = kwargs.get("rho_c")
     grav = kwargs.get("grav")
-    wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
     geom = (
@@ -361,16 +360,15 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     # Process arguments
     sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
-    wrap = _process_wrap(wrap, sxr, diags)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
 
-    ni, nj = n_good.shape
+    surf_shape = n_good.shape
 
     # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
     # selection to (ref, isoval) pair
-    _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj)
+    _check_ref(ans_type, ref, isoval, pin_cast, pin_p, surf_shape)
     ref, isoval = _choose_ref_isoval(
         ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
     )
@@ -392,7 +390,8 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     d = dict()
     if diags:
         d["timer"] = time() - timer
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+        A4 = None  # not done.
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, A4, *geom)
         d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))
@@ -412,7 +411,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     return s, t, p, d
 
 
-def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
+def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, surf_shape):
     """Error checking on ref / isoval / pin_cast / pin_p combinations for "potential"
     and "anomaly" surfaces
     """
@@ -449,22 +448,23 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
     if not isinstance(pin_cast, (type(None), dict)):
         if (
             isinstance(pin_cast, (tuple, list))
-            and len(pin_cast) == 2
+            and len(pin_cast) == len(surf_shape)
             and all(isinstance(x, int) for x in pin_cast)
         ):
-            if (
-                pin_cast[0] < 0
-                or pin_cast[1] < 0
-                or pin_cast[0] >= ni
-                or pin_cast[1] >= nj
+            if np.any(
+                [
+                    pin_cast[i] < 0 or pin_cast[i] >= surf_shape[i]
+                    for i in range(len(pin_cast))
+                ]
             ):
                 raise ValueError(
                     '"pin_cast" must index a cast within the domain; '
-                    f'found "pin_cast" = {pin_cast} outside the bounds (0,{ni-1}) x (0,{nj-1})'
+                    f'found "pin_cast" = {pin_cast} outside the domain with bounds {surf_shape}'
                 )
         else:
             raise TypeError(
-                'If provided, "pin_cast" must be a tuple or list of 2 integers'
+                'If provided, "pin_cast" must be a tuple or list of integers of'
+                " length 1 less than the number of dimensions in S"
             )
 
     # Error checking on pin_p

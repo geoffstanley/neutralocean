@@ -80,7 +80,7 @@ def load_OCCA():
     S = x.salt.isel(Time=ts)
     x.close()
 
-    # # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
+    # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
     dims = ("Longitude_t", "Latitude_t", "Depth_c")
     S, T = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T))
 

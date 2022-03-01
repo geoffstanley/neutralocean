@@ -11,17 +11,20 @@ from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
-from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
-from neutralocean.ntp import ntp_ϵ_errors_norms
+from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
+from neutralocean.grids import edges_to_adjnodes, max_deg_from_edges
+from neutralocean.graph import edges_binary_fcn
+from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.lib import (
     xr_to_np,
     _xr_in,
     _xr_out,
     _process_pin_cast,
-    _process_wrap,
     _process_casts,
     _process_n_good,
     _process_eos,
+    take_fill,
+    aggregate,
 )
 from neutralocean.mixed_layer import mixed_layer
 
@@ -243,7 +246,7 @@ def omega_surf(S, T, P, **kwargs):
     p_init = kwargs.get("p_init")
     vert_dim = kwargs.get("vert_dim", -1)
     p_ml = kwargs.get("p_ml")
-    wrap = kwargs.get("wrap")
+    edges = kwargs.get("edges")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
     eos = kwargs.get("eos", "gsw")
@@ -265,9 +268,11 @@ def omega_surf(S, T, P, **kwargs):
     # fmt: on
     # dist2on1_iJ = dist2_iJ / dist1_iJ
     # dist1on2_Ij = dist1_Ij / dist2_Ij
-    geom = [
-        kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
-    ]
+    # geom = [
+    #    kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
+    # ]
+    dist = kwargs.get("dist", 1.0)
+    distperp = kwargs.get("distperp", 1.0)
 
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
@@ -277,29 +282,33 @@ def omega_surf(S, T, P, **kwargs):
 
     sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
-    wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
+    # wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
-    ni, nj = n_good.shape
+    surf_shape = n_good.shape
 
     # Prepare grid ratios for matrix problem.
-    if not np.all(geom == 1.0):
-        geom = [np.broadcast_to(x, (ni, nj)) for x in geom]
-    dist2on1_iJ = geom[3] / geom[0]  # dist2_iJ / dist1_iJ
-    dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
+    # if not np.all(geom == 1.0):
+    #     geom = [np.broadcast_to(x, (ni, nj)) for x in geom]
+    # dist2on1_iJ = geom[3] / geom[0]  # dist2_iJ / dist1_iJ
+    # dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
+    geom = distperp / dist
 
     if not isinstance(pin_cast, (tuple, list)):
         raise TypeError("`pin_cast` must be a tuple or list")
 
-    pin_cast_1 = np.ravel_multi_index(pin_cast, (ni, nj))  # linear index
+    pin_cast_1 = np.ravel_multi_index(pin_cast, surf_shape)  # linear index
 
     # Pre-calculate grid adjacency needed for Breadth First Search:
-    A4 = grid_adjacency((ni, nj), 4, wrap)  # using 4-connectivity
+    # A4 = neighbour_rectilinear((ni, nj), 4, wrap)  # using 4-connectivity
+    n_nodes = n_good.size
+    max_deg = max_deg_from_edges(edges, n_nodes)
+    adjnodes = edges_to_adjnodes(edges, n_nodes, max_deg)
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
-        TOL_LRPD_MAV = TOL_LRPD_MAV * 1000.0 ** 2
+        TOL_LRPD_MAV = TOL_LRPD_MAV * 1000.0**2
 
     # Pre-allocate arrays for diagnostics
     if diags:
@@ -330,7 +339,6 @@ def omega_surf(S, T, P, **kwargs):
 
         # Update arguments with pre-processed values
         kwargs["n_good"] = n_good
-        kwargs["wrap"] = wrap
         kwargs["vert_dim"] = -1  # Since S, T, P already reordered
         kwargs["diags"] = False  # Will make our own diags next
         kwargs["eos"] = eos
@@ -343,9 +351,9 @@ def omega_surf(S, T, P, **kwargs):
             raise TypeError(
                 'If provided, "p_init" or "p_init.values" must be an ndarray'
             )
-        if p_init.shape != (ni, nj):
+        if p_init.shape != surf_shape:
             raise ValueError(
-                f'"p_init" should contain a 2D array of size ({ni}, {nj});'
+                f'"p_init" should contain a 2D array of size {surf_shape};'
                 f" found size {p_init.shape}"
             )
 
@@ -369,7 +377,7 @@ def omega_surf(S, T, P, **kwargs):
 
     if p_ml is None:
         # Prepare array as needed for bfs_conncomp1_wet
-        p_ml = np.full((ni, nj), -np.inf)
+        p_ml = np.full(surf_shape, -np.inf)
         # p_ml = np.broadcast_to(-np.inf, (ni, nj))  # DEV: Doesn't work with @numba.njit
 
     # ensure same nan structure between s, t, and p. Just in case user gives
@@ -379,7 +387,7 @@ def omega_surf(S, T, P, **kwargs):
     if diags:
         d["timer"][0] = time() - timer
 
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist, distperp)
         d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))
@@ -426,7 +434,7 @@ def omega_surf(S, T, P, **kwargs):
                 T,
                 P,
                 n_good,
-                A4,
+                adjnodes,
                 pin_cast_1,
                 TOL_P_SOLVER,
                 eos,
@@ -434,15 +442,13 @@ def omega_surf(S, T, P, **kwargs):
                 p_ml=p_ml,
             )
         else:
-            qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, pin_cast_1)
+            qu, qt = bfs_conncomp1(np.isfinite(p.reshape(-1)), adjnodes, pin_cast_1)
             n_newly_wet = 0
         timer_bfs = time() - timer_loc
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        ϕ = _omega_matsolve_poisson(
-            s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A4, qu, qt, pin_cast, eos_s_t
-        )
+        ϕ = _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, pin_cast, eos_s_t)
         timer_mat = time() - timer_loc
 
         # --- Update the surface (mutating s, t, p by vertsolve)
@@ -463,7 +469,7 @@ def omega_surf(S, T, P, **kwargs):
         ϕ_MAV = np.nanmean(abs(ϕ))
         if diags or TOL_P_CHANGE_RMS > 0:
             Δp = p - p_old
-            Δp_RMS = np.sqrt(np.nanmean(Δp ** 2))
+            Δp_RMS = np.sqrt(np.nanmean(Δp**2))
 
         if diags:
 
@@ -484,7 +490,7 @@ def omega_surf(S, T, P, **kwargs):
             d["timer_bfs"][iter_] = timer_bfs
 
             # Diagnostics about the state AFTER this iteration
-            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist, distperp)
             d["ϵ_RMS"][iter_], d["ϵ_MAV"][iter_] = ϵ_RMS, ϵ_MAV
 
             n_wet = np.sum(np.isfinite(p))
@@ -515,7 +521,7 @@ def omega_surf(S, T, P, **kwargs):
 
 
 def _omega_matsolve_poisson(
-    s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A4, qu, qt, mr, eos_s_t
+    s, t, p, geom, edges, adjnodes, max_deg, qu, qt, mr, eos_s_t
 ):
     """Solve the Poisson formulation of the omega-surface global matrix problem
 
@@ -525,6 +531,7 @@ def _omega_matsolve_poisson(
 
         Salinity, temperature, pressure on the surface
 
+    # TODO:  update doco
     dist2on1_iJ : ndarray or float
 
         The grid distance in the second dimension divided by the grid distance
@@ -538,11 +545,6 @@ def _omega_matsolve_poisson(
         in the second dimension, both centred at (I-1/2,J). Equivalently, the
         square root of the area of a grid cell centred at(I,J-1/2), divided
         by the distance from (I,J-1) to (I,J).
-
-    wrap : tuple of bool of length 2
-
-        ``wrap(i)`` is true iff the domain is periodic in the i'th lateral
-        dimension.
 
     A4 : ndarray
 
@@ -576,14 +578,14 @@ def _omega_matsolve_poisson(
         so that its LRPD changes by ϕ will yield a more neutral surface.
     """
 
-    ni, nj = p.shape
+    surf_shape = p.shape
 
-    # The value nij appears in A4 to index neighbours that would go across a
+    # This value appears in A4 to index neighbours that would go across a
     # non-periodic boundary
-    nij = ni * nj
+    n_nodes = p.size
 
     # --- Build & solve sparse matrix problem
-    ϕ = np.full(nij, np.nan, dtype=np.float64)
+    ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)
 
     # If there is only one water column, there are no equations to solve,
     # and the solution is simply phi = 0 at that water column, and nan elsewhere.
@@ -592,19 +594,16 @@ def _omega_matsolve_poisson(
     N = qt + 1  # Number of water columns
     if N <= 1:  # There are definitely no equations to solve
         ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
-        return ϕ.reshape(ni, nj)
+        return ϕ.reshape(surf_shape)
 
-    # Collect & sort linear indices to all pixels in this region
+    E = edges.shape[0]  # Number of edges
+
+    # Collect and sort linear indices to all pixels in this region
     # sorting here makes matrix better structured; overall speedup.
     m = np.sort(qu[0 : qt + 1])
 
     # If both gridding variables are 1, then grid is uniform
-    UNIFORM_GRID = (
-        isinstance(dist2on1_iJ, float)
-        and dist2on1_iJ == 1
-        and isinstance(dist1on2_Ij, float)
-        and dist1on2_Ij == 1
-    )
+    UNIFORM_GRID = isinstance(geom, float) and geom == 1.0
 
     # Begin building D = divergence of ϵ,
     # and L = Laplacian operator (compact representation)
@@ -613,36 +612,67 @@ def _omega_matsolve_poisson(
     # . 1 .
     # 0 4 3
     # . 2 .
-    IM = 0  # (I  ,J-1)
-    MJ = 1  # (I-1,J  )
-    PJ = 2  # (I+1,J  )
-    IP = 3  # (I  ,J+1)
-    IJ = 4  # (I  ,J  )
-    L = np.zeros((ni, nj, 5))  # pre-alloc space
+    # IM = 0  # (I  ,J-1)
+    # MJ = 1  # (I-1,J  )
+    # PJ = 2  # (I+1,J  )
+    # IP = 3  # (I  ,J+1)
+    # IJ = 4  # (I  ,J  )
+    # L = np.zeros((n_nodes, max_deg))  # pre-alloc space
 
     # Create views into L
-    L_IM = L[:, :, IM]
-    L_MJ = L[:, :, MJ]
-    L_PJ = L[:, :, PJ]
-    L_IP = L[:, :, IP]
-    L_IJ = L[:, :, IJ]
+    # L_IM = L[:, :, IM]
+    # L_MJ = L[:, :, MJ]
+    # L_PJ = L[:, :, PJ]
+    # L_IP = L[:, :, IP]
+    # L_IJ = L[:, :, IJ]
 
-    # Aliases
-    sm = s
-    tm = t
-    pm = p
+    # Calculate neutrality errors between each pair of adjacent water columns
+    ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
+
+    bad = np.isnan(ϵ)
+    ϵ[bad] = 0.0
+
+    fac = geom.copy()
+    fac[bad] = 0.0
+    ϵ *= fac  # scale ϵ
+
+    # Build the RHS of the matrix problem
+    #  rhs = ϵ[m]
+    # How to do this?  Probably need to use np.argsort
+    # Or, change to using edgescompact rather than edges.
+
+    # Build indices for the rows of the sparse matrix, namely
+    # [[0,0], ..., [E-1,E-1]]
+    r = np.repeat(np.arange(E), 2).reshape(E, 2)
+
+    # Build indices for the columns of the sparse matrix
+    # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
+    # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
+    c = edges
+
+    # Build the values of the sparse matrix
+    v = np.stack((geom, -geom), axis=1)
+
+    # Prune the entries to
+    # ignore connections to adjacent pixels that are dry (including those
+    # that are "adjacent" across a non-periodic boundary), and
+    good = c >= 0
+    # Build the sparse matrix; with E rows & N columns
+    mat = csc_matrix((v[good], (r[good], c[good])), shape=(E, N))
+
+    # Divergence of ϵ
+    D = aggregate(ϵ, edges[:, 0], n_nodes) - aggregate(ϵ, edges[:, 1], n_nodes)
 
     # --- m = (i, j) & n = (i-1, j),  then also n = (i+1, j) by symmetry
     sn = im1(sm)
     tn = im1(tm)
     pn = im1(pm)
-    if not wrap[0]:
-        sn[0, :] = np.nan
+    # sn = edges_binary_fcn(s, edges, lambda a, b: b)
 
     # A stripped down version of ntp_ϵ_errors
-    vs, vt = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
+    # vs, vt = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
     # (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 1500)  # DEV: testing omega software to find potential density surface()
-    ϵ = vs * (sm - sn) + vt * (tm - tn)
+    # ϵ = vs * (sm - sn) + vt * (tm - tn)
 
     bad = np.isnan(ϵ)
     ϵ[bad] = 0.0
@@ -732,7 +762,7 @@ def _omega_matsolve_poisson(
 
     # Build indices for the rows of the sparse matrix, namely
     # [[0,0,0,0,0], ..., [N-1,N-1,N-1,N-1,N-1]]
-    r = np.repeat(range(N), 5).reshape(N, 5)
+    r = np.repeat(np.arange(N), 5).reshape(N, 5)
 
     # Build indices for the columns of the sparse matrix
     # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
@@ -765,7 +795,7 @@ def _omega_matsolve_poisson(
     # spsolve (requires ``good = (c >= 0)`` above) is slower than using cholesky
     # ϕ[m] = spsolve(mat, rhs)
 
-    return ϕ.reshape(ni, nj)
+    return ϕ.reshape(surf_shape)
 
 
 def im1(F):  # G[i,j] == F[i-1,j]

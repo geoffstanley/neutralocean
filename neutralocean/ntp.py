@@ -1,11 +1,13 @@
 """Neutral Tangent Plane and related functions"""
 
 import numpy as np
+import numba as nb
 
-from neutralocean.lib import _process_wrap, xr_to_np
+from neutralocean.lib import xr_to_np
+from neutralocean.graph import edges_binary_fcn
 
 
-def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
+def ntp_ϵ_errors(s, t, p, eos_s_t, edges, dist=1.0):
     """
     Calculate ϵ neutrality errors on an approximately neutral surface
 
@@ -20,6 +22,7 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
         volume with respect to `S` and `T` as a function of `S`, `T`, and `P`
         inputs.
 
+    # TODO: update docs
     wrap : tuple of bool, or tuple of str
 
         Specifies which dimensions are periodic.
@@ -47,20 +50,19 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
         `s`, `t`, and `p` live.
     """
 
-    wrap = _process_wrap(wrap, s)
-
     s, t, p = (xr_to_np(x) for x in (s, t, p))
 
-    # Use backward differences; results are on the U, V grids.
-    ϵx = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, im1, dist1_iJ)
-    ϵy = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, jm1, dist2_Ij)
+    sa, ta, pa = (edges_binary_fcn(x, edges, avg1) for x in (s, t, p))
+    ds, dt = (edges_binary_fcn(x, edges, dif1) for x in (s, t))
 
-    return ϵx, ϵy
+    rsa, rta = eos_s_t(sa, ta, pa)
+    ϵ = rsa * ds + rta * dt
+    if dist is not float or dist != 1.0:
+        ϵ = ϵ / dist
+    return ϵ
 
 
-def ntp_ϵ_errors_norms(
-    s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist1_Ij=1.0, dist2_Ij=1.0, dist2_iJ=1.0
-):
+def ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist=1.0, distperp=1.0):
     """
     Calculate norms of the ϵ neutrality errors on an approximately neutral surface
 
@@ -68,6 +70,12 @@ def ntp_ϵ_errors_norms(
     ----------
     s, t, p, eos_s_t, wrap :
         See ntp_ϵ_errors
+
+    dist : 1d array of float
+        Distance [m] between nodes connected by edges
+
+    distperp : 1d array of float
+        Distance [m] of the face between nodes connected by edges
 
     dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ : float or ndarray, Default 1.0
 
@@ -92,89 +100,152 @@ def ntp_ϵ_errors_norms(
 
     # Calculate ϵ neutrality errors.  Here, treat all distances = 1.
     # The actual distances will be handled in computing the norms
-    ϵ_iJ, ϵ_Ij = ntp_ϵ_errors(s, t, p, eos_s_t, wrap)
+    ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
 
-    ni, nj = s.shape
-
-    # fmt: off
-    # Expand grid distances.  Soft notation: i = I-1/2; j = J-1/2
-    dist1_iJ = np.broadcast_to(dist1_iJ, (ni, nj))  # Distance [m] in 1st dim centred at (I-1/2, J)
-    dist1_Ij = np.broadcast_to(dist1_Ij, (ni, nj))  # Distance [m] in 1st dim centred at (I, J-1/2)
-    dist2_Ij = np.broadcast_to(dist2_Ij, (ni, nj))  # Distance [m] in 2nd dim centred at (I, J-1/2)
-    dist2_iJ = np.broadcast_to(dist2_iJ, (ni, nj))  # Distance [m] in 2nd dim centred at (I-1/2, J)
-    AREA_iJ = dist1_iJ * dist2_iJ  # Area [m^2] centred at (I-1/2, J)
-    AREA_Ij = dist1_Ij * dist2_Ij  # Area [m^2] centred at (I, J-1/2)
+    area = dist * distperp  # Area [m^2] centred on edges
 
     # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
-    # Here, weights are AREA_iJ and AREA_Ij.
-    # But also need to divide epsilon by grid distances dist1_iJ and dist2_Ij.
+    # Here, weights are `area`.
+    # But also need to divide epsilon by grid distances `dist`.
     # Thus, the numerator of L2 norm needs to multiply epsilon^2 by
-    #     AREA_iJ ./ dist1_iJ.^2 = dist2_iJ ./ dist1_iJ ,
-    # and AREA_Ij ./ dist2_Ij.^2 = dist1_Ij ./ dist2_Ij .
-    ϵ_RMS = np.sqrt(
-        (np.nansum(dist2_iJ / dist1_iJ * ϵ_iJ ** 2) + np.nansum(dist1_Ij / dist2_Ij * ϵ_Ij ** 2)) /
-        (   np.sum(AREA_iJ * np.isfinite(ϵ_iJ))     +    np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
-    )
-
+    #     area / dist^2 = distperp / dist,
+    ϵ_RMS = np.sqrt(np.nansum(distperp / dist * ϵ**2) / np.sum(area * np.isfinite(ϵ)))
 
     # L1 norm of vector [a_i], weighted by vector [w_i], is sum( w_i * |a_i| ) / sum( w_i )
-    # Here, weights are AREA_iJ and AREA_Ij.
-    # But also need to divide epsilon by grid distances dist1_iJ and dist2_Ij.
+    # Here, weights are `area`.
+    # But also need to divide epsilon by grid distances `dist`.
     # Thus, the numerator of L1 norm needs to multiply epsilon by
-    #     AREA_iJ ./ dist1_iJ = dist2_iJ ,
-    # and AREA_Ij ./ dist2_Ij = dist1_Ij .
-    ϵ_MAV = (
-        (np.nansum(dist2_iJ        * abs(ϵ_iJ)) + np.nansum(dist1_Ij         * abs(ϵ_Ij)))
-        / ( np.sum(AREA_iJ * np.isfinite(ϵ_iJ)) +     np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
-       )
-    # fmt: on
+    #     area ./ dist = distperp ,
+    ϵ_MAV = np.nansum(distperp * abs(ϵ)) / np.sum(area * np.isfinite(ϵ))
 
     return ϵ_RMS, ϵ_MAV
 
 
-def _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, shift, dist=1.0):
-    # Calculate neutrality error on a surface in one direction.
-
-    sa, ta, pa = (avg(x, shift, wrap) for x in (s, t, p))
-    ds, dt = (dif(x, shift, wrap) for x in (s, t))
-    rsa, rta = eos_s_t(sa, ta, pa)
-    ϵ = rsa * ds + rta * dt
-    if dist is not float or dist != 1.0:
-        ϵ = ϵ / dist
-    return ϵ
+# def im1(F, wrap, fill=np.nan):  # G[i,j] == F[i-1,j]
+#     G = np.roll(F, 1, axis=0)
+#     if not wrap[0]:
+#         G[0, :] = fill
+#     return G
 
 
-def im1(F, wrap, fill=np.nan):  # G[i,j] == F[i-1,j]
-    G = np.roll(F, 1, axis=0)
-    if not wrap[0]:
-        G[0, :] = fill
-    return G
+# def ip1(F, wrap, fill=np.nan):  # G[i,j] == F[i+1,j]
+#     G = np.roll(F, -1, axis=0)
+#     if not wrap[0]:
+#         G[-1, :] = fill
+#     return G
 
 
-def ip1(F, wrap, fill=np.nan):  # G[i,j] == F[i+1,j]
-    G = np.roll(F, -1, axis=0)
-    if not wrap[0]:
-        G[-1, :] = fill
-    return G
+# def jm1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j-1]
+#     G = np.roll(F, 1, axis=1)
+#     if not wrap[1]:
+#         G[:, 0] = fill
+#     return G
 
 
-def jm1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j-1]
-    G = np.roll(F, 1, axis=1)
-    if not wrap[1]:
-        G[:, 0] = fill
-    return G
+# def jp1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j+1]
+#     G = np.roll(F, -1, axis=1)
+#     if not wrap[1]:
+#         G[:, -1] = fill
+#     return G
 
 
-def jp1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j+1]
-    G = np.roll(F, -1, axis=1)
-    if not wrap[1]:
-        G[:, -1] = fill
-    return G
+# def avg(F, shift, wrap):
+#     return (F + shift(F, wrap)) * 0.5
 
 
-def avg(F, shift, wrap):
-    return (F + shift(F, wrap)) * 0.5
+# def dif(F, shift, wrap):
+#     return F - shift(F, wrap)
 
 
-def dif(F, shift, wrap):
-    return F - shift(F, wrap)
+@nb.njit
+def avg1(a, b):
+    return (a + b) * 0.5
+
+
+@nb.njit
+def dif1(a, b):
+    return a - b
+
+
+# def avg(a, adj):
+#     return (a + shift(a, adj)) * 0.5
+
+# def dif(a, adj):
+#     return a - shift(a, adj)
+
+
+# # 180 µs
+# @nb.njit
+# def shpy(a, A4, d):
+#     sh = a.shape
+#     b = np.empty(a.size + 1, dtype=a.dtype)
+#     b[0:-1] = a.reshape(-1)
+#     b[-1] = np.nan
+#     b = b[A4[:, d]]
+#     return b.reshape(sh)
+
+
+# # 217 µs
+# @nb.njit
+# def shpy2(a, A4, d):
+#     sh = a.shape
+#     b = a.reshape(-1)[A4[:, d]]
+#     b[A4[:, d] == -1] = np.nan
+#     return b.reshape(sh)
+
+
+# # 148 µs
+# @nb.njit
+# def sh(a, A4, d):
+#     b = np.empty(a.size, dtype=a.dtype)
+#     sh = a.shape
+#     a = a.reshape(-1)
+#     for i in range(A4.shape[0]):
+#         n = A4[i, d]
+#         if n == -1:
+#             b[i] = np.nan
+#         else:
+#             b[i] = a[n]
+#     return b.reshape(sh)
+
+
+# # 112 µs
+# @nb.njit
+# def sh0pre(a, A4, d, b):
+#     sh = a.shape
+#     a = a.reshape(-1)
+#     for i in range(A4.shape[0]):
+#         if A4[i, d] >= 0:
+#             b[i] = a[A4[i, d]]
+#         else:
+#             b[i] = np.nan
+#     b = b.reshape(sh)
+
+
+# # 116 µs
+# @nb.njit
+# def sh01pre(a, A1, b):
+#     sh = a.shape
+#     a = a.reshape(-1)
+#     for i in range(len(A1)):
+#         if A1[i] >= 0:
+#             b[i] = a[A1[i]]
+#         else:
+#             b[i] = np.nan
+#     b = b.reshape(sh)
+
+
+# # 149 µs
+# @nb.njit
+# def sh1(a, A4, d):
+#     b = np.empty(a.size, dtype=a.dtype)
+#     sh = a.shape
+#     a = a.reshape(-1)
+#     A1 = A4[:, d]
+#     for i in range(A4.shape[0]):
+#         n = A1[i]
+#         if n == -1:
+#             b[i] = np.nan
+#         else:
+#             b[i] = a[n]
+#     return b.reshape(sh)

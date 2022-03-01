@@ -1,13 +1,13 @@
 """Library of simple functions for neutral_surfaces"""
 
 import numpy as np
-import numba
+import numba as nb
 import xarray as xr
 
 from .eos import make_eos, make_eos_s_t
 
 
-@numba.njit
+@nb.njit
 def find_first_nan(a):
     """The index to the first NaN along the last axis
 
@@ -34,6 +34,47 @@ def find_first_nan(a):
                 k[n] = i
                 break
     return k
+
+
+@nb.njit
+def take_fill(a, indices, fillval=np.nan):
+    """
+    Like numpy.take but fills with nan when indices are out of range
+
+    Parameters
+    ----------
+    a : ndarray
+        input data
+
+    indices : 1d array
+        linear indices to elements of `a`
+
+    Returns
+    -------
+    b : ndarray
+        The i'th element of b (in linear order) is the `map[i]`'th element of `a`,
+        (in linear order), or nan if `map[i] < 0`.  Same shape as `remap`.
+    """
+    b = np.empty(indices.size, dtype=a.dtype)
+    a_ = a.reshape(-1)
+    for i in range(len(b)):
+        if indices[i] >= 0:
+            b[i] = a_[indices[i]]
+        else:
+            b[i] = fillval
+    return b
+
+
+@nb.njit
+def aggregate(a, indices, n):
+    # a and indices have the same size
+    # n : int
+    #   length of output array
+    b = np.zeros(n, dtype=a.dtype)
+    for i in range(len(indices)):
+        if indices[i] >= 0:
+            b[indices[i]] += a[i]
+    return b
 
 
 def val_bot(T, n_good):
@@ -156,7 +197,7 @@ def _process_casts(S, T, P, vert_dim):
 
     vert_dim = _process_vert_dim(vert_dim, S)
 
-    # Broadcast a 1D vector for P into a 3D array like S
+    # Broadcast a 1D vector for P into a ND array like S
     if P.ndim < S.ndim:
         # First make P a 3D array with its non-singleton dimension be `vert_dim`
         P = np.reshape(P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim)))
