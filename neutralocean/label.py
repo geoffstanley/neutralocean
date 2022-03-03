@@ -68,10 +68,10 @@ def veronis_density(
         Maximum interval of pressure or depth in trapezoidal numerical
         integration
 
-    interp : str, Default ``linear''
+    interp : str, Default 'linear'
 
-        Method for vertical interpolation.  Use ``linear'' for linear
-        interpolation, and ``pchip'' for Piecewise Cubic Hermite Interpolating
+        Method for vertical interpolation.  Use 'linear' for linear
+        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
         `interp1d`.
 

@@ -65,16 +65,12 @@ def val_bot(T, n_good):
     >>> T[0,1,3:] = np.nan  # make cast (0,1) be only 3 ocean cells deep
     >>> n_good = find_first_nan(T)
     >>> val_bot(T, n_good)
-    array([[nan,  8.],
-           [ 1.,  1.],
-           [ 1.,  1.]])
+    array([[nan,  8.], [ 1.,  1.], [ 1.,  1.]])
 
     # Evaluate the depth at the bottom grid cell
     >>> Z = np.linspace(0, 4500, 10)  # grid cell centre's are at depths 0, 500, 1000, ..., 4500.
     >>> val_bot(Z, n_good)  # using n_good calculated from T as above
-    array([[  nan, 1000.],
-           [4500., 4500.],
-           [4500., 4500.]])
+    array([[  nan, 1000.], [4500., 4500.], [4500., 4500.]])
     """
 
     if T.ndim == n_good.ndim + 1:

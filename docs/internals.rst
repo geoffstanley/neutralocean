@@ -3,9 +3,21 @@ Internal functions
 
 interp1d
 ~~~~~~~~
-.. autofunction:: neutralocean.interp1d.interp_1
+.. autofunction:: neutralocean.interp1d.interp1d._interp_1
 
-.. autofunction:: neutralocean.interp1d.interp_n
+.. autofunction:: neutralocean.interp1d.interp1d._interp_1_fg
+
+.. autofunction:: neutralocean.interp1d.interp1d._interp_1_YZ
+
+.. autofunction:: neutralocean.interp1d.interp1d._interp_1_fg_YZ
+
+.. autofunction:: neutralocean.interp1d.interp1d._interp_n
+
+.. autofunction:: neutralocean.interp1d.interp1d._interp_n_YZ
+
+.. autofunction:: neutralocean.interp1d.interp1d._interp_n_fg
+
+.. autofunction:: neutralocean.interp1d.interp1d._interp_n_fg_YZ
 
 .. autofunction:: neutralocean.interp1d.linear._linterp
 
@@ -21,17 +33,22 @@ interp1d
 
 ppinterp
 ~~~~~~~~
-
 .. autofunction:: neutralocean.ppinterp.ppval1
 
 .. autofunction:: neutralocean.ppinterp.ppval1_two
+
+.. autofunction:: neutralocean.ppinterp.ppval_i
 
 .. autofunction:: neutralocean.ppinterp.linear.linear_coeffs_1
 
 .. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs_1
 
-fzero
------
+Root finding in 1D
+------------------
+
+brent_guess
+~~~~~~~~~~~
+.. autofunction:: neutralocean.fzero.brent_guess
 
 brent
 ~~~~~
@@ -41,8 +58,8 @@ guess_to_bounds
 ~~~~~~~~~~~~~~~
 .. autofunction:: neutralocean.fzero.guess_to_bounds
 
-lib
----
+Library functions
+-----------------
 
 find_first_nan
 ~~~~~~~~~~~~~~

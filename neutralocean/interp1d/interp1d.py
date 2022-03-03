@@ -39,18 +39,18 @@ def _interp_1(f, x, X, Y):
         interpolation within a known interval.
 
         The parameters to `f` are
-            x : float
-            X : ndarray(float, 1d)
-            Y : ndarray(float, 1d)
-            i : int
+        x : float
+        X : ndarray(float, 1d)
+        Y : ndarray(float, 1d)
+        i : int
         and the return value of `f` is
-            y : float
+        y : float
         which is `Y` as a function of `X` interpolated to the value `x`. Here,
         the subinterval of `X` within which `x` falls is given to this
         function by `i`.  This function will only be called when the
         following is guaranteed:
-            (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
-            (b) `2 <= i <= len(X) - 1`  and  X[i-1] < x <= X[i]`.
+        (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
+        (b) `2 <= i <= len(X) - 1`  and  X[i-1] < x <= X[i]`.
 
     x : float
         Evaluation site
