@@ -2,12 +2,21 @@
 Calculate neutral surfaces in the ocean, using Python
 
 # Installation
-To install `neutralocean`, simply execute
+If you use pip, simply execute
 ```
 $ pip install neutralocean
 ```
 
-Later, `neutralocean` will also be added to conda-forge.
+If you use conda, we're going to still use pip because I haven't uploaded `neutralocean` to conda-forge yet.  I will do that soon.  In the meantime, it's probably best to install the main dependencies from conda-forge, first.  
+```
+$ conda install -c conda-forge numpy=1.21 numba
+$ conda install -c conda-forge scipy scikit-sparse xarray gsw pip pooch
+```
+The use of `numpy=1.21` is currently necessary for `numba`.
+Now that we've got most things from conda-forge, we'll get just `neutralocean` from pip:
+```
+$ pip install neutralocean
+```
 
 
 # Usage
