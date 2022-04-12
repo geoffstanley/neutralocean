@@ -14,7 +14,7 @@ from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
 from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
-from neutralocean.graph import edges_to_adjnodes, max_deg_from_edges
+from neutralocean.grid.graph import edges_to_adjnodes, max_deg_from_edges
 from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.lib import (
     xr_to_np,
@@ -745,7 +745,7 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
         return ϕ.reshape(surf_shape)
 
     # Collect linear indices to all pixels in this region
-    m = qu[0 : qt + 1]
+    m = qu[0:N]
 
     # `remap` changes from linear indices (0, 1, ..., n_nodes) for the entire
     # space (including land), into linear indices (0, 1, ..., N-1) for the
@@ -754,11 +754,11 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     remap[m] = np.arange(N)
 
     # Build logical array of good nodes
-    gn = np.full(n_nodes, False)
-    gn[m] = True
+    # gn = np.full(n_nodes, False)
+    # gn[m] = True
 
     # Build logical array of good edges
-    ge = gn[edges[:, 0]] & gn[edges[:, 1]]
+    ge = (remap[edges[:, 0]] >= 0) & (remap[edges[:, 1]] >= 0)
 
     # Select only the good edges
     edges = edges[ge, :]
@@ -797,11 +797,8 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # less near boundaries of the connected component.
     diag = aggsum(fac, edges[:, 0], N) + aggsum(fac, edges[:, 1], N)
 
-    # Divergence of ϵ
+    # Divergence of ϵ -- for the connected component only
     D = aggsum(ϵ, edges[:, 1], N) - aggsum(ϵ, edges[:, 0], N)
-
-    # Pinning:
-    # D[remap[mr]] = 0.0
 
     # Build the rows, columns, and values of the sparse matrix
     r = np.concatenate((edges.reshape(-1), np.arange(N)))
@@ -819,6 +816,12 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # Pinning
     i = remap[mr]
     L[i, i] += 1
+
+    # alternative pinning strategy.  Basically same output to many sig figs.
+    # L[:, i] = 0
+    # L[i, :] = 0
+    # L[i, i] = 1
+    # D[i] = 0
 
     # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
     # function, so that this can be njit'ed.  But numba doesn't support
