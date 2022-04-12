@@ -36,7 +36,7 @@ eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
 
 edges = build_edges((ni, nj), g["wrap"])
 dist = build_edge_data((ni, nj), g["wrap"], (g["DXCvec"], g["DYCsc"]))
-distperp = build_edge_data((ni, nj), g["wrap"], (g["DXGvec"], g["DYGsc"]))
+distperp = build_edge_data((ni, nj), g["wrap"], (g["DYGsc"], g["DXGvec"]))
 
 # %% Potential Density surfaces
 
@@ -183,14 +183,14 @@ s, t, z, d = omega_surf(
     S,
     T,
     Z,
-    edges=edges,
+    edges,
     geometry=(dist, distperp),
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
     eos=(eos, eos_s_t),
     ITER_MAX=10,
-    ITER_START_WETTING=100,
+    ITER_START_WETTING=1,
 )
 print(
     f" ** The omega-surface"
@@ -207,9 +207,9 @@ s, t, z, d = omega_surf(
     S,
     T,
     Z,
-    ref=(None, None),
-    edges=edges,
+    edges,
     geom=(dist, distperp),
+    ref=(None, None),
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
@@ -258,6 +258,8 @@ s, t, z, d = omega_surf(
     S,
     T,
     Z,
+    edges=edges,
+    geom=(dist, distperp),
     ref=(None, None),
     wrap="Longitude_t",
     vert_dim="Depth_c",
@@ -268,7 +270,6 @@ s, t, z, d = omega_surf(
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
-    **geom,
     p_ml=z_ml,
 )
 

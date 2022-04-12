@@ -29,7 +29,7 @@ from neutralocean.lib import (
 from neutralocean.mixed_layer import mixed_layer
 
 
-def omega_surf(S, T, P, **kwargs):
+def omega_surf(S, T, P, edges, **kwargs):
     """Calculate an omega surface from structured ocean data.
 
     Given 3D salinity, temperature, and pressure or depth data arranged on a
@@ -246,7 +246,6 @@ def omega_surf(S, T, P, **kwargs):
     p_init = kwargs.get("p_init")
     vert_dim = kwargs.get("vert_dim", -1)
     p_ml = kwargs.get("p_ml")
-    edges = kwargs.get("edges")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
     eos = kwargs.get("eos", "gsw")
