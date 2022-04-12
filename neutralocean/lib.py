@@ -37,7 +37,7 @@ def find_first_nan(a):
 
 
 @nb.njit
-def take_fill(a, indices, fillval=np.nan):
+def take_fill(a, idx, fillval=np.nan):
     """
     Like numpy.take but fills with nan when indices are out of range
 
@@ -46,34 +46,59 @@ def take_fill(a, indices, fillval=np.nan):
     a : ndarray
         input data
 
-    indices : 1d array
+    idx : 1d array
         linear indices to elements of `a`
 
     Returns
     -------
     b : ndarray
-        The i'th element of b (in linear order) is the `map[i]`'th element of `a`,
-        (in linear order), or nan if `map[i] < 0`.  Same shape as `remap`.
+        The i'th element of b (in linear order) is the `idx[i]`'th element of `a`,
+        (in linear order), or nan if `idx[i] < 0`.  Same shape as `idx`.
     """
-    b = np.empty(indices.size, dtype=a.dtype)
+    b = np.empty(idx.size, dtype=a.dtype)
     a_ = a.reshape(-1)
     for i in range(len(b)):
-        if indices[i] >= 0:
-            b[i] = a_[indices[i]]
+        if idx[i] >= 0:
+            b[i] = a_[idx[i]]
         else:
             b[i] = fillval
     return b
 
 
 @nb.njit
-def aggregate(a, indices, n):
-    # a and indices have the same size
-    # n : int
-    #   length of output array
+def aggsum(a, idx, n):
+    """
+    Aggregate data into groups and then sum each group.
+
+    Parameters
+    ----------
+    a : array
+        Input data to be aggregated into groups and summed.
+
+    idx : array of int
+        Group label for each element of `a`.  To exclude element `i` of `a`
+        from any group, let `idx[i]` be a negative int.  Must be same size
+        as `a`.
+
+    n : int
+        Number of groups, including empty groups.
+        As this is also the length of `b`, must satisfy `n >= np.max(idx) + 1`.
+
+    Returns
+    -------
+    b : array
+        The sum of each group of data from `a`.
+
+    Notes
+    -----
+    This is a simple implementation of `numpy_groupies.aggregate`.
+    See https://github.com/ml31415/numpy-groupies/
+
+    """
     b = np.zeros(n, dtype=a.dtype)
-    for i in range(len(indices)):
-        if indices[i] >= 0:
-            b[indices[i]] += a[i]
+    for i in range(len(idx)):
+        if idx[i] >= 0:
+            b[idx[i]] += a[i]
     return b
 
 

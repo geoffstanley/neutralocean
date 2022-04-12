@@ -1,0 +1,273 @@
+import numpy as np
+import numba as nb
+import xarray as xr
+import xgcm
+
+
+def neighbour_rectilinear(dims, conn, periodic):
+    """
+    Linear indices to each neighbour of each grid point on a regular grid
+
+    This builds a 2D array `adj` giving linear indices to each of `conn`
+    neighbours of each grid point in a regular grid.
+
+    Parameters
+    ----------
+    dims : tuple of int
+
+        The number of grid points in each dimension of the grid.  Currently
+        this must be of length 2, i.e. only 2D grids are supported.
+
+    conn : int
+        The grid connectivity: for a 2D grid, this must be 4, 5, 8, or 9.
+
+    periodic : tuple of bool
+        The periodicity of the grid.  Dimension `i` is periodic iff
+        `periodic[i] == True`.
+
+
+    Returns
+    -------
+    adj : ndarray
+
+        Linear indices to up to `conn` neighbours of each grid point.
+        When a grid point `m` is adjacent to a non-periodic boundary, some of
+        `adj[m,:]` will be `N`, where `N = np.prod(dims)` is the total number
+        of grid points.
+
+    Notes
+    -----
+    The connectivity `conn` specifies the number of neighbours to a central
+    grid point, possibly including itself.  For `n` between 1 and conn; the
+    `n`'th neighbour is located relative to the central grid point according
+    to the following diagram:
+
+    conn==4      conn==5    conn==8   conn==9
+    +------> j
+    | . 1 .       . 1 .     4 1 6     0 3 6
+    | 0 . 3       0 2 4     0 . 3     1 4 7
+    v . 2 .       . 3 .     5 2 7     2 5 8
+    i
+
+    Here, the first dimension (i) increases downward and the second dimension
+    (j) increases right.  For example, with `conn == 4`, if `m` is the linear
+    index to grid point `(i,j)`, then `n = adj[m,1]` is the linear index to
+    grid point `(i-1,j)`.
+
+    """
+
+    ndim = len(dims)  # Number of dimensions in the grid
+    assert ndim == 2, "currently only works for 2D grids."
+    assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
+
+    ni = dims[0]
+    nj = dims[1]
+
+    badval = ni * nj
+
+    # fmt: off
+    # Build adjacency matrix and handle periodicity
+    if conn == 4:
+        # . 1 .
+        # 0 . 3
+        # . 2 .
+        order = [1, 3, 5, 7]
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+        if not periodic[0]:
+            adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, 2] = badval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
+
+    elif conn == 5:
+        # . 1 .
+        # 0 4 3
+        # . 2 .
+        order = [1, 3, 5, 7, 4]
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+        if not periodic[0]:
+            # adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+            # adj[ni-1, :, 3] = badval # i+1 hits a wall when i = ni - 1
+            adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, 2] = badval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            # adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+            # adj[:, nj-1, 4] = badval # j+1 hits a wall when j = nj - 1
+            adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
+            
+        # # . 1 .
+        # # 0 2 4
+        # # . 3 .
+        # # order = [1, 3, 4, 5, 7]
+        # adj = _neighbour_rectilinear_helper(ni, nj, order)
+        # if not periodic[0]:
+        #     adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
+        #     adj[ni-1, :, 3] = badval # i+1 hits a wall when i = ni - 1
+        # if not periodic[1]:
+        #     adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
+        #     adj[:, nj-1, 4] = badval # j+1 hits a wall when j = nj - 1
+        #     adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
+            
+    elif conn == 8:
+        # 4 1 6
+        # 0 . 3
+        # 5 2 7
+        order = [1, 3, 5, 7, 0, 2, 6, 8]
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+        if not periodic[0]:
+            adj[0   , :, [1, 4, 6]] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, [2, 5, 7]] = badval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            adj[:, 0   , [0, 4, 5]] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, [3, 6, 7]] = badval # j+1 hits a wall when j = nj - 1
+
+    elif conn == 9:
+        # 0 3 6
+        # 1 4 7
+        # 2 5 8
+        order = range(9)
+        adj = _neighbour_rectilinear_helper(ni, nj, order)
+        if not periodic[0]:
+            adj[0   , :, [0, 3, 6]] = badval # i-1 hits a wall when i = 0
+            adj[ni-1, :, [2, 5, 8]] = badval # i+1 hits a wall when i = ni - 1
+        if not periodic[1]:
+            adj[:, 0   , [0, 1, 2]] = badval # j-1 hits a wall when j = 0
+            adj[:, nj-1, [6, 7, 8]] = badval # j+1 hits a wall when j = nj - 1
+
+    else:
+        raise("Unknown number of neighbours.  conn must be one of 4, 5, 8, or 9.")
+    # fmt: on
+
+    # Reshape adj to a matrix of dimensions (conn, ni*nj)
+    adj = adj.reshape((ni * nj, conn))
+
+    return adj
+
+
+def _neighbour_rectilinear_helper(ni, nj, order):
+
+    D = len(order)  # max degree
+
+    # Prepare to circshift linear indices to some subset of its neighbours
+    # generally ordered as follows
+    # +------> j = 2'nd dim
+    # | 0 3 6
+    # | 1 4 7
+    # | 2 5 8
+    # v
+    #  i = 1'st dim
+    spin = (
+        (1, 1),
+        (0, 1),
+        (-1, 1),
+        (1, 0),
+        (0, 0),
+        (-1, 0),
+        (1, -1),
+        (0, -1),
+        (-1, -1),
+    )  # - sign included as prep for np.roll
+
+    # Build linear index to each grid point, and repeat them D times
+    adj = np.tile(np.reshape(range(ni * nj), (ni, nj, 1)), (1, 1, D))  # ni x nj x D
+
+    # Shift these linear indices so they refer to their neighbours.
+    for d in range(D):
+        adj[:, :, d] = np.roll(adj[:, :, d], spin[order[d]], (0, 1))
+
+    return adj
+
+
+def im1(F, wrap, fill=np.nan):  # G[i,j] == F[i-1,j]
+    G = np.roll(F, 1, axis=0)
+    if not wrap[0]:
+        G[0, :] = fill
+    return G
+
+
+def jm1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j-1]
+    G = np.roll(F, 1, axis=1)
+    if not wrap[1]:
+        G[:, 0] = fill
+    return G
+
+
+def build_edges(dims, periodic):
+    ndim = len(dims)  # Number of dimensions in the grid
+    assert ndim == 2, "currently only works for 2D grids."
+    assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
+    # assert conn == 4, "currently only works for conn==4"
+
+    ni, nj = dims
+    N = ni * nj  # number of nodes
+
+    # Calculate number of edges
+    # Ei = (ni - (not periodic[0])) * nj
+    # Ej = ni * (nj - (not periodic[1]))
+    # E = Ei + Ej
+
+    # Build edges for the doubly periodic case and then prune edges that cross
+    # any non-periodic boundaries.
+    # This could be coded more efficiently.
+    edges = np.tile(
+        np.concatenate((np.arange(N), np.arange(N))).reshape((-1, 1)), [1, 2]
+    )
+
+    idx = np.arange(N).reshape((ni, nj))
+    edges[:N, 1] = im1(idx, periodic, -1).reshape(-1)
+    edges[N:, 1] = jm1(idx, periodic, -1).reshape(-1)
+
+    good = np.all(edges >= 0, axis=1)
+    edges = edges[good, :]
+
+    return edges
+
+
+def build_edge_data(dims, periodic, data):
+    # Build data for the doubly periodic case and then prune edges that cross
+    # any non-periodic boundaries.
+    # This could be coded more efficiently.
+    i1 = int(not periodic[0])  # 0 when periodic, 1 when non-periodic
+    j1 = int(not periodic[1])
+    x = np.broadcast_to(data[0], dims)
+    y = np.broadcast_to(data[1], dims)
+    return np.concatenate((x[i1:, :].reshape(-1), y[:, j1:].reshape(-1)))
+
+
+@nb.njit
+def adj_to_dir_edges(adj):
+    # This is really producing directed edges.  If edges are undirected, this
+    # produces two entries in `edges` for each edge, i.e. [a, b] and [b, a].
+    N, D = adj.shape
+    E = N * D  # max number of edges
+    edges = np.empty((E, 2), dtype=type(0))
+    ne = 0
+    for d in range(D):
+        for n in range(N):
+            if n < N:
+                # n < N: neighbour node exists in the graph (handle nodes with degree < D)
+                edges[ne, :] = (n, adj[n, d])
+                ne += 1
+
+    edges = edges[0:ne, :]  # trim
+    return edges
+
+
+@nb.njit
+def adj_to_undir_edges(adj):
+    N, D = adj.shape
+    E = -(N * D // -2)  # max number of edges == int(ceil(N * D / 2))
+    edges = np.empty((E, 2), dtype=type(0))
+    ne = 0
+    for d in range(D):
+        for m in range(N):
+            n = adj[m, d]  # neighbour
+            if m < n and n < N:
+                # m < n: Only add once, for undirected graph.
+                # n < N: neighbour node exists in the graph (handle nodes with degree < D)
+                edges[ne, :] = (m, n)
+                ne += 1
+    edges = edges[0:ne, :]  # trim
+    return edges

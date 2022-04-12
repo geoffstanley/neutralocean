@@ -14,7 +14,6 @@ from neutralocean.lib import (
     _xr_in,
     _xr_out,
     _process_pin_cast,
-    _process_wrap,
     _process_casts,
     _process_n_good,
     _process_eos,
@@ -347,9 +346,11 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     grav = kwargs.get("grav")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
-    geom = (
-        kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
-    )
+
+    edges = kwargs.get("edges")
+    geometry = kwargs.get("geometry", (1.0, 1.0))
+    dist = geometry[0]
+    distperp = geometry[1]
 
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
@@ -363,6 +364,8 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
+    if diags:
+        assert edges is not None, "edges must be provided when diags is True"
 
     surf_shape = n_good.shape
 
@@ -390,8 +393,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     d = dict()
     if diags:
         d["timer"] = time() - timer
-        A4 = None  # not done.
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, A4, *geom)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist, distperp)
         d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))

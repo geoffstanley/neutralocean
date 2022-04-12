@@ -1,8 +1,10 @@
 """Omega surfaces"""
+import matplotlib.pyplot as plt
 
 import numpy as np
 from time import time
 from scipy.sparse import csc_matrix
+from scipy.sparse.linalg import lsqr
 
 # from scipy.sparse.linalg import spsolve
 from sksparse.cholmod import cholesky
@@ -12,8 +14,7 @@ from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
 from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
-from neutralocean.grids import edges_to_adjnodes, max_deg_from_edges
-from neutralocean.graph import edges_binary_fcn
+from neutralocean.graph import edges_to_adjnodes, max_deg_from_edges
 from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.lib import (
     xr_to_np,
@@ -23,8 +24,7 @@ from neutralocean.lib import (
     _process_casts,
     _process_n_good,
     _process_eos,
-    take_fill,
-    aggregate,
+    aggsum,
 )
 from neutralocean.mixed_layer import mixed_layer
 
@@ -259,6 +259,7 @@ def omega_surf(S, T, P, **kwargs):
     TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
     TOL_LRPD_MAV = kwargs.get("TOL_LRPD_MAV", 1e-7)
     TOL_P_CHANGE_RMS = kwargs.get("TOL_P_CHANGE_RMS", 0.0)
+    OMEGA_FORMULATION = kwargs.get("OMEGA_FORMULATION", "poisson")
     # fmt: off
     # grid distances.  (soft notation: i = I-1/2; j = J-1/2)
     # dist1_iJ = kwargs.get('dist1_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
@@ -271,8 +272,9 @@ def omega_surf(S, T, P, **kwargs):
     # geom = [
     #    kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
     # ]
-    dist = kwargs.get("dist", 1.0)
-    distperp = kwargs.get("distperp", 1.0)
+    geometry = kwargs.get("geometry", (1.0, 1.0))
+    dist = geometry[0]
+    distperp = geometry[1]
 
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
@@ -282,7 +284,6 @@ def omega_surf(S, T, P, **kwargs):
 
     sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
-    # wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
@@ -294,6 +295,11 @@ def omega_surf(S, T, P, **kwargs):
     # dist2on1_iJ = geom[3] / geom[0]  # dist2_iJ / dist1_iJ
     # dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
     geom = distperp / dist
+    if OMEGA_FORMULATION == "poisson":
+        global_solver = _omega_matsolve_poisson
+    elif OMEGA_FORMULATION == "gradlsqr":
+        global_solver = _omega_matsolve_gradlsqr
+        geom = np.sqrt(geom)
 
     if not isinstance(pin_cast, (tuple, list)):
         raise TypeError("`pin_cast` must be a tuple or list")
@@ -301,7 +307,6 @@ def omega_surf(S, T, P, **kwargs):
     pin_cast_1 = np.ravel_multi_index(pin_cast, surf_shape)  # linear index
 
     # Pre-calculate grid adjacency needed for Breadth First Search:
-    # A4 = neighbour_rectilinear((ni, nj), 4, wrap)  # using 4-connectivity
     n_nodes = n_good.size
     max_deg = max_deg_from_edges(edges, n_nodes)
     adjnodes = edges_to_adjnodes(edges, n_nodes, max_deg)
@@ -448,7 +453,8 @@ def omega_surf(S, T, P, **kwargs):
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        ϕ = _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, pin_cast, eos_s_t)
+        ϕ = global_solver(s, t, p, geom, edges, qu, qt, pin_cast_1, eos_s_t)
+
         timer_mat = time() - timer_loc
 
         # --- Update the surface (mutating s, t, p by vertsolve)
@@ -520,9 +526,151 @@ def omega_surf(S, T, P, **kwargs):
     return s, t, p, d
 
 
-def _omega_matsolve_poisson(
-    s, t, p, geom, edges, adjnodes, max_deg, qu, qt, mr, eos_s_t
-):
+def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
+    # TODO:  document.
+
+    surf_shape = p.shape
+
+    # This value appears in A4 to index neighbours that would go across a
+    # non-periodic boundary
+    n_nodes = p.size
+
+    # --- Build & solve sparse matrix problem
+    ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)
+
+    # If there is only one water column, there are no equations to solve,
+    # and the solution is simply phi = 0 at that water column, and nan elsewhere.
+    # Note, qt > 0 (N >= 1) should be guaranteed by omega_surf(), so N <= 1 should
+    # imply N == 1.  If qt > 0 weren't guaranteed, this could throw an error.
+    N = qt + 1  # Number of water columns
+    if N <= 1:  # There are definitely no equations to solve
+        ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
+        return ϕ.reshape(surf_shape)
+
+    # Collect linear indices to all pixels in this region.
+    m = qu[0 : qt + 1]
+    # Tests from MATLAB rectilinear code showed that sorting m made the matrix
+    # better structured and gave anoverall speedup.
+    # Tests in Python with general edge structure suggest that may not be so.
+    # We will not sort.  To sort, uncomment the following line.
+    # m = np.sort(m)
+
+    ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
+
+    bad = np.isnan(ϵ)
+    ϵ[bad] = 0.0
+
+    if np.isscalar(geom):
+        fac = np.full(ϵ.shape, geom)
+        if geom != 1.0:
+            ϵ *= fac  # scale ϵ
+    else:
+        fac = geom.copy()
+        fac[bad] = 0.0
+        ϵ *= fac  # scale ϵ
+
+    # Build logical array of good nodes
+    gn = np.full(n_nodes, False)
+    gn[m] = True
+
+    # Build logical array of good edges
+    ge = gn[edges[:, 0]] & gn[edges[:, 1]]
+
+    rhs = -ϵ[ge]
+
+    # `remap` changes from linear indices for the entire 2D space (0, 1, ..., ni*nj-1) into linear
+    # indices for the current connected component (0, 1, ..., N-1)
+    # If the domain were doubly periodic, we would want `remap` to be a 2D array
+    # of size (ni,nj). However, with a potentially non-periodic domain, we need
+    # one more value for `A4` to index into.  Hence we use `remap` as a vector
+    # with ni*nj+1 elements, the last one corresponding to non-periodic boundaries.
+    # Water columns that are not in this connected component, and dry water columns (i.e. land),
+    # and the fake water column for non-periodic boundaries are all left
+    # to have a remap value of -1.
+    # remap = np.full(n_nodes + 1, -1, dtype=int)
+
+    # With `edges`, we no longer need extra element to index into for non-periodic boundaries.
+    remap = np.full(n_nodes, -1, dtype=int)
+    remap[m] = np.arange(N)
+
+    # Build the RHS of the matrix problem
+    #  rhs = ϵ[m] # no...
+    # How to do this?  Probably need to use np.argsort
+    # Or, change to using edgescompact rather than edges.
+
+    # Build indices for the columns of the sparse matrix
+    # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
+    # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
+    # c = np.column_stack((remap[adjnodes[m]], np.arange(N)))
+    # c = remap[edges[ge, :]]
+    # E = c.shape[0]
+    # c = c.reshape(-1)
+    c = remap[edges[ge, :]].reshape(-1)
+    E = len(c) // 2  # # of equations ==  # of rows in matrix
+
+    # Build indices for the rows of the sparse matrix, namely
+    # r = np.repeat(np.arange(E), 2).reshape(E, 2)  # [[0,0], ..., [E-1,E-1]]
+    r = np.repeat(np.arange(E), 2)  # [0, 0, ..., E-1, E-1]
+
+    # Build the values of the sparse matrix.
+    # v is [1, -1, 1, -1, ..., 1, -1] when geom == 1.
+    # When geom is an array of length edges.shape[0], each pair of 1 and -1
+    # from above is scaled according to geom for the appropriate edge.
+    v = fac[ge]
+    v = np.stack((v, -v), axis=1).reshape(-1)
+    # v = np.repeat(fac[ge], 2)
+    # v[1::2] *= -1  # slower than above
+
+    # Prune the entries to
+    # ignore connections to adjacent pixels that are dry (including those
+    # that are "adjacent" across a non-periodic boundary), and
+    # good = (c >= 0)
+    # badc = (c < 0)
+
+    # Build the sparse matrix with E rows & N columns
+    # mat = csc_matrix((v, (r, c)), shape=(E, N))
+
+    # raise RuntimeError
+
+    # Apply Normal Equations: multiply by matrix transpose.
+    # This is slow because .transpose() apparently converts the above
+    # csr_matrix to a csc_matrix.
+    # rhs = mat.transpose() * rhs
+    # mat = mat.transpose() * mat
+
+    # Change equation for pinning cast to be 1 * ϕ = 0.  Keep matrix symmetric.
+    # This is slow because it changes the sparsity structure of the matrix.
+    # i = remap[mr]
+    # rhs[i] = 0.0
+    # mat[:, i] = 0.0
+    # mat[i, :] = 0.0
+    # mat[i, i] = 1.0
+
+    # Solve the matrix problem
+    # factor = cholesky(mat)
+    # ϕ[m] = factor(rhs)
+
+    # spsolve (requires ``good = (c >= 0)`` above) is slower than using cholesky
+    # ϕ[m] = spsolve(mat, rhs)
+
+    # Build the sparse matrix with one extra row for the pinning equation.
+    # (Could code this more efficiently by building data for the extra row into r, c, v.)
+    mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
+    i = remap[mr]
+    mat[E, i] = 1e-2  # chosen empirically from tests on 1x1deg OCCA data
+    rhs = np.concatenate((rhs, np.zeros(1)))  # add 0 to end of rhs vector
+    sol = lsqr(mat, rhs)
+    ϕ[m] = sol[0]
+
+    # Heave solution to be exactly 0 at pinning cast
+    ϕ -= ϕ[mr]
+
+    ϕ = ϕ.reshape(surf_shape)
+
+    return ϕ
+
+
+def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     """Solve the Poisson formulation of the omega-surface global matrix problem
 
     Parameters
@@ -591,224 +739,95 @@ def _omega_matsolve_poisson(
     # and the solution is simply phi = 0 at that water column, and nan elsewhere.
     # Note, qt > 0 (N >= 1) should be guaranteed by omega_surf(), so N <= 1 should
     # imply N == 1.  If qt > 0 weren't guaranteed, this could throw an error.
-    N = qt + 1  # Number of water columns
+    N = qt + 1  # # of water columns.  N == len(m)
     if N <= 1:  # There are definitely no equations to solve
         ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
         return ϕ.reshape(surf_shape)
 
-    E = edges.shape[0]  # Number of edges
+    # Collect linear indices to all pixels in this region
+    m = qu[0 : qt + 1]
 
-    # Collect and sort linear indices to all pixels in this region
-    # sorting here makes matrix better structured; overall speedup.
-    m = np.sort(qu[0 : qt + 1])
-
-    # If both gridding variables are 1, then grid is uniform
-    UNIFORM_GRID = isinstance(geom, float) and geom == 1.0
-
-    # Begin building D = divergence of ϵ,
-    # and L = Laplacian operator (compact representation)
-
-    # L refers to neighbours in this order (so does A4, except without the 5'th entry):
-    # . 1 .
-    # 0 4 3
-    # . 2 .
-    # IM = 0  # (I  ,J-1)
-    # MJ = 1  # (I-1,J  )
-    # PJ = 2  # (I+1,J  )
-    # IP = 3  # (I  ,J+1)
-    # IJ = 4  # (I  ,J  )
-    # L = np.zeros((n_nodes, max_deg))  # pre-alloc space
-
-    # Create views into L
-    # L_IM = L[:, :, IM]
-    # L_MJ = L[:, :, MJ]
-    # L_PJ = L[:, :, PJ]
-    # L_IP = L[:, :, IP]
-    # L_IJ = L[:, :, IJ]
-
-    # Calculate neutrality errors between each pair of adjacent water columns
-    ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
-
-    bad = np.isnan(ϵ)
-    ϵ[bad] = 0.0
-
-    fac = geom.copy()
-    fac[bad] = 0.0
-    ϵ *= fac  # scale ϵ
-
-    # Build the RHS of the matrix problem
-    #  rhs = ϵ[m]
-    # How to do this?  Probably need to use np.argsort
-    # Or, change to using edgescompact rather than edges.
-
-    # Build indices for the rows of the sparse matrix, namely
-    # [[0,0], ..., [E-1,E-1]]
-    r = np.repeat(np.arange(E), 2).reshape(E, 2)
-
-    # Build indices for the columns of the sparse matrix
-    # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
-    # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
-    c = edges
-
-    # Build the values of the sparse matrix
-    v = np.stack((geom, -geom), axis=1)
-
-    # Prune the entries to
-    # ignore connections to adjacent pixels that are dry (including those
-    # that are "adjacent" across a non-periodic boundary), and
-    good = c >= 0
-    # Build the sparse matrix; with E rows & N columns
-    mat = csc_matrix((v[good], (r[good], c[good])), shape=(E, N))
-
-    # Divergence of ϵ
-    D = aggregate(ϵ, edges[:, 0], n_nodes) - aggregate(ϵ, edges[:, 1], n_nodes)
-
-    # --- m = (i, j) & n = (i-1, j),  then also n = (i+1, j) by symmetry
-    sn = im1(sm)
-    tn = im1(tm)
-    pn = im1(pm)
-    # sn = edges_binary_fcn(s, edges, lambda a, b: b)
-
-    # A stripped down version of ntp_ϵ_errors
-    # vs, vt = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
-    # (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 1500)  # DEV: testing omega software to find potential density surface()
-    # ϵ = vs * (sm - sn) + vt * (tm - tn)
-
-    bad = np.isnan(ϵ)
-    ϵ[bad] = 0.0
-
-    if UNIFORM_GRID:
-        fac = np.float64(~bad)  # 0 and 1
-    else:
-        fac = dist2on1_iJ.copy()
-        fac[bad] = 0.0
-        ϵ *= fac  # scale ϵ
-
-    D = -ϵ + ip1(ϵ)
-
-    L_IJ[:] = fac + ip1(fac)
-
-    L_MJ[:] = -fac
-
-    L_PJ[:] = -ip1(fac)
-
-    # --- m = (i, j) & n = (i, j-1),  then also n = (i, j+1) by symmetry
-    sn = jm1(sm)
-    tn = jm1(tm)
-    pn = jm1(pm)
-    if not wrap[1]:
-        sn[:, 0] = np.nan
-
-    # A stripped down version of ntp_ϵ_errors
-    (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
-    # (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 1500)  # DEV: testing omega software to find potential density surface()
-
-    ϵ = vs * (sm - sn) + vt * (tm - tn)
-    bad = np.isnan(ϵ)
-    ϵ[bad] = 0.0
-
-    if UNIFORM_GRID:
-        fac = np.float64(~bad)  # 0 and 1
-    else:
-        fac = dist1on2_Ij.copy()
-        fac[bad] = 0.0
-        ϵ *= fac  # scale ϵ
-
-    D += -ϵ + jp1(ϵ)
-
-    L_IJ[:] += fac + jp1(fac)
-
-    L_IM[:] = -fac
-
-    L_IP[:] = -jp1(fac)
-
-    # --- Build matrix
-    # `remap` changes from linear indices for the entire 2D space (0, 1, ..., ni*nj-1) into linear
-    # indices for the current connected component (0, 1, ..., N-1)
-    # If the domain were doubly periodic, we would want `remap` to be a 2D array
-    # of size (ni,nj). However, with a potentially non-periodic domain, we need
-    # one more value for `A4` to index into.  Hence we use `remap` as a vector
-    # with ni*nj+1 elements, the last one corresponding to non-periodic boundaries.
-    # Water columns that are not in this connected component, and dry water columns (i.e. land),
-    # and the fake water column for non-periodic boundaries are all left
-    # to have a remap value of -1.
-    remap = np.full(nij + 1, -1, dtype=int)
+    # `remap` changes from linear indices (0, 1, ..., n_nodes) for the entire
+    # space (including land), into linear indices (0, 1, ..., N-1) for the
+    # current connected component
+    remap = np.full(n_nodes, -1, dtype=int)
     remap[m] = np.arange(N)
 
+    # Build logical array of good nodes
+    gn = np.full(n_nodes, False)
+    gn[m] = True
+
+    # Build logical array of good edges
+    ge = gn[edges[:, 0]] & gn[edges[:, 1]]
+
+    # Select only the good edges
+    edges = edges[ge, :]
+
+    # Calculate neutrality errors between each pair of adjacent water columns in the surface
+    ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
+
+    # bad = np.isnan(ϵ)
+    # assert not np.any(bad)  # assert that bad is all False
+    # ϵ[bad] = 0.0
+
+    if np.isscalar(geom):
+        fac = np.full(ϵ.shape, geom)
+        if geom != 1.0:
+            ϵ *= fac  # scale ϵ
+    else:
+        # fac = geom.copy()
+        # fac[bad] = 0.0
+        fac = geom[ge]
+        ϵ *= fac  # scale ϵ
+
+    # Divergence of ϵ
+    # D = aggsum(ϵ, edges[:, 1], n_nodes) - aggsum(ϵ, edges[:, 0], n_nodes)
+
+    # diag = aggsum(fac, edges[:, 0], n_nodes) + aggsum(fac, edges[:, 1], n_nodes)
+
     # Pin surface at mr by changing the mr'th equation to be 1 * ϕ[mr] = 0.
-    D[mr] = 0.0
-    L[mr] = 0.0
-    L[mr][IJ] = 1.0
+    # D[mr] = 0.0
 
-    L = L.reshape((nij, 5))
-    D = D.reshape(nij)
+    # Henceforth we only refer to nodes in the connected component, so remap edges now
+    edges = remap[edges]
 
-    # The above change renders the mr'th column on all rows irrelevant
-    # since ϕ[mr] will be zero.  So, we may also set this column to 0
-    # which we do here by setting the appropriate links in L to 0. This
-    # maintains symmetry of the matrix, enabling the use of a Cholesky solver.
-    mrI = np.ravel_multi_index(mr, (ni, nj))  # get linear index for mr
-    if A4[mrI, IP] != nij:
-        L[A4[mrI, IP], IM] = 0
-    if A4[mrI, PJ] != nij:
-        L[A4[mrI, PJ], MJ] = 0
-    if A4[mrI, MJ] != nij:
-        L[A4[mrI, MJ], PJ] = 0
-    if A4[mrI, IM] != nij:
-        L[A4[mrI, IM], IP] = 0
+    # Prepare diagonal entries of negative Laplacian.  For uniform geometry,
+    # this simply counts the number of edges incident upon each node.  For
+    # rectilinear grids, this value will be 4 for a typical node, but can be
+    # less near boundaries of the connected component.
+    diag = aggsum(fac, edges[:, 0], N) + aggsum(fac, edges[:, 1], N)
 
-    # Build the RHS of the matrix problem
-    rhs = D[m]
+    # Divergence of ϵ
+    D = aggsum(ϵ, edges[:, 1], N) - aggsum(ϵ, edges[:, 0], N)
 
-    # Build indices for the rows of the sparse matrix, namely
-    # [[0,0,0,0,0], ..., [N-1,N-1,N-1,N-1,N-1]]
-    r = np.repeat(np.arange(N), 5).reshape(N, 5)
+    # Pinning:
+    # D[remap[mr]] = 0.0
 
-    # Build indices for the columns of the sparse matrix
-    # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
-    # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
-    c = np.column_stack((remap[A4[m]], np.arange(N)))
+    # Build the rows, columns, and values of the sparse matrix
+    r = np.concatenate((edges.reshape(-1), np.arange(N)))
+    c = np.concatenate((edges[:, [1, 0]].reshape(-1), np.arange(N)))
+    v = np.concatenate((-fac.repeat(2), diag))  # negative Laplacian
 
-    # Build the values of the sparse matrix
-    v = L[m]
+    # Build the (negative) Laplacian sparse matrix with N rows and N columns
+    # L = csc_matrix((v, (r, c)), shape=(N, N))
 
-    # Prune the entries to
-    # (a) ignore connections to adjacent pixels that are dry (including those
-    #     that are "adjacent" across a non-periodic boundary), and
-    # (b) ignore the upper triangle of the matrix, since cholesky only
-    #     accessses the lower triangular part of the matrix
-    good = (c >= 0) & (r >= c)
+    # Prune the entries to ignore the upper triangle of the matrix, since
+    # cholesky only accessses the lower triangular part of the matrix.
+    good = r >= c
+    L = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
+
+    # Pinning
+    i = remap[mr]
+    L[i, i] += 1
 
     # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
     # function, so that this can be njit'ed.  But numba doesn't support
     # np.roll as we need it...  (nor ravel_multi_index, but we could just do
     # that one ourselves)
-    # return r[good], c[good], v[good], N, rhs, m
+    # return r[good], c[good], v[good], N, D, m
 
-    # Build the sparse matrix; with N rows & N columns
-    mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
-
-    # --- Solve the matrix problem
-    factor = cholesky(mat)
-    ϕ[m] = factor(rhs)
-
-    # spsolve (requires ``good = (c >= 0)`` above) is slower than using cholesky
-    # ϕ[m] = spsolve(mat, rhs)
+    # Solve the matrix problem, L ϕ = D
+    factor = cholesky(L)
+    ϕ[m] = factor(D)
 
     return ϕ.reshape(surf_shape)
-
-
-def im1(F):  # G[i,j] == F[i-1,j]
-    return np.roll(F, 1, axis=0)
-
-
-def ip1(F):  # G[i,j] == F[i+1,j]
-    return np.roll(F, -1, axis=0)
-
-
-def jm1(F):  # G[i,j] == F[i,j-1]
-    return np.roll(F, 1, axis=1)
-
-
-def jp1(F):  # G[i,j] == F[i,j+1]
-    return np.roll(F, -1, axis=1)

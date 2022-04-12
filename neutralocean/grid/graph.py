@@ -104,11 +104,12 @@ def edges_to_adjnodes(edges, n_nodes, max_deg):
         neighbours, some elements of `adjnodes[m,:]` will be -1.
 
     """
-    adjnodes = np.full((n_nodes, max_deg), -1)
-    deg = np.zeros((n_nodes,), dtype=type(0))
+    # adjnodes = np.full((n_nodes, max_deg), -1)
+    adjnodes = np.full((n_nodes, max_deg), n_nodes)
+    deg = np.zeros(n_nodes, dtype=type(0))
     for e in range(edges.shape[0]):
         a, b = edges[e]
-        if a >= 0 and b >= 0:
+        if a >= 0 and b >= 0:  # TODO: needed?
             adjnodes[a, deg[a]] = b
             adjnodes[b, deg[b]] = a
             deg[a] += 1
@@ -135,3 +136,20 @@ def edgescompact_to_adjnodes(adj):
                 adjnodes[n, deg[n]] = m
                 deg[n] += 1
     return adjnodes
+
+
+from scipy.sparse import csc_matrix
+
+
+def edges_to_graph(edges, N=None, weights=None):
+    E = edges.shape[0]
+    if N is None:
+        N = np.max(edges) + 1
+    r = np.concatenate((edges[:, 0], edges[:, 1]))
+    c = np.concatenate((edges[:, 1], edges[:, 0]))
+    if weights is None:
+        v = np.ones(E * 2)
+    else:
+        v = np.tile(weights, 2)
+    graph = csc_matrix((v, (r, c)), shape=(N, N))
+    return graph

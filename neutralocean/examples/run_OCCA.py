@@ -9,6 +9,8 @@ from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 # Functions to load OCCA data
 from neutralocean.examples.load_OCCA import load_OCCA
 
+from neutralocean.grid.rectilinear import build_edges, build_edge_data
+
 # %% Load OCCA data
 
 # Load OCCA data from the local folder containing this script.
@@ -30,13 +32,11 @@ eos = make_eos("jmd95", g["grav"], g["ρ_c"])
 eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
 
 # Package up grid distance information for neutralocean functions:
-geom = {
-    "dist1_iJ": g["DXCvec"],  # Distance [m] in 1st dim centred at (I-1/2, J)
-    "dist1_Ij": g["DXGvec"],  # Distance [m] in 1st dim centred at (I, J-1/2)
-    "dist2_Ij": g["DYGsc"],  # Distance [m] in 2nd dim centred at (I-1/2, J)
-    "dist2_iJ": g["DYCsc"],  # Distance [m] in 2nd dim centred at (I, J-1/2)
-}
 
+
+edges = build_edges((ni, nj), g["wrap"])
+dist = build_edge_data((ni, nj), g["wrap"], (g["DXCvec"], g["DYCsc"]))
+distperp = build_edge_data((ni, nj), g["wrap"], (g["DXGvec"], g["DYGsc"]))
 
 # %% Potential Density surfaces
 
@@ -51,12 +51,13 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
+    edges=edges,
+    geometry=(dist, distperp),
     eos="jmd95",
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=0.0,
     isoval=1027.5,
-    **geom,
 )
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
@@ -69,13 +70,14 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
+    edges=edges,
+    geometry=(dist, distperp),
     eos="jmd95",
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=0.0,
     pin_cast=(i0, j0),
     pin_p=z0,
-    **geom,
 )
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
@@ -93,6 +95,8 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
+    edges=edges,
+    geometry=(dist, distperp),
     eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
@@ -115,12 +119,13 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
+    edges=edges,
+    geometry=(dist, distperp),
     eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=(s0, t0),
     isoval=0.0,
-    **geom,
 )
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
@@ -133,13 +138,14 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
+    edges=edges,
+    geometry=(dist, distperp),
     eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=(s0, t0),
     pin_cast=(i0, j0),
     pin_p=z0,
-    **geom,
 )
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
@@ -154,12 +160,13 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
+    edges=edges,
+    geometry=(dist, distperp),
     eos=(eos, eos_s_t),
     wrap="Longitude_t",
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
-    **geom,
 )
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
@@ -176,14 +183,14 @@ s, t, z, d = omega_surf(
     S,
     T,
     Z,
-    wrap="Longitude_t",
+    edges=edges,
+    geom=(dist, distperp),
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
     eos=(eos, eos_s_t),
     ITER_MAX=10,
-    ITER_START_WETTING=1,
-    **geom,
+    ITER_START_WETTING=100,
 )
 print(
     f" ** The omega-surface"
@@ -201,7 +208,8 @@ s, t, z, d = omega_surf(
     T,
     Z,
     ref=(None, None),
-    wrap="Longitude_t",
+    edges=edges,
+    geom=(dist, distperp),
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
@@ -211,7 +219,6 @@ s, t, z, d = omega_surf(
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
-    **geom,
 )
 print(
     f" ** The omega-surface"
