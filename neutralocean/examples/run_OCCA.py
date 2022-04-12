@@ -184,7 +184,7 @@ s, t, z, d = omega_surf(
     T,
     Z,
     edges=edges,
-    geom=(dist, distperp),
+    geometry=(dist, distperp),
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,

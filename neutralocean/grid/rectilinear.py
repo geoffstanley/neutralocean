@@ -180,55 +180,74 @@ def _neighbour_rectilinear_helper(ni, nj, order):
     return adj
 
 
-def im1(F, wrap, fill=np.nan):  # G[i,j] == F[i-1,j]
-    G = np.roll(F, 1, axis=0)
-    if not wrap[0]:
-        G[0, :] = fill
-    return G
-
-
-def jm1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j-1]
-    G = np.roll(F, 1, axis=1)
-    if not wrap[1]:
-        G[:, 0] = fill
-    return G
-
-
 def build_edges(dims, periodic):
     ndim = len(dims)  # Number of dimensions in the grid
     assert ndim == 2, "currently only works for 2D grids."
     assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
-    # assert conn == 4, "currently only works for conn==4"
 
     ni, nj = dims
     N = ni * nj  # number of nodes
 
+    i1 = int(not periodic[0])  # 0 when periodic, 1 when non-periodic
+    j1 = int(not periodic[1])
+    i2 = ni - i1  # ni when periodic, ni - 1 when non-periodic
+    j2 = nj - j1
+
     # Calculate number of edges
-    # Ei = (ni - (not periodic[0])) * nj
-    # Ej = ni * (nj - (not periodic[1]))
-    # E = Ei + Ej
+    Ei = i2 * nj
+    Ej = ni * j2
+    E = Ei + Ej
 
-    # Build edges for the doubly periodic case and then prune edges that cross
-    # any non-periodic boundaries.
-    # This could be coded more efficiently.
-    edges = np.tile(
-        np.concatenate((np.arange(N), np.arange(N))).reshape((-1, 1)), [1, 2]
-    )
+    edges = np.empty((E, 2), dtype=int)  # prealloc space
 
+    # Build linear indices to the entire grid
     idx = np.arange(N).reshape((ni, nj))
-    edges[:N, 1] = im1(idx, periodic, -1).reshape(-1)
-    edges[N:, 1] = jm1(idx, periodic, -1).reshape(-1)
 
-    good = np.all(edges >= 0, axis=1)
-    edges = edges[good, :]
+    # Handle first dimension
+    if periodic[0]:
+        edges[:Ei, 0] = idx.reshape(-1)
+        edges[:Ei, 1] = np.roll(idx, 1, axis=0).reshape(-1)
+    else:
+        edges[:Ei, 0] = idx[i1:, :].reshape(-1)
+        edges[:Ei, 1] = idx[:i2, :].reshape(-1)
+
+    # Handle second dimension
+    if periodic[1]:
+        edges[Ei:, 0] = idx.reshape(-1)
+        edges[Ei:, 1] = np.roll(idx, 1, axis=1).reshape(-1)
+    else:
+        edges[Ei:, 0] = idx[:, j1:].reshape(-1)
+        edges[Ei:, 1] = idx[:, :j2].reshape(-1)
 
     return edges
 
 
 def build_edge_data(dims, periodic, data):
-    # Build data for the doubly periodic case and then prune edges that cross
-    # any non-periodic boundaries.
-    # This could be coded more efficiently.
+    """
+
+
+    Parameters
+    ----------
+    dims : tuple of int
+        dimensions of the grid.  i'th element gives number of grid cells in the
+        i'th direction, for i = 1,2.
+    periodic : tuple of bool
+        Specifies periodicity.  The i'th dimension is periodic when `periodic[i]` is True.
+    data : tuple of float or ndarray
+        The data that lives on edges, i.e. between water columns.
+        The i'th element gives data that lives between water columns in the i'th
+        dimension.
+        For example, `data = (xdist, ydist)` where `xdist` is the distance
+        between water columns in the x (first) dimension, and `ydist` is the
+        distance between water columns in the y (second) dimension.
+
+    Returns
+    -------
+    edge_data : array
+        1D array of `data` in the same order as the `edges` constructed by
+        `build_edges`.
+
+    """
     i1 = int(not periodic[0])  # 0 when periodic, 1 when non-periodic
     j1 = int(not periodic[1])
     x = np.broadcast_to(data[0], dims)
