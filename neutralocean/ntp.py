@@ -4,7 +4,7 @@ import numpy as np
 import numba as nb
 
 from neutralocean.lib import xr_to_np
-from neutralocean.graph import edges_binary_fcn
+from neutralocean.grid.graph import edges_binary_fcn
 
 
 def ntp_ϵ_errors(s, t, p, eos_s_t, edges, dist=1.0):
