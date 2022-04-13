@@ -1,12 +1,12 @@
 # %% Imports
 
+import numpy as np
+import xarray as xr
+
 # Functions to make the Equation of State
 from neutralocean.eos import make_eos, make_eos_s_t
 
-# from neutralocean.grids import neighbour4_tiled_rectilinear, xgcm_faceconns_convert
-
-import numpy as np
-import xarray as xr
+from neutralocean.grid.xgcm import xgcm_to_edges
 
 # import ecco_v4_py as ecco
 
@@ -39,8 +39,11 @@ del bad
 n = ds.nx
 
 g = xr.open_dataset(file_grid)
-Z = -np.float64(g.Z.load().values)  # Depth vector (note positive and increasing down)
+# Z = -np.float64(g.Z.load().values)  # Depth vector (note positive and increasing down)
 
+# Create depth xarray.
+Z = -g.Z  # Make Z > 0 and increasing down
+Z.attrs.update({"positive": "down"})  # Update attrs to match.
 
 # define the connectivity between faces for the ECCOv4 LLC grid:
 # fmt: off
@@ -78,24 +81,31 @@ N = n * n * nf  # number of nodes
 # F = xgcm_faceconns_convert(face_connections)
 # A4 = neighbour4_tiled_rectilinear(F, n)
 
-from neutralocean.grids import edgescompact_from_faceconns, adj_to_edges
-from neutralocean.graph import (
-    max_deg_from_edges,
-    edges_to_adjnodes,
-    edgescompact_to_adjnodes,
-)
+# from neutralocean.grids import edgescompact_from_faceconns, adj_to_edges
+# from neutralocean.graph import (
+#     max_deg_from_edges,
+#     edges_to_adjnodes,
+#     edgescompact_to_adjnodes,
+# )
 
-adj = edgescompact_from_faceconns(face_connections, n)
-edges = adj_to_edges(adj)
-max_deg = 4
+# adj = edgescompact_from_faceconns(face_connections, n)
+# edges = adj_to_edges(adj)
+# max_deg = 4
 # max_deg = max_deg_from_edges(edges, N)
-neigh = edges_to_adjnodes(edges, N, max_deg)
+# neigh = edges_to_adjnodes(edges, N, max_deg)
 
-A4 = edgescompact_to_adjnodes(adj)
+# A4 = edgescompact_to_adjnodes(adj)
+
+edges = xgcm_to_edges(n, face_connections)
 
 # %%
-# Select pinning cast in the middle of the domain
-pin_cast = (11, 0, 14)  # Near equatorial Pacific
+# Select pinning cast
+# pin_cast = (11, 0, 14)  # hardcoded cast at (-127.5, 0.2)
+
+x0, y0 = (-172, -4)
+pin_cast = np.unravel_index(
+    ((g.XC.values - x0) ** 2 + (g.YC.values - y0) ** 2).argmin(), g.XC.shape
+)
 z0 = 1500.0
 
 # make Boussinesq version of the Jackett and McDougall (1995) equation of state
@@ -106,14 +116,24 @@ eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
 
 # %%
 # Functions to compute various approximately neutral surfaces
-from neutralocean.surface import potential_surf
+from neutralocean.surface import potential_surf, omega_surf
 
 s, t, z, _ = potential_surf(
-    S.values, T.values, Z, eos="jmd95", vert_dim=-1, ref=0.0, isoval=1027.5, diags=False
+    S, T, Z, eos="jmd95", vert_dim="k", ref=0.0, isoval=1027.5, diags=False
 )
 
-# %%
-from neutralocean.ntp import ntp_ϵ_errors
 
-dist = np.ones(adj.size)
-eps = ntp_ϵ_errors(s, t, z, eos_s_t, edges, dist)
+# Initialize omega surface with a (locally referenced) potential density surface.
+s, t, z, d = omega_surf(
+    S,
+    T,
+    Z,
+    edges,
+    geometry=(1.0, 1.0),
+    vert_dim="k",
+    pin_cast=pin_cast,
+    pin_p=z0,
+    eos=(eos, eos_s_t),
+    ITER_MAX=10,
+    ITER_START_WETTING=100,
+)

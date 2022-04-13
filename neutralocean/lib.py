@@ -174,12 +174,31 @@ def _xr_in(S, drop_dim):
         return None
 
 
+def _xrs_in(S, T, P, drop_dim):
+    # Prepare xarray containers for output: like inputs S, T, P but without
+    # the dimension labelled `drop_dim`.  Doing S, T, P together allows for
+    # pxr to be an xarray even if P is an ndarray -- it just won't have attributes.
+    sxr, txr = (_xr_in(X, drop_dim) for X in (S, T))
+
+    if sxr is None:
+        pxr = None
+    else:
+        pxr = sxr.copy()
+        try:
+            pxr.attrs.update(P.attrs)
+        except:
+            pxr.attrs.clear()
+
+    return sxr, txr, pxr
+
+
 def _xr_out(s, sxr):
     # Return xarrays if inputs were xarrays
     if isinstance(sxr, xr.core.dataarray.DataArray):
         sxr.data = s
-        s = sxr
-    return s
+        return sxr
+    else:
+        return s
 
 
 def _process_vert_dim(vert_dim, S):
@@ -222,13 +241,14 @@ def _process_casts(S, T, P, vert_dim):
 
     vert_dim = _process_vert_dim(vert_dim, S)
 
+    S, T, P = (xr_to_np(x) for x in (S, T, P))
+
     # Broadcast a 1D vector for P into a ND array like S
     if P.ndim < S.ndim:
         # First make P a 3D array with its non-singleton dimension be `vert_dim`
         P = np.reshape(P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim)))
         P = np.broadcast_to(P, S.shape)
 
-    S, T, P = (xr_to_np(x) for x in (S, T, P))
     S, T, P = (_contiguous_casts(x, vert_dim) for x in (S, T, P))
     return S, T, P
 
@@ -287,7 +307,7 @@ def _process_pin_cast(pin_cast, S):
     # when S is an xarray, into an index representation, suitable for ``S[pin_cast]``
     # when S is an ndarray.
 
-    # DEV: There must be a better way of doing this...
+    # TODO: There must be a better way of doing this...
     # One issue is this always rounds one way, whereas a "nearest" neighbour
     # type behaviour would be preferred, as in xr.DataArray.sel
     if isinstance(pin_cast, dict):

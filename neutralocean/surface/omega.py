@@ -13,16 +13,12 @@ from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
-from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_graph, bfs_conncomp1_wet
-from neutralocean.grid.graph import (
-    edges_to_adjnodes,
-    max_deg_from_edges,
-    edges_to_graph,
-)
+from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
+from neutralocean.grid.graph import edges_to_graph
 from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.lib import (
     xr_to_np,
-    _xr_in,
+    _xrs_in,
     _xr_out,
     _process_pin_cast,
     _process_casts,
@@ -285,7 +281,7 @@ def omega_surf(S, T, P, edges, **kwargs):
     ppc_fn = select_ppc(interp, "1")
     interp_u_two = make_interpolator(interp, 0, "u", True)
 
-    sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
+    sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
@@ -311,8 +307,6 @@ def omega_surf(S, T, P, edges, **kwargs):
 
     # Pre-calculate grid adjacency needed for Breadth First Search:
     n_nodes = n_good.size
-    max_deg = max_deg_from_edges(edges, n_nodes)
-    adjnodes = edges_to_adjnodes(edges, n_nodes, max_deg)
     graph = edges_to_graph(edges, n_nodes)
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
@@ -429,7 +423,7 @@ def omega_surf(S, T, P, edges, **kwargs):
         timer = time()
 
         # --- Remove the Mixed Layer
-        if iter_ > 1 and p_ml[0, 0] != -np.inf:
+        if p_ml is not None and iter_ > 1:
             p[p < p_ml] = np.nan
 
         # --- Determine the connected component containing the reference cast, via Breadth First Search
@@ -449,12 +443,11 @@ def omega_surf(S, T, P, edges, **kwargs):
                 TOL_P_SOLVER,
                 eos,
                 ppc_fn,
-                p_ml=p_ml,
+                p_ml,
             )
         else:
-            # qu, qt = bfs_conncomp1(np.isfinite(p.reshape(-1)), adjnodes, pin_cast_1)
-            qu, qt = bfs_conncomp1_graph(
-                np.isfinite(p.reshape(-1)), graph.indptr, graph.indices, pin_cast_1
+            qu, qt = bfs_conncomp1(
+                graph.indptr, graph.indices, pin_cast_1, np.isfinite(p.reshape(-1))
             )
             n_newly_wet = 0
         timer_bfs = time() - timer_loc

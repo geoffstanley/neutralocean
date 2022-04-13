@@ -11,7 +11,7 @@ from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.ppinterp import ppval1_two, select_ppc
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (
-    _xr_in,
+    _xrs_in,
     _xr_out,
     _process_pin_cast,
     _process_casts,
@@ -359,7 +359,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     ppc_fn = select_ppc(interp, "1")
 
     # Process arguments
-    sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
+    sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
@@ -367,11 +367,9 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     if diags:
         assert edges is not None, "edges must be provided when diags is True"
 
-    surf_shape = n_good.shape
-
     # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
     # selection to (ref, isoval) pair
-    _check_ref(ans_type, ref, isoval, pin_cast, pin_p, surf_shape)
+    _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S)
     ref, isoval = _choose_ref_isoval(
         ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
     )
@@ -413,7 +411,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     return s, t, p, d
 
 
-def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, surf_shape):
+def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     """Error checking on ref / isoval / pin_cast / pin_p combinations for "potential"
     and "anomaly" surfaces
     """
@@ -448,25 +446,12 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, surf_shape):
 
     # Error checking on pin_cast.  Let dict inputs (for xarray) pass through fine...
     if not isinstance(pin_cast, (type(None), dict)):
-        if (
-            isinstance(pin_cast, (tuple, list))
-            and len(pin_cast) == len(surf_shape)
-            and all(isinstance(x, int) for x in pin_cast)
-        ):
-            if np.any(
-                [
-                    pin_cast[i] < 0 or pin_cast[i] >= surf_shape[i]
-                    for i in range(len(pin_cast))
-                ]
-            ):
-                raise ValueError(
-                    '"pin_cast" must index a cast within the domain; '
-                    f'found "pin_cast" = {pin_cast} outside the domain with bounds {surf_shape}'
-                )
-        else:
-            raise TypeError(
-                'If provided, "pin_cast" must be a tuple or list of integers of'
-                " length 1 less than the number of dimensions in S"
+        try:
+            S[pin_cast]
+        except:
+            raise ValueError(
+                'If provided, "pin_cast" must be able to index all but the'
+                " vertical dimension of S"
             )
 
     # Error checking on pin_p
