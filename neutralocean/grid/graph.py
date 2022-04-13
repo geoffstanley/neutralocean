@@ -1,6 +1,8 @@
 import numpy as np
 import numba as nb
 
+from scipy.sparse import csr_matrix, triu
+
 
 @nb.njit
 def shift(a, adj):
@@ -138,18 +140,22 @@ def edgescompact_to_adjnodes(adj):
     return adjnodes
 
 
-from scipy.sparse import csc_matrix
-
-
 def edges_to_graph(edges, N=None, weights=None):
     E = edges.shape[0]
     if N is None:
-        N = np.max(edges) + 1
+        N = np.max(edges) + 1  # assumes no degree 0 nodes.
     r = np.concatenate((edges[:, 0], edges[:, 1]))
     c = np.concatenate((edges[:, 1], edges[:, 0]))
     if weights is None:
-        v = np.ones(E * 2)
+        v = np.ones(E * 2, dtype=int)
     else:
         v = np.tile(weights, 2)
-    graph = csc_matrix((v, (r, c)), shape=(N, N))
+    graph = csr_matrix((v, (r, c)), shape=(N, N))
     return graph
+
+
+def graph_to_edges(graph):
+    # assume undirected graph, i.e. symmetric matrix
+    rcv = triu(graph).tocoo()
+    edges = np.stack((rcv.row, rcv.col), axis=1)
+    return edges
