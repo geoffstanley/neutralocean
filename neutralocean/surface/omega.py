@@ -13,8 +13,12 @@ from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
-from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
-from neutralocean.grid.graph import edges_to_adjnodes, max_deg_from_edges
+from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_graph, bfs_conncomp1_wet
+from neutralocean.grid.graph import (
+    edges_to_adjnodes,
+    max_deg_from_edges,
+    edges_to_graph,
+)
 from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.lib import (
     xr_to_np,
@@ -309,6 +313,7 @@ def omega_surf(S, T, P, edges, **kwargs):
     n_nodes = n_good.size
     max_deg = max_deg_from_edges(edges, n_nodes)
     adjnodes = edges_to_adjnodes(edges, n_nodes, max_deg)
+    graph = edges_to_graph(edges, n_nodes)
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
@@ -438,7 +443,8 @@ def omega_surf(S, T, P, edges, **kwargs):
                 T,
                 P,
                 n_good,
-                adjnodes,
+                graph.indptr,
+                graph.indices,
                 pin_cast_1,
                 TOL_P_SOLVER,
                 eos,
@@ -446,7 +452,10 @@ def omega_surf(S, T, P, edges, **kwargs):
                 p_ml=p_ml,
             )
         else:
-            qu, qt = bfs_conncomp1(np.isfinite(p.reshape(-1)), adjnodes, pin_cast_1)
+            # qu, qt = bfs_conncomp1(np.isfinite(p.reshape(-1)), adjnodes, pin_cast_1)
+            qu, qt = bfs_conncomp1_graph(
+                np.isfinite(p.reshape(-1)), graph.indptr, graph.indices, pin_cast_1
+            )
             n_newly_wet = 0
         timer_bfs = time() - timer_loc
 
@@ -549,8 +558,8 @@ def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # Collect linear indices to all pixels in this region.
     m = qu[0 : qt + 1]
     # Tests from MATLAB rectilinear code showed that sorting m made the matrix
-    # better structured and gave anoverall speedup.
-    # Tests in Python with general edge structure suggest that may not be so.
+    # better structured and gave an overall speedup.
+    # Tests in Python with general edge structure suggest that is not so.
     # We will not sort.  To sort, uncomment the following line.
     # m = np.sort(m)
 
@@ -568,15 +577,6 @@ def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
         fac[bad] = 0.0
         ϵ *= fac  # scale ϵ
 
-    # Build logical array of good nodes
-    gn = np.full(n_nodes, False)
-    gn[m] = True
-
-    # Build logical array of good edges
-    ge = gn[edges[:, 0]] & gn[edges[:, 1]]
-
-    rhs = -ϵ[ge]
-
     # `remap` changes from linear indices for the entire 2D space (0, 1, ..., ni*nj-1) into linear
     # indices for the current connected component (0, 1, ..., N-1)
     # If the domain were doubly periodic, we would want `remap` to be a 2D array
@@ -591,6 +591,11 @@ def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # With `edges`, we no longer need extra element to index into for non-periodic boundaries.
     remap = np.full(n_nodes, -1, dtype=int)
     remap[m] = np.arange(N)
+
+    # Build logical array of good edges
+    ge = (remap[edges[:, 0]] >= 0) & (remap[edges[:, 1]] >= 0)
+
+    rhs = -ϵ[ge]
 
     # Build the RHS of the matrix problem
     #  rhs = ϵ[m] # no...

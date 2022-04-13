@@ -5,88 +5,84 @@ from neutralocean.traj import _ntp_bottle_to_cast
 
 
 @nb.njit
-def bfs_conncomp1(G, A, r):
+def bfs_conncomp1(indptr, indices, root, good):
     """
     Find the Connected Component containing 1 reference location using
     Breadth-first Search
 
     Parameters
     ----------
-    G : ndarray of bool
+    indptr, indices : ndarray of int
 
-        A 1D array of logicals.  `G[m]` is True iff element `m` is a valid node.
-        Note, this function mutates `G`!
+        Together, these specify the connectivity of the full graph.  Node `m` is
+        adjacent to the nodes `indices[indptr[m] : indptr[m+1]]`.  Note that
+        these are simply the `indptr` and `indices` attributes of a the graph
+        specified as a sparse matrix in csr_matrix format, i.e. a square matrix
+        `G` that has `G[i,j] != 0` whenever nodes `i` and `j` are adjacent.
 
-    A : ndarray of int
-
-        A 2D array of integers specifying (directional) edges in the graph.
-        Consider some valid node `m` (`G[m] == True).  Node `m` is connected
-        to node `n = A[m,j]` provided `n < N` and `G[n] == True`, for each
-        `j` in `0` to `D-1`.  Here, `N = G.size` is the maximum possible
-        number of nodes (if all of `G` is True), and `D = A.shape[-1]` is the
-        maximal degree in the graph.  Hence, if node `m` has less than the
-        maximal degree (e.g. to handle non-periodic boundaries in regular
-        grids, or for more general graphs), some elements of `A[m,:]` should
-        be `N`.
-
-    r : int
+    root : int
 
         Index to the chosen root node, where the BFS begins.
+
+    good : ndarray of bool
+
+        A 1D array of logicals for masking out certain nodes in the graph.
+        The BFS only operates on "valid nodes" `m` for which `good[m]` is True.
+        Note, this function mutates `good`!
 
     Returns
     -------
     qu : ndarray of int
 
-        The BFS search queue: a 1D array with as many elements as in `G`.
-        `qu[0:qt]` are the indices to the True elements of `G` that are in the
-        connected component containing the root node `r`, given in the order
-        that the BFS discovered them. For instance, `qu[0] == r`, provided
-        the root node is valid (`G[r] == True`). Elements after `qt`, i.e.
-        `qu[qt+1 : -1]`, are meaningless.
+        The BFS search queue: a 1D array of length equal to the number of nodes
+        in the full graph (i.e. the same length as `good`).
+        `qu[0:qt]` are the indices to nodes that are in the connected component
+        containing the `root` node, given in the order that the BFS discovered
+        them.
+        E.g., `qu[0] == root` (provided the root node is valid, `good[root] == True`).
+        Elements after `qt`, i.e. `qu[qt+1 : -1]`, are meaningless.
 
     qt : int
 
         The queue tail, i.e. the index to the last meaningful entry in `qu`.
         Hence, `qt+1` is the number of valid nodes in the connected region
-        containing the root node. If the root node is invalid (`G[r] ==
+        containing the root node. If the root node is invalid (`good[root] ==
         False`) then `qt == -1`.
-
     """
 
-    N = len(G)
+    # N = graph.shape[0]  # number of nodes == len(good)
+    N = len(good)
     qu = np.empty(N, dtype=np.int64)
 
     qt = -1  # Queue Tail
     qh = -1  # Queue Head
 
-    D = A.shape[-1]  # maximal degree
-
-    # Check that the root node is valid.  If not, leave qt as -1, so qu[0:qt+1]
-    # is empty
-    if G[r]:
-
-        # Initialize BFS from root node
-        qt += 1  # Add r to queue
-        qu[qt] = r
-        G[r] = False  # mark r as discovered
+    if good[root]:
+        # Root node is valid.  Initialize BFS from root node
+        qt += 1  # Add root to queue
+        qu[qt] = root
+        good[root] = False  # mark root as discovered
 
         while qt > qh:
             qh += 1  # advance head of the queue
             m = qu[qh]  # me node; pop from head of queue
-            for d in range(D):
-                n = A[m, d]  # neighbour node
-                if n < N and G[n]:  # First condition checks n is not a
-                    #                 neighbour across a non-periodic boundary
+
+            # loop over neighbour nodes
+            for n in indices[indptr[m] : indptr[m + 1]]:
+                if good[n]:
                     # n is good and undiscovered
                     qt += 1  # Add n to queue
                     qu[qt] = n
-                    G[n] = False  # mark n as discovered
+                    good[n] = False  # mark n as discovered
+    # else, root node is invalid.  Leave qt as -1, so qu[0:qt+1] is empty
 
     return qu, qt
 
 
 @nb.njit
-def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, ppc_fn, p_ml):
+def bfs_conncomp1_wet(
+    s, t, p, S, T, P, n_good, indptr, indices, root, tol_p, eos, ppc_fn, p_ml
+):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting
 
@@ -118,10 +114,10 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, ppc_fn, p_ml):
         Pre-computed number of ocean data points in each water column.
         This should be computed as ``n_good = lib.find_first_nan(S)``.
 
-    A : ndarray of int
+    indptr, indices : ndarray of int
          As in `bfs_conncomp1`
 
-    r : int
+    root : int
         As in `bfs_conncomp1`
 
     tol_p : float
@@ -170,16 +166,15 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, ppc_fn, p_ml):
 
     qt = -1  # Queue Tail
     qh = -1  # Queue Head
+    newly_wet = 0
 
-    D = A.shape[-1]  # maximal degree
-
-    G = np.isfinite(p)  # Good nodes
+    good = np.isfinite(p)  # Good nodes
 
     # Try wetting only these locations: ocean and not currently in the surface
-    dry = (n_good > 1) & ~G
+    dry = (n_good > 1) & ~good
 
     # Flatten lateral dimension of inputs to be 1D.  Use reshape() to get a view.
-    G = np.reshape(G, N)
+    good = np.reshape(good, N)
     dry = np.reshape(dry, N)
     s = np.reshape(s, N)
     t = np.reshape(t, N)
@@ -191,24 +186,24 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, ppc_fn, p_ml):
 
     p_ml = np.reshape(p_ml, -1)  # flatten
 
-    # Initialize BFS from root node
-    qt += 1  # Add r to queue
-    qu[qt] = r
-    G[r] = False  # mark r as discovered
+    if good[root]:
+        # Initialize BFS from root node
+        qt += 1  # Add r to queue
+        qu[qt] = root
+        good[root] = False  # mark r as discovered
 
-    newly_wet = 0
-    while qt > qh:
-        qh += 1  # advance head of the queue
-        m = qu[qh]  # me node; pop from head of queue
-        for d in range(D):
-            n = A[m, d]  # neighbour node
-            if n < N:  # check n is not a neighbour across a non-periodic boundary
-                if G[n]:
+        while qt > qh:
+            qh += 1  # advance head of the queue
+            m = qu[qh]  # me node; pop from head of queue
+
+            # loop over neighbour nodes
+            for n in indices[indptr[m] : indptr[m + 1]]:
+                if good[n]:
                     # n is good and undiscovered
 
                     qt += 1  # Add n to queue
                     qu[qt] = n
-                    G[n] = False  # mark n as discovered
+                    good[n] = False  # mark n as discovered
 
                 elif dry[n]:
                     # n is "dry".  Try wetting.
@@ -233,7 +228,7 @@ def bfs_conncomp1_wet(s, t, p, S, T, P, n_good, A, r, tol_p, eos, ppc_fn, p_ml):
                         # on the neighbouring cast is below the mixed layer.
                         qt += 1  # Add n to queue
                         qu[qt] = n
-                        G[n] = False  # mark n as discovered
+                        good[n] = False  # mark n as discovered
                         dry[n] = False
                         newly_wet += 1  # augment counter of newly wet casts
 
