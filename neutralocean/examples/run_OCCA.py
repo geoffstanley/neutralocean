@@ -32,8 +32,6 @@ eos = make_eos("jmd95", g["grav"], g["ρ_c"])
 eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
 
 # Package up grid distance information for neutralocean functions:
-
-
 edges = build_edges((ni, nj), g["wrap"])
 dist = build_edge_data((ni, nj), g["wrap"], (g["DXCvec"], g["DYCsc"]))
 distperp = build_edge_data((ni, nj), g["wrap"], (g["DYGsc"], g["DXGvec"]))

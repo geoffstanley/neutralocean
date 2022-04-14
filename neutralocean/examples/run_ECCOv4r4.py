@@ -6,18 +6,19 @@ import xarray as xr
 # Functions to make the Equation of State
 from neutralocean.eos import make_eos, make_eos_s_t
 
-from neutralocean.grid.xgcm import xgcm_to_edges
+# Functions to compute various approximately neutral surfaces
+from neutralocean.surface import potential_surf, omega_surf
 
-# import ecco_v4_py as ecco
+from neutralocean.grid.xgcm import build_edges_and_geometry
 
-folder_ecco4 = "/home/stanley/work/data/ECCOv4r4/"
+# %% Load data
+folder_ecco4 = "/home/stanley/work/data/ECCOv4r4/"  # edit as needed...
 file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
 
 file_salt = folder_ecco4 + "nctiles_daily/SALT/SALT_2002_12_23.nc"
 file_theta = folder_ecco4 + "nctiles_daily/THETA/THETA_2002_12_23.nc"
 
-# tuple(x for x in foo.dims if x != "k")
-
+# Load hydrographic data
 ds = xr.open_dataset(file_salt)
 S = ds.SALT.squeeze().load()
 ds.close()
@@ -36,10 +37,10 @@ S.values[bad] = np.nan
 T.values[bad] = np.nan
 del bad
 
+# size of each horizontal dimension in each square tile
 n = ds.nx
 
 g = xr.open_dataset(file_grid)
-# Z = -np.float64(g.Z.load().values)  # Depth vector (note positive and increasing down)
 
 # Create depth xarray.
 Z = -g.Z  # Make Z > 0 and increasing down
@@ -78,28 +79,21 @@ face_connections = {'tile': {
 nf = len(next(iter(face_connections.values())))  # len(faces_connections only value)
 N = n * n * nf  # number of nodes
 
-# F = xgcm_faceconns_convert(face_connections)
-# A4 = neighbour4_tiled_rectilinear(F, n)
+# Build list of adjacent water columns and distances between those water column pairs
+dims = g.Depth.dims  # ('tile', 'j', 'i')
+edges, geometry = build_edges_and_geometry(
+    n, face_connections, dims, g.dxC, g.dyC, g.dxG, g.dyG, "left", "left"
+)
 
-# from neutralocean.grids import edgescompact_from_faceconns, adj_to_edges
-# from neutralocean.graph import (
-#     max_deg_from_edges,
-#     edges_to_adjnodes,
-#     edgescompact_to_adjnodes,
-# )
 
-# adj = edgescompact_from_faceconns(face_connections, n)
-# edges = adj_to_edges(adj)
-# max_deg = 4
-# max_deg = max_deg_from_edges(edges, N)
-# neigh = edges_to_adjnodes(edges, N, max_deg)
+# Make Boussinesq version of the Jackett and McDougall (1995) equation of state
+#  and its partial derivatives.
+# TODO: double check that is what ECCOv4r4 used
+grav, rho_c = 9.81, 1027.5
+eos = make_eos("jmd95", grav, rho_c)
+eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
 
-# A4 = edgescompact_to_adjnodes(adj)
-
-edges = xgcm_to_edges(n, face_connections)
-
-# %%
-# Select pinning cast
+# %% Select pinning cast and pinning depth
 # pin_cast = (11, 0, 14)  # hardcoded cast at (-127.5, 0.2)
 
 x0, y0 = (-172, -4)
@@ -108,20 +102,27 @@ pin_cast = np.unravel_index(
 )
 z0 = 1500.0
 
-# make Boussinesq version of the Jackett and McDougall (1995) equation of state
-# --- which is what OCCA used --- and its partial derivatives
-grav, rho_c = 9.81, 1027.5
-eos = make_eos("jmd95", grav, rho_c)
-eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
+# %% Build approximately neutral surfaces!
 
-# %%
-# Functions to compute various approximately neutral surfaces
-from neutralocean.surface import potential_surf, omega_surf
-
+# Build potential density surface, with given reference pressure (actually depth,
+# for Boussinesq) and given isovalue.  No diagnostics requested, so info about
+# the grid is not needed (no `edges` and `geoemtry` provided).
 s, t, z, _ = potential_surf(
-    S, T, Z, eos="jmd95", vert_dim="k", ref=0.0, isoval=1027.5, diags=False
+    S, T, Z, eos=eos, vert_dim="k", ref=0.0, isoval=1027.5, diags=False
 )
 
+# As above, but with diagnostics.
+s, t, z, d = potential_surf(
+    S,
+    T,
+    Z,
+    edges=edges,
+    geometry=geometry,
+    eos=(eos, eos_s_t),
+    vert_dim="k",
+    ref=0.0,
+    isoval=1027.5,
+)
 
 # Initialize omega surface with a (locally referenced) potential density surface.
 s, t, z, d = omega_surf(
@@ -129,11 +130,12 @@ s, t, z, d = omega_surf(
     T,
     Z,
     edges,
-    geometry=(1.0, 1.0),
+    geometry=geometry,
     vert_dim="k",
     pin_cast=pin_cast,
     pin_p=z0,
     eos=(eos, eos_s_t),
+    interp="pchip",
     ITER_MAX=10,
-    ITER_START_WETTING=100,
+    ITER_START_WETTING=1,
 )

@@ -50,7 +50,6 @@ def bfs_conncomp1(indptr, indices, root, good):
         False`) then `qt == -1`.
     """
 
-    # N = graph.shape[0]  # number of nodes == len(good)
     N = len(good)
     qu = np.empty(N, dtype=np.int64)
 
@@ -84,9 +83,9 @@ def bfs_conncomp1_wet(
     s, t, p, S, T, P, n_good, indptr, indices, root, tol_p, eos, ppc_fn, p_ml
 ):
     """
-    As in bfs_conncomp1 but extending the perimeter via wetting
+    As in bfs_conncomp1 but extending the perimeter via wetting.
 
-    A breadth-first search begins from the root node `r`, extending through
+    A breadth-first search begins from the root node `root`, extending through
     wet surface points, i.e. points where `p` is finite.  When an invalid
     node is reached (a dry water column), a neutral tangent plane calculation
     is performed from the surface to this water column.  If successful, and
@@ -159,8 +158,8 @@ def bfs_conncomp1_wet(
 
     """
 
-    ni, nj, nk = S.shape
-    N = ni * nj
+    # N, nk = S.shape
+    N = S.shape[0]  # Number of nodes (water columns)
 
     qu = np.empty(N, dtype=np.int64)
 
@@ -174,17 +173,17 @@ def bfs_conncomp1_wet(
     dry = (n_good > 1) & ~good
 
     # Flatten lateral dimension of inputs to be 1D.  Use reshape() to get a view.
-    good = np.reshape(good, N)
-    dry = np.reshape(dry, N)
-    s = np.reshape(s, N)
-    t = np.reshape(t, N)
-    p = np.reshape(p, N)
-    S = np.reshape(S, (N, nk))
-    T = np.reshape(T, (N, nk))
-    P = np.reshape(P, (N, nk))
-    n_good = np.reshape(n_good, -1)
-
-    p_ml = np.reshape(p_ml, -1)  # flatten
+    # ... removed this!  Should already have been done.
+    # good = np.reshape(good, N)
+    # dry = np.reshape(dry, N)
+    # s = np.reshape(s, N)
+    # t = np.reshape(t, N)
+    # p = np.reshape(p, N)
+    # S = np.reshape(S, (N, nk))
+    # T = np.reshape(T, (N, nk))
+    # P = np.reshape(P, (N, nk))
+    # n_good = np.reshape(n_good, -1)
+    # p_ml = np.reshape(p_ml, -1)  # flatten
 
     if good[root]:
         # Initialize BFS from root node

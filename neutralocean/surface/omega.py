@@ -286,28 +286,25 @@ def omega_surf(S, T, P, edges, **kwargs):
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
+
+    # Save shape of horizontal dimensions, then flatten horiz dims to 1D.
     surf_shape = n_good.shape
+    N = n_good.size  # number of nodes (water columns)
+    S, T, P = (np.reshape(X, (N, -1)) for X in (S, T, P))
+    n_good = np.reshape(n_good, -1)
+    pin_cast = np.ravel_multi_index(pin_cast, surf_shape)  # update to linear index
 
     # Prepare grid ratios for matrix problem.
-    # if not np.all(geom == 1.0):
-    #     geom = [np.broadcast_to(x, (ni, nj)) for x in geom]
-    # dist2on1_iJ = geom[3] / geom[0]  # dist2_iJ / dist1_iJ
-    # dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
     geom = distperp / dist
+
     if OMEGA_FORMULATION == "poisson":
         global_solver = _omega_matsolve_poisson
     elif OMEGA_FORMULATION == "gradlsqr":
         global_solver = _omega_matsolve_gradlsqr
         geom = np.sqrt(geom)
 
-    if not isinstance(pin_cast, (tuple, list)):
-        raise TypeError("`pin_cast` must be a tuple or list")
-
-    pin_cast_1 = np.ravel_multi_index(pin_cast, surf_shape)  # linear index
-
     # Pre-calculate grid adjacency needed for Breadth First Search:
-    n_nodes = n_good.size
-    graph = edges_to_graph(edges, n_nodes)
+    graph = edges_to_graph(edges, N)
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
@@ -345,6 +342,7 @@ def omega_surf(S, T, P, edges, **kwargs):
         kwargs["vert_dim"] = -1  # Since S, T, P already reordered
         kwargs["diags"] = False  # Will make our own diags next
         kwargs["eos"] = eos
+        kwargs["pin_cast"] = pin_cast  # update with the 1D value
         s, t, p, _ = _traditional_surf(ans_type, S, T, P, **kwargs)
 
     else:
@@ -359,6 +357,7 @@ def omega_surf(S, T, P, edges, **kwargs):
                 f'"p_init" should contain a 2D array of size {surf_shape};'
                 f" found size {p_init.shape}"
             )
+        p_init = np.reshape(p_init, -1)  # now reshape to 1D
 
         if pin_p is not None and pin_p != p_init[pin_cast]:
             raise ValueError("pin_p does not match p_init at pin_cast")
@@ -380,7 +379,7 @@ def omega_surf(S, T, P, edges, **kwargs):
 
     if p_ml is None:
         # Prepare array as needed for bfs_conncomp1_wet
-        p_ml = np.full(surf_shape, -np.inf)
+        p_ml = np.full(p.shape, -np.inf)
         # p_ml = np.broadcast_to(-np.inf, (ni, nj))  # DEV: Doesn't work with @numba.njit
 
     # ensure same nan structure between s, t, and p. Just in case user gives
@@ -439,7 +438,7 @@ def omega_surf(S, T, P, edges, **kwargs):
                 n_good,
                 graph.indptr,
                 graph.indices,
-                pin_cast_1,
+                pin_cast,
                 TOL_P_SOLVER,
                 eos,
                 ppc_fn,
@@ -447,14 +446,14 @@ def omega_surf(S, T, P, edges, **kwargs):
             )
         else:
             qu, qt = bfs_conncomp1(
-                graph.indptr, graph.indices, pin_cast_1, np.isfinite(p.reshape(-1))
+                graph.indptr, graph.indices, pin_cast, np.isfinite(p)
             )
             n_newly_wet = 0
         timer_bfs = time() - timer_loc
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        ϕ = global_solver(s, t, p, geom, edges, qu, qt, pin_cast_1, eos_s_t)
+        ϕ = global_solver(s, t, p, geom, edges, qu, qt, pin_cast, eos_s_t)
 
         timer_mat = time() - timer_loc
 
@@ -522,7 +521,11 @@ def omega_surf(S, T, P, edges, **kwargs):
         for k, v in d.items():
             d[k] = v[0 : iter_ + (k in ("ϵ_MAV", "ϵ_RMS"))]
 
-    s, t, p = (_xr_out(x, xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr)))
+    # Reshape (from 1D arrays) and put into DataArrays if appropriate
+    s, t, p = (
+        _xr_out(np.reshape(x, surf_shape), xxr)
+        for (x, xxr) in ((s, sxr), (t, txr), (p, pxr))
+    )
 
     return s, t, p, d
 

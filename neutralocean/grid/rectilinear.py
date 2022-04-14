@@ -1,7 +1,4 @@
 import numpy as np
-import numba as nb
-import xarray as xr
-import xgcm
 
 
 def neighbour_rectilinear(dims, conn, periodic):
@@ -253,40 +250,3 @@ def build_edge_data(dims, periodic, data):
     x = np.broadcast_to(data[0], dims)
     y = np.broadcast_to(data[1], dims)
     return np.concatenate((x[i1:, :].reshape(-1), y[:, j1:].reshape(-1)))
-
-
-@nb.njit
-def adj_to_dir_edges(adj):
-    # This is really producing directed edges.  If edges are undirected, this
-    # produces two entries in `edges` for each edge, i.e. [a, b] and [b, a].
-    N, D = adj.shape
-    E = N * D  # max number of edges
-    edges = np.empty((E, 2), dtype=type(0))
-    ne = 0
-    for d in range(D):
-        for n in range(N):
-            if n < N:
-                # n < N: neighbour node exists in the graph (handle nodes with degree < D)
-                edges[ne, :] = (n, adj[n, d])
-                ne += 1
-
-    edges = edges[0:ne, :]  # trim
-    return edges
-
-
-@nb.njit
-def adj_to_undir_edges(adj):
-    N, D = adj.shape
-    E = -(N * D // -2)  # max number of edges == int(ceil(N * D / 2))
-    edges = np.empty((E, 2), dtype=type(0))
-    ne = 0
-    for d in range(D):
-        for m in range(N):
-            n = adj[m, d]  # neighbour
-            if m < n and n < N:
-                # m < n: Only add once, for undirected graph.
-                # n < N: neighbour node exists in the graph (handle nodes with degree < D)
-                edges[ne, :] = (m, n)
-                ne += 1
-    edges = edges[0:ne, :]  # trim
-    return edges
