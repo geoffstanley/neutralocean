@@ -286,8 +286,8 @@ def neutral_trajectory(
         Sppc = ppc_fn(Pc, Sc)
         Tppc = ppc_fn(Pc, Tc)
 
-        # Make a neutral connection from previous bottle to the cast (S[:,c], T[:,c], P[:,c])
-        K = np.sum(np.isfinite(Sc))
+        # Make a neutral connection from previous bottle to the cast (S[c,:], T[c,:], P[c,:])
+        K = find_first_nan(Sc)
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
             s[c - 1], t[c - 1], p[c - 1], Sppc, Tppc, Pc, K, tol_p, eos
         )
