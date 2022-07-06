@@ -205,7 +205,9 @@ def neutral_trajectory(
     S, T, P : 2D ndarray
 
         1D data specifying the practical / Absolute salinity, and potential /
-        Conservative temperature, and pressure / depth down a 1D sequence of casts
+        Conservative temperature, and pressure / depth down a 1D sequence of casts.
+        The first dimension specifies the cast number, while the second provides
+        data on that cast; e.g. S[i,:] is the salinity down cast `i`.
 
     p0 : float
 
@@ -258,7 +260,7 @@ def neutral_trajectory(
     eos = make_eos(eos, grav, rho_c)
     ppc_fn = select_ppc(interp, "1")
 
-    nk, nc = S.shape
+    nc, nk = S.shape
     # assert(all(size(T) == size(S)), 'T must be same size as S')
     # assert(all(size(P) == size(S)) || all(size(P) == [nk, 1]), 'P must be [nk,nc] or [nk,1]')
 
@@ -267,27 +269,27 @@ def neutral_trajectory(
     p = np.full(nc, np.nan)
 
     # Evaluate S and T on first cast at p0
-    Sc = S[:, 0]
-    Tc = T[:, 0]
-    Pc = P[:, 0]
-    Sppc = ppc_fn(Sc, Pc)
-    Tppc = ppc_fn(Tc, Pc)
-    s[0], t[0] = interp(p0, Pc, Sppc, Tppc)
+    Sc = S[0, :]
+    Tc = T[0, :]
+    Pc = P[0, :]
+    Sppc = ppc_fn(Pc, Sc)
+    Tppc = ppc_fn(Pc, Tc)
+    s[0], t[0] = ppval1_two(p0, Pc, Sppc, Tppc)
     p[0] = p0
 
     # Loop over remaining casts
     for c in range(1, nc):
 
-        Sc = S[:, c]
-        Tc = T[:, c]
-        Pc = P[:, c]
-        Sppc = ppc_fn(Sc, Pc)
-        Tppc = ppc_fn(Tc, Pc)
+        Sc = S[c, :]
+        Tc = T[c, :]
+        Pc = P[c, :]
+        Sppc = ppc_fn(Pc, Sc)
+        Tppc = ppc_fn(Pc, Tc)
 
         # Make a neutral connection from previous bottle to the cast (S[:,c], T[:,c], P[:,c])
         K = np.sum(np.isfinite(Sc))
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
-            s[c - 1], t[c - 1], p[c - 1], Sppc, Tppc, Pc, Sc, Tc, K, tol_p, eos
+            s[c - 1], t[c - 1], p[c - 1], Sppc, Tppc, Pc, K, tol_p, eos
         )
 
         if np.isnan(p[c]):
