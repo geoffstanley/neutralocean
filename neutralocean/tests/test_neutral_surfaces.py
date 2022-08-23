@@ -1,6 +1,6 @@
 import numpy as np
 from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
-from neutralocean import potential_surf, anomaly_surf, omega_surf
+from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.synthocean import synthocean
 from neutralocean.lib import find_first_nan, val_bot
 
@@ -68,7 +68,7 @@ def test_anomaly_surf():
         ref=(s_ref, t_ref),
         pin_cast=(i0, j0),
         pin_p=pin_z,
-        eos=eos,
+        eos=(eos,eos_s_t),
         TOL_P_SOLVER=1e-8,
         diags=True,  # True to get isoval output
         wrap=(False, False),  # Only needed since diags=True
