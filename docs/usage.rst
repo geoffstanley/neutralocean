@@ -4,133 +4,20 @@ Usage
 Installation
 ------------
 
-The following is the easy installation that we aspire to.  This won't work, yet...
-
-Install using either pip,
+Install using pip,
 
 .. code-block:: console
 
     $ pip install neutralocean
 
-or Conda,
+At the moment, it seems numba does not work with python3.10, and numpy 1.22 does not work with numba.vectorize right now. How annoying.  So if the above doesn't work, try manually installing the dependencies as follows.  First install numpy 1.21 to get a slightly older version of Python, then pull in the others::
 
-.. code-block:: console
+	$ conda install -c conda-forge numpy==1.21 numba
+	$ conda install -c conda-forge xarray scipy scikit-sparse gsw pooch
 
-	$ conda install neutralocean -c conda-forge
-
-
-
-Calculating approximately neutral surfaces
-------------------------------------------
-
-potential_surf
-~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.surface.trad.potential_surf
-
-anomaly_surf
-~~~~~~~~~~~~
-.. autofunction:: neutralocean.surface.trad.anomaly_surf
-
-omega_surf
-~~~~~~~~~~
-.. autofunction:: neutralocean.surface.omega.omega_surf
+We're installing everything from conda-forge since that's where we must get `gsw`, and I find it's better (in terms of resolving the environment) to have everything or nothing from conda-forge.
 
 
-Calculating other neutral things
---------------------------------
-
-ntp_bottle_to_cast
-~~~~~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.traj.ntp_bottle_to_cast
-
-neutral_trajectory
-~~~~~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.traj.neutral_trajectory
-
-veronis_density
-~~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.label.veronis_density
-
-Choosing the Equation Of State
-------------------------------
-
-make_eos
-~~~~~~~~
-.. autofunction:: neutralocean.eos.tools.make_eos
-
-vectorize_eos
-~~~~~~~~~~~~~
-.. autofunction:: neutralocean.eos.tools.vectorize_eos
-
-make_eos_bsq
-~~~~~~~~~~~~~
-.. autofunction:: neutralocean.eos.tools.make_eos_bsq
-
-
-JMD95 Equation of State
------------------------
-.. automodule:: neutralocean.eos.jmd95
-
-rho
-~~~
-.. autofunction:: neutralocean.eos.jmd95.rho
-
-rho_s_t
-~~~~~~~
-.. autofunction:: neutralocean.eos.jmd95.rho_s_t
-
-rho_p
-~~~~~
-.. autofunction:: neutralocean.eos.jmd95.rho_p
-
-JMDFWG06 Equation of State
------------------------
-.. automodule:: neutralocean.eos.jmdfwg06
-
-rho
-~~~
-.. autofunction:: neutralocean.eos.jmdfwg06.rho
-
-rho_s_t
-~~~~~~~
-.. autofunction:: neutralocean.eos.jmdfwg06.rho_s_t
-
-rho_p
-~~~~~
-.. autofunction:: neutralocean.eos.jmdfwg06.rho_p
-
-TEOS-10 GSW Equation of State
------------------------------
-
-rho
----
-.. autofunction:: neutralocean.eos.gsw.rho
-
-rho_s_t
-~~~~~~~
-.. autofunction:: neutralocean.eos.gsw.rho_s_t
-
-rho_p
-~~~~~
-.. autofunction:: neutralocean.eos.gsw.rho_p
-
-
-Vertical Interpolation
-----------------------
-
-make_interpolator
-~~~~~~~~~~~~~~~~~
-.. autofunction:: neutralocean.interp1d.make_interpolator
-
-
-select_ppc
-~~~~~~~~~~
-.. autofunction:: neutralocean.ppinterp.select_ppc
-
-ppval
-~~~~~
-.. autofunction:: neutralocean.ppinterp.ppval
-
-ppval_two
-~~~~~~~~~
-.. autofunction:: neutralocean.ppinterp.ppval_two
+Getting Started
+---------------
+Have a look at the script in `run_OCCA.py` in `neutralocean/examples/`

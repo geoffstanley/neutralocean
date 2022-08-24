@@ -20,8 +20,8 @@ def _linterp(x, X, Y, i):
 
     i : int
         The interval of `X` that contains `x`.  Specifically,
-            (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
-            (b) `2 <= i <= len(X) - 1`  and  X[i-1] < x <= X[i]`.
+        (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
+        (b) `2 <= i <= len(X) - 1`  and  X[i-1] < x <= X[i]`.
         These facts about `i` are assumed true; they are not checked.
         (This function will not be called if `x < X[0]` or `X[-1] < x` or
         `x` is nan or `X` are all nan.)

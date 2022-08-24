@@ -5,9 +5,7 @@ import numpy as np
 from time import time
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import lsqr
-
-# from scipy.sparse.linalg import spsolve
-from sksparse.cholmod import cholesky
+from scipy.sparse.linalg import spsolve
 
 from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
@@ -816,12 +814,15 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # Pinning
     i = remap[mr]
     L[i, i] += 1
-
     # alternative pinning strategy.  Basically same output to many sig figs.
     # L[:, i] = 0
     # L[i, :] = 0
     # L[i, i] = 1
     # D[i] = 0
+
+    # Prune the entries to ignore connections to adjacent pixels that are dry
+    # (including those that are "adjacent" across a non-periodic boundary).
+    good = c >= 0
 
     # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
     # function, so that this can be njit'ed.  But numba doesn't support
@@ -830,7 +831,6 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # return r[good], c[good], v[good], N, D, m
 
     # Solve the matrix problem, L ϕ = D
-    factor = cholesky(L)
-    ϕ[m] = factor(D)
+    ϕ[m] = spsolve(L, D)
 
     return ϕ.reshape(surf_shape)
