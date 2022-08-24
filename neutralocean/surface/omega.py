@@ -1,6 +1,4 @@
 """Omega surfaces"""
-import matplotlib.pyplot as plt
-
 import numpy as np
 from time import time
 from scipy.sparse import csc_matrix
@@ -804,13 +802,11 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     v = np.concatenate((-fac.repeat(2), diag))  # negative Laplacian
 
     # Build the (negative) Laplacian sparse matrix with N rows and N columns
-    # L = csc_matrix((v, (r, c)), shape=(N, N))
+    L = csc_matrix((v, (r, c)), shape=(N, N))
 
     # Prune the entries to ignore the upper triangle of the matrix, since
     # cholesky only accessses the lower triangular part of the matrix.
-    good = r >= c
-    L = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
-
+    
     # Pinning
     i = remap[mr]
     L[i, i] += 1
@@ -819,10 +815,6 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # L[i, :] = 0
     # L[i, i] = 1
     # D[i] = 0
-
-    # Prune the entries to ignore connections to adjacent pixels that are dry
-    # (including those that are "adjacent" across a non-periodic boundary).
-    good = c >= 0
 
     # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
     # function, so that this can be njit'ed.  But numba doesn't support
