@@ -81,7 +81,7 @@ N = n * n * nf  # number of nodes
 
 # Build list of adjacent water columns and distances between those water column pairs
 dims = g.Depth.dims  # ('tile', 'j', 'i')
-edges, geometry = build_edges_and_geometry(
+edges, dist, distperp = build_edges_and_geometry(
     n, face_connections, dims, g.dxC, g.dyC, g.dxG, g.dyG, "left", "left"
 )
 
@@ -117,7 +117,7 @@ s, t, z, d = potential_surf(
     T,
     Z,
     edges=edges,
-    geometry=geometry,
+    geometry=(dist, distperp),
     eos=(eos, eos_s_t),
     vert_dim="k",
     ref=0.0,
@@ -130,7 +130,7 @@ s, t, z, d = omega_surf(
     T,
     Z,
     edges,
-    geometry=geometry,
+    geometry=(dist, distperp),
     vert_dim="k",
     pin_cast=pin_cast,
     pin_p=z0,

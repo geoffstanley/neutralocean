@@ -276,10 +276,8 @@ s, t, z, d = omega_surf(
 # z[z < z_ml] = np.nan
 
 # %% Neutrality errors on a surface
-ϵx, ϵy = ntp_ϵ_errors(
-    s, t, z, eos_s_t, "Longitude_t", geom["dist1_iJ"], geom["dist2_Ij"]
-)
-ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, "Longitude_t", **geom)
+ϵ = ntp_ϵ_errors(s, t, z, eos_s_t, edges, dist)
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, edges, dist, distperp)
 print(f"RMS of ϵ is {ϵ_RMS : 4e} [kg m-4])")
 
 # %% Neutral Tangent Plane bottle to cast

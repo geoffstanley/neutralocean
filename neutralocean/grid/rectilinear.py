@@ -1,183 +1,33 @@
 import numpy as np
 
 
-def neighbour_rectilinear(dims, conn, periodic):
+def build_edges(dims, periodic):
     """
-    Linear indices to each neighbour of each grid point on a regular grid
-
-    This builds a 2D array `adj` giving linear indices to each of `conn`
-    neighbours of each grid point in a regular grid.
+    Build list of pairs of adjacent grid points, numbered 1, ..., N, on a
+    rectilinear grid
 
     Parameters
     ----------
     dims : tuple of int
-
-        The number of grid points in each dimension of the grid.  Currently
-        this must be of length 2, i.e. only 2D grids are supported.
-
-    conn : int
-        The grid connectivity: for a 2D grid, this must be 4, 5, 8, or 9.
-
+        dimensions of the grid.  i'th element gives number of grid cells in the
+        i'th direction, for i = 1,2.
     periodic : tuple of bool
-        The periodicity of the grid.  Dimension `i` is periodic iff
-        `periodic[i] == True`.
-
+        Specifies periodicity.  The i'th dimension is periodic when `periodic[i]` is True.
 
     Returns
     -------
-    adj : ndarray
-
-        Linear indices to up to `conn` neighbours of each grid point.
-        When a grid point `m` is adjacent to a non-periodic boundary, some of
-        `adj[m,:]` will be `N`, where `N = np.prod(dims)` is the total number
-        of grid points.
-
-    Notes
-    -----
-    The connectivity `conn` specifies the number of neighbours to a central
-    grid point, possibly including itself.  For `n` between 1 and conn; the
-    `n`'th neighbour is located relative to the central grid point according
-    to the following diagram:
-
-    conn==4      conn==5    conn==8   conn==9
-    +------> j
-    | . 1 .       . 1 .     4 1 6     0 3 6
-    | 0 . 3       0 2 4     0 . 3     1 4 7
-    v . 2 .       . 3 .     5 2 7     2 5 8
-    i
-
-    Here, the first dimension (i) increases downward and the second dimension
-    (j) increases right.  For example, with `conn == 4`, if `m` is the linear
-    index to grid point `(i,j)`, then `n = adj[m,1]` is the linear index to
-    grid point `(i-1,j)`.
+    edges : array
+        List of pairs of adjacent grid points.
+        If `dims == (ni,nj)`, then the grid points are labelled 1, 2, ..., N=ni*nj.
+        The grid points whose integer indices are `edges[i,0]` and `edges[i,1]`
+        are adjacent.
+        (Pairs that are adjacent in the first dimension come first in `edges`,
+         followed by pairs that are adjacent in the second dimension.)
+        If both elements of `periodic` are True, there will be 2 * ni * nj pairs
+        of adjacent grid points (rows of `edges`).  Otherwise, there will be fewer.
 
     """
 
-    ndim = len(dims)  # Number of dimensions in the grid
-    assert ndim == 2, "currently only works for 2D grids."
-    assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
-
-    ni = dims[0]
-    nj = dims[1]
-
-    badval = ni * nj
-
-    # fmt: off
-    # Build adjacency matrix and handle periodicity
-    if conn == 4:
-        # . 1 .
-        # 0 . 3
-        # . 2 .
-        order = [1, 3, 5, 7]
-        adj = _neighbour_rectilinear_helper(ni, nj, order)
-        if not periodic[0]:
-            adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
-            adj[ni-1, :, 2] = badval # i+1 hits a wall when i = ni - 1
-        if not periodic[1]:
-            adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
-            adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
-
-    elif conn == 5:
-        # . 1 .
-        # 0 4 3
-        # . 2 .
-        order = [1, 3, 5, 7, 4]
-        adj = _neighbour_rectilinear_helper(ni, nj, order)
-        if not periodic[0]:
-            # adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
-            # adj[ni-1, :, 3] = badval # i+1 hits a wall when i = ni - 1
-            adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
-            adj[ni-1, :, 2] = badval # i+1 hits a wall when i = ni - 1
-        if not periodic[1]:
-            # adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
-            # adj[:, nj-1, 4] = badval # j+1 hits a wall when j = nj - 1
-            adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
-            adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
-            
-        # # . 1 .
-        # # 0 2 4
-        # # . 3 .
-        # # order = [1, 3, 4, 5, 7]
-        # adj = _neighbour_rectilinear_helper(ni, nj, order)
-        # if not periodic[0]:
-        #     adj[0   , :, 1] = badval # i-1 hits a wall when i = 0
-        #     adj[ni-1, :, 3] = badval # i+1 hits a wall when i = ni - 1
-        # if not periodic[1]:
-        #     adj[:, 0   , 0] = badval # j-1 hits a wall when j = 0
-        #     adj[:, nj-1, 4] = badval # j+1 hits a wall when j = nj - 1
-        #     adj[:, nj-1, 3] = badval # j+1 hits a wall when j = nj - 1
-            
-    elif conn == 8:
-        # 4 1 6
-        # 0 . 3
-        # 5 2 7
-        order = [1, 3, 5, 7, 0, 2, 6, 8]
-        adj = _neighbour_rectilinear_helper(ni, nj, order)
-        if not periodic[0]:
-            adj[0   , :, [1, 4, 6]] = badval # i-1 hits a wall when i = 0
-            adj[ni-1, :, [2, 5, 7]] = badval # i+1 hits a wall when i = ni - 1
-        if not periodic[1]:
-            adj[:, 0   , [0, 4, 5]] = badval # j-1 hits a wall when j = 0
-            adj[:, nj-1, [3, 6, 7]] = badval # j+1 hits a wall when j = nj - 1
-
-    elif conn == 9:
-        # 0 3 6
-        # 1 4 7
-        # 2 5 8
-        order = range(9)
-        adj = _neighbour_rectilinear_helper(ni, nj, order)
-        if not periodic[0]:
-            adj[0   , :, [0, 3, 6]] = badval # i-1 hits a wall when i = 0
-            adj[ni-1, :, [2, 5, 8]] = badval # i+1 hits a wall when i = ni - 1
-        if not periodic[1]:
-            adj[:, 0   , [0, 1, 2]] = badval # j-1 hits a wall when j = 0
-            adj[:, nj-1, [6, 7, 8]] = badval # j+1 hits a wall when j = nj - 1
-
-    else:
-        raise("Unknown number of neighbours.  conn must be one of 4, 5, 8, or 9.")
-    # fmt: on
-
-    # Reshape adj to a matrix of dimensions (conn, ni*nj)
-    adj = adj.reshape((ni * nj, conn))
-
-    return adj
-
-
-def _neighbour_rectilinear_helper(ni, nj, order):
-
-    D = len(order)  # max degree
-
-    # Prepare to circshift linear indices to some subset of its neighbours
-    # generally ordered as follows
-    # +------> j = 2'nd dim
-    # | 0 3 6
-    # | 1 4 7
-    # | 2 5 8
-    # v
-    #  i = 1'st dim
-    spin = (
-        (1, 1),
-        (0, 1),
-        (-1, 1),
-        (1, 0),
-        (0, 0),
-        (-1, 0),
-        (1, -1),
-        (0, -1),
-        (-1, -1),
-    )  # - sign included as prep for np.roll
-
-    # Build linear index to each grid point, and repeat them D times
-    adj = np.tile(np.reshape(range(ni * nj), (ni, nj, 1)), (1, 1, D))  # ni x nj x D
-
-    # Shift these linear indices so they refer to their neighbours.
-    for d in range(D):
-        adj[:, :, d] = np.roll(adj[:, :, d], spin[order[d]], (0, 1))
-
-    return adj
-
-
-def build_edges(dims, periodic):
     ndim = len(dims)  # Number of dimensions in the grid
     assert ndim == 2, "currently only works for 2D grids."
     assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
@@ -221,7 +71,7 @@ def build_edges(dims, periodic):
 
 def build_edge_data(dims, periodic, data):
     """
-
+    Build a 1D array of `data` in the same order as the `edges` constructed by `build_edges`
 
     Parameters
     ----------
@@ -241,8 +91,10 @@ def build_edge_data(dims, periodic, data):
     Returns
     -------
     edge_data : array
-        1D array of `data` in the same order as the `edges` constructed by
-        `build_edges`.
+        1D array of `data`.
+        If `edges = build_edges(dims, periodic)`, then `edge_data[i]` is the
+        value from `data` that corresponds to the interface between the grid
+        cells indexed by `edges[i,0]` and `edges[i,1]`.
 
     """
     i1 = int(not periodic[0])  # 0 when periodic, 1 when non-periodic

@@ -80,9 +80,6 @@ def build_edges_and_geometry(n, face_connections, dims, dxC, dyC, dxG, dyG, xsh,
         For each i, edges[i,:] is a 2-element array giving linear indices to
         a pair of adjacent nodes (water columns).
 
-    geometry : tuple
-        A two element tuple, consisting of the following.
-
     dist : 1d array
         Distance between adjacent grid points.  `dist[m]` is the distance
         between nodes (water columns) whose linear indices are `edges[m,0]` and
@@ -188,4 +185,4 @@ def build_edges_and_geometry(n, face_connections, dims, dxC, dyC, dxG, dyG, xsh,
     dist = dist[good]
     distperp = distperp[good]
 
-    return edges, (dist, distperp)
+    return edges, dist, distperp
