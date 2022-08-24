@@ -3,9 +3,7 @@
 import numpy as np
 from time import time
 from scipy.sparse import csc_matrix
-
-# from scipy.sparse.linalg import spsolve
-from sksparse.cholmod import cholesky
+from scipy.sparse.linalg import spsolve
 
 from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
@@ -299,7 +297,7 @@ def omega_surf(S, T, P, **kwargs):
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
-        TOL_LRPD_MAV = TOL_LRPD_MAV * 1000.0 ** 2
+        TOL_LRPD_MAV = TOL_LRPD_MAV * 1000.0**2
 
     # Pre-allocate arrays for diagnostics
     if diags:
@@ -463,7 +461,7 @@ def omega_surf(S, T, P, **kwargs):
         ϕ_MAV = np.nanmean(abs(ϕ))
         if diags or TOL_P_CHANGE_RMS > 0:
             Δp = p - p_old
-            Δp_RMS = np.sqrt(np.nanmean(Δp ** 2))
+            Δp_RMS = np.sqrt(np.nanmean(Δp**2))
 
         if diags:
 
@@ -742,12 +740,9 @@ def _omega_matsolve_poisson(
     # Build the values of the sparse matrix
     v = L[m]
 
-    # Prune the entries to
-    # (a) ignore connections to adjacent pixels that are dry (including those
-    #     that are "adjacent" across a non-periodic boundary), and
-    # (b) ignore the upper triangle of the matrix, since cholesky only
-    #     accessses the lower triangular part of the matrix
-    good = (c >= 0) & (r >= c)
+    # Prune the entries to ignore connections to adjacent pixels that are dry
+    # (including those that are "adjacent" across a non-periodic boundary).
+    good = c >= 0
 
     # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
     # function, so that this can be njit'ed.  But numba doesn't support
@@ -759,11 +754,7 @@ def _omega_matsolve_poisson(
     mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
 
     # --- Solve the matrix problem
-    factor = cholesky(mat)
-    ϕ[m] = factor(rhs)
-
-    # spsolve (requires ``good = (c >= 0)`` above) is slower than using cholesky
-    # ϕ[m] = spsolve(mat, rhs)
+    ϕ[m] = spsolve(mat, rhs)
 
     return ϕ.reshape(ni, nj)
 
