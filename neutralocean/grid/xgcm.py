@@ -3,7 +3,9 @@ import xarray as xr
 import xgcm
 
 
-def build_edges_and_geometry(n, face_connections, dims, dxC, dyC, dxG, dyG, xsh, ysh):
+def build_edges_and_geometry(
+    n, face_connections, dims, dxC, dyC, dxG, dyG, xsh, ysh
+):
     """
     Make a list of edges between adjacent nodes in a graph consisting of
     rectilinear tiles, with adjacency between tiles specified as for xgcm;
@@ -37,7 +39,7 @@ def build_edges_and_geometry(n, face_connections, dims, dxC, dyC, dxG, dyG, xsh,
         two entires must be 'i' and 'j'.  We need `dims` as an input here
         because the order matters.
 
-        An example: in ECCOv4r4, `dims == ('tile', 'j', 'i')`.
+        Example: in ECCOv4r4, `dims == ('tile', 'j', 'i')`.
 
     dxC : ndarray
         Distance between adjacent grid points in the 'i' dimension.
@@ -97,14 +99,20 @@ def build_edges_and_geometry(n, face_connections, dims, dxC, dyC, dxG, dyG, xsh,
 
     # If given DataArrays, check the dims are correct then convert to numpy arrays.
     if all(hasattr(x, "dims") for x in (dxC, dyC, dxG, dyG)):
-        assert dxC.dims == dyG.dims, "Expected dxC and dyG to have the same coordinates"
-        assert dyC.dims == dxG.dims, "Expected dyC and dxG to have the same coordinates"
+        assert (
+            dxC.dims == dyG.dims
+        ), "Expected dxC and dyG to have the same coordinates"
+        assert (
+            dyC.dims == dxG.dims
+        ), "Expected dyC and dxG to have the same coordinates"
     dxC, dyC, dxG, dyG = (
         x.values if hasattr(x, "values") else x for x in (dxC, dyC, dxG, dyG)
     )
 
     # Access first (and only) key / value of face_connections
-    tile = next(iter(face_connections.keys()))  # name of face_connections only key
+    tile = next(
+        iter(face_connections.keys())
+    )  # name of face_connections only key
     nf = len(next(iter(face_connections.values())))  #  number of faces
 
     # Get index of tile in dims
@@ -137,24 +145,74 @@ def build_edges_and_geometry(n, face_connections, dims, dxC, dyC, dxG, dyG, xsh,
     # Make linear indices for the whole domain: a DataArray of 0, 1, ... N-1.
     idx = xr.DataArray(np.arange(N).reshape(shape), dims=dims, coords=coords)
 
-    # Make linear indices to the neighbour in the i//x dimension
+    # Make linear indices to the neighbour in the i//x dimension.
+    # Use XGCM grid Ufunc to pad the `idx` data as needed, then subset forwards
+    # or backwards.
     if xsh[0] == "l":  # left
-        ish = grid.axes["X"]._neighbor_binary_func(
-            idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
-        )
-    else:  # right
-        ish = grid.axes["X"]._neighbor_binary_func(
-            idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+        # # Old code using depreciated XGCM function below
+        # ish = grid.axes["X"]._neighbor_binary_func(
+        #     idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
+        # )
+        ish = grid.apply_as_grid_ufunc(
+            lambda a: a[:, :, 0:-1],
+            idx,
+            axis=[["X"]],
+            signature="(ax1:center)->(ax1:center)",
+            boundary_width={"ax1": (1, 0)},
+            boundary="fill",
+            fill_value=-1,
         )
 
-    # Make linear indices to the neighbour in the j//y dimension
-    if ysh[0] == "l":  # left
-        jsh = grid.axes["Y"]._neighbor_binary_func(
-            idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
-        )
     else:  # right
-        jsh = grid.axes["Y"]._neighbor_binary_func(
-            idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+        # ish = grid.axes["X"]._neighbor_binary_func(
+        #     idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+        # )
+        ish = grid.apply_as_grid_ufunc(
+            lambda a: a[:, :, 1:],
+            idx,
+            axis=[["X"]],
+            signature="(ax1:center)->(ax1:center)",
+            boundary_width={"ax1": (0, 1)},
+            boundary="fill",
+            fill_value=-1,
+        )
+
+    # Make linear indices to the neighbour in the j//y dimension.
+    # Why do the following lambda functions subset along the last dimension,
+    # when j is the second (middle) dimension?  See:
+    # https://xgcm.readthedocs.io/en/latest/grid_ufuncs.html
+    # "XGCM assumes the function acts along the last axis of the numpy array"
+    if ysh[0] == "l":  # left
+        # jsh = grid.axes["Y"]._neighbor_binary_func(
+        #     idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
+        # )
+        jsh = grid.apply_as_grid_ufunc(
+            lambda a: a[:, :, 0:-1],
+            idx,
+            axis=[["Y"]],
+            signature="(ax1:center)->(ax1:center)",
+            boundary_width={"ax1": (1, 0)},
+            boundary="fill",
+            fill_value=-1,
+        )
+
+        # Must ensure same ordering of dimensions as idx.  Currently, this
+        # one gets its dimensions reordered by the grid ufunc, probably
+        # because it reorders things to act on the last dimension...?
+        jsh = jsh.transpose(*idx.dims)
+
+    else:  # right
+        # jsh = grid.axes["Y"]._neighbor_binary_func(
+        #     idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
+        # )
+        jsh = grid.apply_as_grid_ufunc(
+            lambda a: a[:, :, 1:],
+            idx,
+            axis=[["Y"]],
+            signature="(ax1:center)->(ax1:center)",
+            boundary_width={"ax1": (0, 1)},
+            boundary="fill",
+            fill_value=-1,
         )
 
     # Build list of pairs of adjacent nodes.  The first N entries are [m,n]
@@ -179,7 +237,7 @@ def build_edges_and_geometry(n, face_connections, dims, dxC, dyC, dxG, dyG, xsh,
     distperp[N:] = dyG.reshape(-1)
 
     # Trim out invalid edges, i.e. those for which one of the two nodes was
-    # filled by `_neighbor_binary_func`.
+    # filled by `apply_as_grid_ufunc` to have a value of -1.
     good = np.all(edges >= 0, axis=1)
     edges = edges[good, :]
     dist = dist[good]
