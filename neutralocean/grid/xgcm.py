@@ -27,17 +27,15 @@ def build_edges_and_geometry(
         See https://xgcm.readthedocs.io/en/latest/grid_topology.html
 
     dims : tuple of str
+        A tuple of length 3, with one entry being the same as the only key in
+        the `face_connections` dict, and the other two being 'i' and 'j'.
+
         This names, in order, the dimensions of a DataArray whose data lives
         on each (tracer) grid point in the horizontal, and has no vertical
         dimension.
 
         If `D` is a DataArray giving the Sea Surface Temperature, for example,
         then this argument should be `D.dims`.
-
-        This must be a tuple of length 3.  One of the entries must
-        be the same as the only key in the `face_connections` dict.  The other
-        two entires must be 'i' and 'j'.  We need `dims` as an input here
-        because the order matters.
 
         Example: in ECCOv4r4, `dims == ('tile', 'j', 'i')`.
 
@@ -122,6 +120,10 @@ def build_edges_and_geometry(
         raise ValueError(
             f"Expected to find '{tile}' (the key from `face_connections`) in `dims` == {dims}."
         )
+
+    # Ensure dims also has 'i' and 'j':
+    if not (dims.__contains__("i") and dims.__contains__("j")):
+        raise ValueError(f"Expected to find 'i' and 'j' in `dims` == {dims}.")
 
     N = n * n * nf  # number of Nodes (water columns)
 
