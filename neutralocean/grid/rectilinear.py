@@ -30,7 +30,9 @@ def build_edges(dims, periodic):
 
     ndim = len(dims)  # Number of dimensions in the grid
     assert ndim == 2, "currently only works for 2D grids."
-    assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
+    assert (
+        len(periodic) == ndim
+    ), "periodic must be a tuple the same length as dims."
 
     ni, nj = dims
     N = ni * nj  # number of nodes
@@ -82,9 +84,9 @@ def build_edge_data(dims, periodic, data):
         Specifies periodicity.  The i'th dimension is periodic when `periodic[i]` is True.
     data : tuple of float or ndarray
         The data that lives on edges, i.e. between water columns.
-        The i'th element gives data that lives between water columns in the i'th
-        dimension.
-        For example, `data = (xdist, ydist)` where `xdist` is the distance
+        The i'th element of the tuple gives data that lives between water
+        columns in the i'th dimension.
+        Example: `data = (xdist, ydist)` where `xdist` is the distance
         between water columns in the x (first) dimension, and `ydist` is the
         distance between water columns in the y (second) dimension.
 

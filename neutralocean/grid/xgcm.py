@@ -133,9 +133,8 @@ def build_edges_and_geometry(
 
     # Build a simple xgcm grid
     coords = {"i": np.arange(n), "j": np.arange(n), tile: np.arange(nf)}
-    gg = xr.Dataset(None, coords)
     grid = xgcm.Grid(
-        gg,
+        xr.Dataset(None, coords),
         periodic=False,
         face_connections=face_connections,
         coords={
@@ -148,14 +147,18 @@ def build_edges_and_geometry(
     idx = xr.DataArray(np.arange(N).reshape(shape), dims=dims, coords=coords)
 
     # Make linear indices to the neighbour in the i//x dimension.
-    # Use XGCM grid Ufunc to pad the `idx` data as needed, then subset forwards
-    # or backwards.
+    # That is, idx[t,j,i-1] == im1[t,j,i] for all 0 <= t < nf, 0 <= j < n, 0 < i < n
+    # and corresponding treatment across tiles when i == 0.
+    # Similarly, idx[t,j-1,i] == jm1[t,j,i] for all 0 <= t < nf, 0 < j < n, 0 <= i < n
+    # and corresponding treatment across tiles when j == 0.
+    # To achieve this, use XGCM grid Ufunc to pad the `idx` data as needed,
+    # then subset forwards or backwards.
     if xsh[0] == "l":  # left
         # # Old code using depreciated XGCM function below
-        # ish = grid.axes["X"]._neighbor_binary_func(
+        # im1 = grid.axes["X"]._neighbor_binary_func(
         #     idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
         # )
-        ish = grid.apply_as_grid_ufunc(
+        im1 = grid.apply_as_grid_ufunc(
             lambda a: a[:, :, 0:-1],
             idx,
             axis=[["X"]],
@@ -166,10 +169,10 @@ def build_edges_and_geometry(
         )
 
     else:  # right
-        # ish = grid.axes["X"]._neighbor_binary_func(
+        # im1 = grid.axes["X"]._neighbor_binary_func(
         #     idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
         # )
-        ish = grid.apply_as_grid_ufunc(
+        im1 = grid.apply_as_grid_ufunc(
             lambda a: a[:, :, 1:],
             idx,
             axis=[["X"]],
@@ -185,10 +188,10 @@ def build_edges_and_geometry(
     # https://xgcm.readthedocs.io/en/latest/grid_ufuncs.html
     # "XGCM assumes the function acts along the last axis of the numpy array"
     if ysh[0] == "l":  # left
-        # jsh = grid.axes["Y"]._neighbor_binary_func(
+        # jm1 = grid.axes["Y"]._neighbor_binary_func(
         #     idx, lambda a, b: a, to="left", boundary="fill", fill_value=-1
         # )
-        jsh = grid.apply_as_grid_ufunc(
+        jm1 = grid.apply_as_grid_ufunc(
             lambda a: a[:, :, 0:-1],
             idx,
             axis=[["Y"]],
@@ -201,13 +204,13 @@ def build_edges_and_geometry(
         # Must ensure same ordering of dimensions as idx.  Currently, this
         # one gets its dimensions reordered by the grid ufunc, probably
         # because it reorders things to act on the last dimension...?
-        jsh = jsh.transpose(*idx.dims)
+        jm1 = jm1.transpose(*idx.dims)
 
     else:  # right
-        # jsh = grid.axes["Y"]._neighbor_binary_func(
+        # jm1 = grid.axes["Y"]._neighbor_binary_func(
         #     idx, lambda a, b: b, to="right", boundary="fill", fill_value=-1
         # )
-        jsh = grid.apply_as_grid_ufunc(
+        jm1 = grid.apply_as_grid_ufunc(
             lambda a: a[:, :, 1:],
             idx,
             axis=[["Y"]],
@@ -223,8 +226,8 @@ def build_edges_and_geometry(
     # neighbour in the i dimension.
     edges = np.empty((N * 2, 2), dtype=int)
     edges[:, 0] = np.tile(np.arange(N), 2)
-    edges[:N, 1] = jsh.values.reshape(-1)
-    edges[N:, 1] = ish.values.reshape(-1)
+    edges[:N, 1] = jm1.values.reshape(-1)
+    edges[N:, 1] = im1.values.reshape(-1)
 
     # Build list of distances between adjacent nodes, in the same order as the
     # pairs of nodes built by edges.

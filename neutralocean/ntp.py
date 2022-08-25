@@ -22,25 +22,26 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, edges, dist=1.0):
         volume with respect to `S` and `T` as a function of `S`, `T`, and `P`
         inputs.
 
-    # TODO: update docs
-    wrap : tuple of bool, or tuple of str
+    edges : ndarray of int
 
-        Specifies which dimensions are periodic.
+        A 2D array with `edges.shape[1] == 2` that specifies pairs of water
+        columns that are adjacent.  Each water column (including land) is
+        indexed by an integer: 0, 1, 2, ... N.  So, the water columns indexed
+        by `edges[i,0]` and `edges[i,1]` are adjacent, for any valid `i`.
 
-        As a tuple of bool, this must be length two.  The first and second
-        dimensions of `s` and `t` are periodic iff ``wrap[0]`` and
-        ``wrap[1]`` is True, respectively.
+        For a rectilinear grid (e.g. latitude-longitude), use
+            `neutralocean.grid.rectilinear.build_edges`
 
-        As a tuple of str, simply name the periodic dimensions of `s` and
-        `t`.
+        For a tiled rectilinear grid, such as works with XGCM, use
+            `neutralocean.grid.xgcm.build_edges_and_geometry`
 
-    dist1_iJ, dist2_Ij, : float or ndarray, Default 1.0
+        For a general grid given as a graph, use
+            `neutralocean.grid.graph.graph_to_edges`
 
-        Grid distances [m] in either the 1st or 2nd lateral dimension, and
-        centred at the location specified.  The naming uses a soft notation:
-        the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
-        `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
-        `dist2_Ij[5,3]` is the distance between cells (5,3) and (5,2).
+    dist : array or float
+
+        Distance [m] between nodes connected by edges. `dist[i]` is the
+        distance between water columns `edges[i,0]` and `edges[i,1]`.
 
     Returns
     -------
@@ -62,31 +63,27 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, edges, dist=1.0):
     return ϵ
 
 
-def ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist=1.0, distperp=1.0):
+def ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, geometry=(1.0, 1.0)):
     """
     Calculate norms of the ϵ neutrality errors on an approximately neutral surface
 
     Parameters
     ----------
-    s, t, p, eos_s_t, wrap :
+    s, t, p, eos_s_t, edges :
         See ntp_ϵ_errors
 
-    dist : 1d array of float
-        Distance [m] between nodes connected by edges
+    geometry : tuple
+        The geometry of the horizontal grid, a tuple of length 2 with the following:
 
-    distperp : 1d array of float
-        Distance [m] of the face between nodes connected by edges
+        dist : 1d array of float
+            Distance [m] between nodes connected by edges.
+            E.g. `dist[i]` is the distance between water columns `edges[i,0]`
+            and `edges[i,1]`.
 
-    dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ : float or ndarray, Default 1.0
-
-        Grid distances [m] in either the 1st or 2nd lateral dimension, and
-        centred at the location specified.  The naming uses a soft notation:
-        the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
-        `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
-        `dist2_iJ[5,3]` is the distance of the face between cells (5,3) and
-        (4,3). Similarly, `dist2_Ij[5,3]` is the distance between cells
-        (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
-        between cells (5,3) and (5,2).
+        distperp : 1d array of float
+            Distance [m] of the face between nodes connected by edges.
+            E.g. `distperp[i]` is the distance of the face between water
+            columns `edges[i,0]` and `edges[i,1]`.
 
     Returns
     -------
@@ -102,6 +99,8 @@ def ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist=1.0, distperp=1.0):
     # The actual distances will be handled in computing the norms
     ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
 
+    dist, distperp = geometry
+
     area = dist * distperp  # Area [m^2] centred on edges
 
     # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
@@ -109,7 +108,9 @@ def ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist=1.0, distperp=1.0):
     # But also need to divide epsilon by grid distances `dist`.
     # Thus, the numerator of L2 norm needs to multiply epsilon^2 by
     #     area / dist^2 = distperp / dist,
-    ϵ_RMS = np.sqrt(np.nansum(distperp / dist * ϵ**2) / np.sum(area * np.isfinite(ϵ)))
+    ϵ_RMS = np.sqrt(
+        np.nansum(distperp / dist * ϵ**2) / np.sum(area * np.isfinite(ϵ))
+    )
 
     # L1 norm of vector [a_i], weighted by vector [w_i], is sum( w_i * |a_i| ) / sum( w_i )
     # Here, weights are `area`.

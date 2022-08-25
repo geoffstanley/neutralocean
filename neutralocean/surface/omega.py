@@ -138,8 +138,7 @@ def omega_surf(S, T, P, edges, **kwargs):
 
     Other Parameters
     ----------------
-    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, grav, rho_c,
-    interp, n_good, diags, output, TOL_P_SOLVER :
+    edges, geometry, vert_dim, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
 
         See `potential_surf`
 
@@ -148,7 +147,7 @@ def omega_surf(S, T, P, edges, **kwargs):
         As in `potential_surf`, excluding the option to pass a single function.
         The omega surface algorithm relies on knowing the partial derivatives
         of the equation of state with respect to salinity and temperature, so
-        the `eos_s_t` function is also required.
+        the `eos_s_t` function is also required if given as a tuple of functions.
 
     ITER_MIN : int, Default 1
 
@@ -199,6 +198,13 @@ def omega_surf(S, T, P, edges, **kwargs):
 
         If None, the mixed layer is not removed.
 
+    OMEGA_FORMULATION : str, Default 'poisson'
+
+        Specify how the matrix problem is set up and solved.  Options are:
+        - 'poisson', to solve the Poisson problem as in [1]_ with Cholesky, or
+        - 'gradient', to solve the overdetermined gradient equations as in [2]_
+            using LSQR.
+
     Examples
     --------
     omega surfaces require a pinning cast and initial surface.  The surface is
@@ -208,12 +214,9 @@ def omega_surf(S, T, P, edges, **kwargs):
 
     >>> omega_surf(S, T, P, pin_cast, p_init, ...)
 
-    Alternatively, a
-    potential density surface
-    or a
-    in-situ density (specific volume) anomaly surface
-    can be used as the initial
-    surface.  To do this, use one of the following two methods
+    Alternatively, a potential density surface or an in-situ density (specific
+    volume) anomaly surface can be used as the initial surface.  To do this,
+    use one of the following two methods:
 
     >>> omega_surf(S, T, P, ref, isoval, pin_cast, ...)
 
@@ -255,18 +258,6 @@ def omega_surf(S, T, P, edges, **kwargs):
     TOL_LRPD_MAV = kwargs.get("TOL_LRPD_MAV", 1e-7)
     TOL_P_CHANGE_RMS = kwargs.get("TOL_P_CHANGE_RMS", 0.0)
     OMEGA_FORMULATION = kwargs.get("OMEGA_FORMULATION", "poisson")
-    # fmt: off
-    # grid distances.  (soft notation: i = I-1/2; j = J-1/2)
-    # dist1_iJ = kwargs.get('dist1_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
-    # dist1_Ij = kwargs.get('dist1_Ij', 1.) # Distance [m] in 1st dim centred at (I, J-1/2)
-    # dist2_Ij = kwargs.get('dist2_Ij', 1.) # Distance [m] in 2nd dim centred at (I, J-1/2)
-    # dist2_iJ = kwargs.get('dist2_iJ', 1.) # Distance [m] in 2nd dim centred at (I-1/2, J)
-    # fmt: on
-    # dist2on1_iJ = dist2_iJ / dist1_iJ
-    # dist1on2_Ij = dist1_Ij / dist2_Ij
-    # geom = [
-    #    kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
-    # ]
     geometry = kwargs.get("geometry", (1.0, 1.0))
     dist = geometry[0]
     distperp = geometry[1]
@@ -288,16 +279,22 @@ def omega_surf(S, T, P, edges, **kwargs):
     N = n_good.size  # number of nodes (water columns)
     S, T, P = (np.reshape(X, (N, -1)) for X in (S, T, P))
     n_good = np.reshape(n_good, -1)
-    pin_cast = np.ravel_multi_index(pin_cast, surf_shape)  # update to linear index
+    pin_cast = np.ravel_multi_index(
+        pin_cast, surf_shape
+    )  # update to linear index
 
     # Prepare grid ratios for matrix problem.
-    geom = distperp / dist
+    distratio = distperp / dist
 
-    if OMEGA_FORMULATION == "poisson":
+    if OMEGA_FORMULATION.lower() == "poisson":
         global_solver = _omega_matsolve_poisson
-    elif OMEGA_FORMULATION == "gradlsqr":
+    elif OMEGA_FORMULATION.lower() == "gradient":
         global_solver = _omega_matsolve_gradlsqr
-        geom = np.sqrt(geom)
+        distratio = np.sqrt(distratio)
+    else:
+        raise ValueError(
+            f"Unknown OMEGA_FORMULATION. Given {OMEGA_FORMULATION}"
+        )
 
     # Pre-calculate grid adjacency needed for Breadth First Search:
     graph = edges_to_graph(edges, N)
@@ -385,7 +382,7 @@ def omega_surf(S, T, P, edges, **kwargs):
     if diags:
         d["timer"][0] = time() - timer
 
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist, distperp)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, geometry)
         d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))
@@ -449,8 +446,7 @@ def omega_surf(S, T, P, edges, **kwargs):
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        ϕ = global_solver(s, t, p, geom, edges, qu, qt, pin_cast, eos_s_t)
-
+        ϕ = global_solver(s, t, p, edges, distratio, qu, qt, pin_cast, eos_s_t)
         timer_mat = time() - timer_loc
 
         # --- Update the surface (mutating s, t, p by vertsolve)
@@ -492,7 +488,9 @@ def omega_surf(S, T, P, edges, **kwargs):
             d["timer_bfs"][iter_] = timer_bfs
 
             # Diagnostics about the state AFTER this iteration
-            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist, distperp)
+            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(
+                s, t, p, eos_s_t, edges, geometry
+            )
             d["ϵ_RMS"][iter_], d["ϵ_MAV"][iter_] = ϵ_RMS, ϵ_MAV
 
             n_wet = np.sum(np.isfinite(p))
@@ -509,7 +507,9 @@ def omega_surf(S, T, P, edges, **kwargs):
                 )
 
         # --- Check for convergence
-        if (ϕ_MAV < TOL_LRPD_MAV or Δp_RMS < TOL_P_CHANGE_RMS) and iter_ >= ITER_MIN:
+        if (
+            ϕ_MAV < TOL_LRPD_MAV or Δp_RMS < TOL_P_CHANGE_RMS
+        ) and iter_ >= ITER_MIN:
             break
 
     if diags:
@@ -526,8 +526,29 @@ def omega_surf(S, T, P, edges, **kwargs):
     return s, t, p, d
 
 
-def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
-    # TODO:  document.
+def _omega_matsolve_gradlsqr(
+    s, t, p, edges, sqrtdistratio, qu, qt, mr, eos_s_t
+):
+    """Solve the Gradient formulation of the omega-surface global matrix problem
+
+    Parameters
+    ----------
+    s, t, p, edges, qu, qt, mr, eos_s_t :
+        See `_omega_matsolve_poisson`
+
+    sqrtdistratio : array
+        The square-root of the distance of the interface between adjacent
+        water columns divided by the square-root of the distance between
+        adjacent water columns.  That is, `np.sqrt(distperp / dist)`,
+        where `distperp` and `dist` are as in the `geoemtry` input to
+        `omega_surf`.
+
+    Returns
+    -------
+    ϕ : ndarray
+        See `_omega_matsolve_poisson`
+
+    """
 
     surf_shape = p.shape
 
@@ -560,12 +581,12 @@ def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     bad = np.isnan(ϵ)
     ϵ[bad] = 0.0
 
-    if np.isscalar(geom):
-        fac = np.full(ϵ.shape, geom)
-        if geom != 1.0:
+    if np.isscalar(sqrtdistratio):
+        fac = np.full(ϵ.shape, sqrtdistratio)
+        if sqrtdistratio != 1.0:
             ϵ *= fac  # scale ϵ
     else:
-        fac = geom.copy()
+        fac = sqrtdistratio.copy()
         fac[bad] = 0.0
         ϵ *= fac  # scale ϵ
 
@@ -609,9 +630,9 @@ def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     r = np.repeat(np.arange(E), 2)  # [0, 0, ..., E-1, E-1]
 
     # Build the values of the sparse matrix.
-    # v is [1, -1, 1, -1, ..., 1, -1] when geom == 1.
-    # When geom is an array of length edges.shape[0], each pair of 1 and -1
-    # from above is scaled according to geom for the appropriate edge.
+    # v is [1, -1, 1, -1, ..., 1, -1] when distratio == 1.
+    # When distratio is an array of length edges.shape[0], each pair of 1 and -1
+    # from above is scaled according to distratio for the appropriate edge.
     v = fac[ge]
     v = np.stack((v, -v), axis=1).reshape(-1)
     # v = np.repeat(fac[ge], 2)
@@ -652,13 +673,14 @@ def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # Build the sparse matrix with one extra row for the pinning equation.
     # (Could code this more efficiently by building data for the extra row into r, c, v.)
     mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
-    i = remap[mr]
+    i = remap[mr]  # index for reference cast in matrix-vector problem
     mat[E, i] = 1e-2  # chosen empirically from tests on 1x1deg OCCA data
     rhs = np.concatenate((rhs, np.zeros(1)))  # add 0 to end of rhs vector
     sol = lsqr(mat, rhs)
     ϕ[m] = sol[0]
 
-    # Heave solution to be exactly 0 at pinning cast
+    # Heave solution to be exactly 0 at pinning cast (to fix any intolerance
+    # caused by lsqr converging before reaching the exact solution)
     ϕ -= ϕ[mr]
 
     ϕ = ϕ.reshape(surf_shape)
@@ -666,7 +688,7 @@ def _omega_matsolve_gradlsqr(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     return ϕ
 
 
-def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
+def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     """Solve the Poisson formulation of the omega-surface global matrix problem
 
     Parameters
@@ -675,30 +697,19 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
 
         Salinity, temperature, pressure on the surface
 
-    # TODO:  update doco
-    dist2on1_iJ : ndarray or float
+    edges : ndarray
 
-        The grid distance in the second dimension divided by the grid distance
-        in the first dimension, both centred at (I-1/2,J). Equivalently, the
-        square root of the area of a grid cell centred at(I-1/2,J), divided
-        by the distance from (I-1,J) to (I,J).
+        See `omega_surf`
 
-    dist1on2_Ij : ndarray or float
+    distratio : array
 
-        The grid distance in the first dimension divided by the grid distance
-        in the second dimension, both centred at (I-1/2,J). Equivalently, the
-        square root of the area of a grid cell centred at(I,J-1/2), divided
-        by the distance from (I,J-1) to (I,J).
-
-    A4 : ndarray
-
-        four-connectivity adjacency matrix, computed as
-        ``A4 = grid_adjacency(s.shape, 4, wrap)``.
-        See `grid_adjacency` in `bfs.py`
+        The distance of the interface between adjacent water columns divided by
+        the distance between adjacent water columns.  That is, `distperp / dist`
+        where `distperp` and `dist` are as in the `geoemtry` input to `omega_surf`.
 
     qu : ndarray
 
-        The nodes visited by the BFS in order from 0 to `qt`(see bfs_conncomp1
+        The nodes visited by the BFS in order from 0 to `qt` (see bfs_conncomp1
         in bfs.py).
 
     qt : int
@@ -718,8 +729,9 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     -------
     ϕ : ndarray
 
-        Locally referenced potential density (LRPD) perturbation.  Vertically heaving the surface
-        so that its LRPD changes by ϕ will yield a more neutral surface.
+        Locally referenced potential density (LRPD) perturbation.
+        Vertically heaving the surface so that its LRPD in water column i
+        increases by the i'th element of ϕ will yield a more neutral surface.
     """
 
     surf_shape = p.shape
@@ -749,10 +761,6 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     remap = np.full(n_nodes, -1, dtype=int)
     remap[m] = np.arange(N)
 
-    # Build logical array of good nodes
-    # gn = np.full(n_nodes, False)
-    # gn[m] = True
-
     # Build logical array of good edges
     ge = (remap[edges[:, 0]] >= 0) & (remap[edges[:, 1]] >= 0)
 
@@ -766,14 +774,14 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
     # assert not np.any(bad)  # assert that bad is all False
     # ϵ[bad] = 0.0
 
-    if np.isscalar(geom):
-        fac = np.full(ϵ.shape, geom)
-        if geom != 1.0:
+    if np.isscalar(distratio):
+        fac = np.full(ϵ.shape, distratio)
+        if distratio != 1.0:
             ϵ *= fac  # scale ϵ
     else:
-        # fac = geom.copy()
+        # fac = distratio.copy()
         # fac[bad] = 0.0
-        fac = geom[ge]
+        fac = distratio[ge]
         ϵ *= fac  # scale ϵ
 
     # Divergence of ϵ
@@ -806,9 +814,9 @@ def _omega_matsolve_poisson(s, t, p, geom, edges, qu, qt, mr, eos_s_t):
 
     # Prune the entries to ignore the upper triangle of the matrix, since
     # cholesky only accessses the lower triangular part of the matrix.
-    
+
     # Pinning
-    i = remap[mr]
+    i = remap[mr]  # index for reference cast in matrix-vector problem
     L[i, i] += 1
     # alternative pinning strategy.  Basically same output to many sig figs.
     # L[:, i] = 0

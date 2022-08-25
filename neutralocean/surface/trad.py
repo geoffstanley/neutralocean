@@ -113,18 +113,46 @@ def potential_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap : tuple of bool, or tuple of str
+    edges : ndarray of int
 
-        Specifies which dimensions are periodic.
+        A 2D array with `edges.shape[1] == 2` that specifies pairs of water
+        columns that are adjacent.  Each water column (including land) is
+        indexed by an integer: 0, 1, 2, ... N.  So, the water columns indexed
+        by `edges[i,0]` and `edges[i,1]` are adjacent, for any valid `i`.
 
-        As a tuple of bool, this must be length two.  The first or second
-        non-vertical dimension of `S` and `T` is periodic iff ``wrap[0]`` or
-        ``wrap[1]`` is True, respectively.
+        For a rectilinear grid (e.g. latitude-longitude), use
+            `neutralocean.grid.rectilinear.build_edges`
 
-        As a tuple of str, simply name the periodic dimensions of `S` and
-        `T`.
+        For a tiled rectilinear grid, such as works with XGCM, use
+            `neutralocean.grid.xgcm.build_edges_and_geometry`
+
+        For a general grid given as a graph, use
+            `neutralocean.grid.graph.graph_to_edges`
 
         Required if `diags` is True
+
+    geometry : tuple, Default (1.0, 1.0)
+        The geometry of the horizontal grid, a tuple of length 2 with the following:
+
+        dist : 1d array of float, or float
+            Distance [m] between nodes connected by edges. `dist[i]` is the
+            distance between water columns `edges[i,0]` and `edges[i,1]`.
+
+        distperp : 1d array of float, or float
+            Distance [m] of the face between nodes connected by edges.
+            `distperp[i]` is the distance of the face between water
+            columns `edges[i,0]` and `edges[i,1]`.
+
+        When `dist` or `distperp` is a float, this value is assumed for all edges.
+
+        For a rectilinear grid (e.g. latitude-longitude), use
+            `neutralocean.grid.rectilinear.build_edge_data`
+
+        For a tiled rectilinear grid, such as works with XGCM, use
+            `neutralocean.grid.xgcm.build_edges_and_geometry`
+
+        For a general grid given as a graph, use
+            `neutralocean.grid.graph.graph_to_edge_data`
 
     vert_dim : int or str, Default -1
 
@@ -138,18 +166,6 @@ def potential_surf(S, T, P, **kwargs):
         naming the vertical dimension of `S` and `T`.
 
         Ideally, `vert_dim` is -1.  See `Notes`.
-
-    dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ : float or ndarray, Default 1.0
-
-        Grid distances [m] in either the 1st or 2nd lateral dimension, and
-        centred at the location specified.  The naming uses a soft notation:
-        the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
-        `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
-        `dist2_iJ[5,3]` is the distance of the face between cells (5,3) and
-        (4,3). Similarly, `dist2_Ij[5,3]` is the distance between cells
-        (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
-        between cells (5,3) and (5,2).
-
 
     eos : str or function or tuple of functions, Default 'gsw'
 
@@ -294,8 +310,7 @@ def anomaly_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, grav, rho_c,
-    interp, n_good, diags, output, TOL_P_SOLVER :
+    edges, geometry, vert_dim, eos, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
         See `potential_surf`
 
     Examples
@@ -349,8 +364,6 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
 
     edges = kwargs.get("edges")
     geometry = kwargs.get("geometry", (1.0, 1.0))
-    dist = geometry[0]
-    distperp = geometry[1]
 
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
@@ -391,7 +404,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     d = dict()
     if diags:
         d["timer"] = time() - timer
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, dist, distperp)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, geometry)
         d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))
@@ -459,7 +472,9 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
         raise TypeError('If provided, "pin_p" must be a float')
 
 
-def _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn):
+def _choose_ref_isoval(
+    ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
+):
     # Handle the three valid calls in the following order of precedence:
     # >>> _traditional_surf(ans_type, S, T, P, ref, isoval)
     # >>> _traditional_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
