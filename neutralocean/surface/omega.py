@@ -279,9 +279,9 @@ def omega_surf(S, T, P, edges, **kwargs):
     N = n_good.size  # number of nodes (water columns)
     S, T, P = (np.reshape(X, (N, -1)) for X in (S, T, P))
     n_good = np.reshape(n_good, -1)
-    pin_cast = np.ravel_multi_index(
-        pin_cast, surf_shape
-    )  # update to linear index
+
+    # Update pinning cast to a linear index.
+    pin_cast = np.ravel_multi_index(pin_cast, surf_shape)
 
     # Prepare grid ratios for matrix problem.
     distratio = distperp / dist

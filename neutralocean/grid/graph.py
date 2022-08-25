@@ -155,7 +155,51 @@ def edges_to_graph(edges, N=None, weights=None):
 
 
 def graph_to_edges(graph):
-    # assume undirected graph, i.e. symmetric matrix
+    """
+    Build a list of pairs of nodes that are adjacent in a graph
+
+    Parameters
+    ----------
+    graph : sparse matrix
+        A sparse N x N matrix representing a graph (collection of nodes and
+        edges), with N nodes and an edge between nodes `i` and `j` iff
+        `graph[i,j]` is non-zero.
+        Note: Only the upper triangle of the matrix is used, as the graph
+        is assumed to be undirected.
+
+    Returns
+    -------
+    edges : ndarray of int
+        An array of pairs of nodes that are adjacent.
+        The shape of edges is (E,2) where `E` is the number of edges in the graph.
+        Nodes numbered by `edges[i,0]` and `edges[i,1]` are adjacent.
+    """
     rcv = triu(graph).tocoo()
-    edges = np.stack((rcv.row, rcv.col), axis=1)
-    return edges
+    return np.stack((rcv.row, rcv.col), axis=1)
+
+
+def graph_to_edge_data(graph):
+    """
+    Build a list of data on the edges
+
+    Parameters
+    ----------
+    graph : sparse matrix
+        As in `graph_to_edges`.
+
+    Returns
+    -------
+    edge_data : array
+        A 1D array of weights or values of the edges, listed in the same order
+        as `edges` returned by `graph_to_edges`.
+        That is, `edge_data[m] = graph[i,j]` is the value associated with the
+        edge between nodes `i` and `j`, where `i = edges[m,0]` and `j = edges[m,1]`.
+
+    Notes
+    -----
+    Edges with an associated data value of 0 are not supported, as this would
+    not be stored in the sparse matrix.
+
+    """
+
+    return triu(graph).tocoo().data

@@ -147,7 +147,9 @@ def val_bot(T, n_good):
         T_bot = T[n_good - 1]
         T_bot[n_good == 0] = np.nan
     else:
-        raise ValueError("T must be 1 dimensional or have 1 more dimension than n_good")
+        raise ValueError(
+            "T must be 1 dimensional or have 1 more dimension than n_good"
+        )
     return T_bot
 
 
@@ -242,7 +244,9 @@ def _process_casts(S, T, P, vert_dim):
     # Broadcast a 1D vector for P into a ND array like S
     if P.ndim < S.ndim:
         # First make P a 3D array with its non-singleton dimension be `vert_dim`
-        P = np.reshape(P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim)))
+        P = np.reshape(
+            P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim))
+        )
         P = np.broadcast_to(P, S.shape)
 
     S, T, P = (_contiguous_casts(x, vert_dim) for x in (S, T, P))
@@ -299,15 +303,25 @@ def _process_wrap(wrap, s=None, diags=False):
 
 
 def _process_pin_cast(pin_cast, S):
-    # Convert pinning cast from a coordinate representation, suitable for ``S.sel(pin_cast)``
-    # when S is an xarray, into an index representation, suitable for ``S[pin_cast]``
-    # when S is an ndarray.
-
+    """
+    If pinning cast is a dict:
+        convert from a coordinate representation,
+        suitable for `S.sel(pin_cast)` where S is an xarray,
+        into an index representation,
+        suitable for `S[pin_cast]` where S is an ndarray.
+    If pinning cast is an int:
+        wrap it into a 1-element tuple, so np.ravel_multi_index works
+    Otherwise, just return the input `pin_cast`.
+    """
     # TODO: There must be a better way of doing this...
     # One issue is this always rounds one way, whereas a "nearest" neighbour
     # type behaviour would be preferred, as in xr.DataArray.sel
     if isinstance(pin_cast, dict):
-        return tuple(int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items())
+        return tuple(
+            int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items()
+        )
+    elif isinstance(pin_cast, int):
+        return (pin_cast,)
     else:
         return pin_cast
 

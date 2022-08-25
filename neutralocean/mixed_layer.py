@@ -126,8 +126,8 @@ def mixed_layer(
     # Convert S, T, P from xarray to numpy arrays if needed, and make casts contiguous in memory
     S, T, P = _process_casts(S, T, P, vert_dim)
 
-    SB = S[:, :, bottle_index : bottle_index + 1]  # retain singleton trailing dimension
-    TB = T[:, :, bottle_index : bottle_index + 1]
+    SB = S[..., bottle_index : bottle_index + 1]  # keep singleton trailing dim
+    TB = T[..., bottle_index : bottle_index + 1]
 
     # Calculate potential density difference between each data point and the
     # near-surface bottle
