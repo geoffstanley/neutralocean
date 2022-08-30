@@ -25,7 +25,7 @@ from neutralocean.lib import (
 from neutralocean.mixed_layer import mixed_layer
 
 
-def omega_surf(S, T, P, edges, **kwargs):
+def omega_surf(S, T, P, grid, **kwargs):
     """Calculate an omega surface from structured ocean data.
 
     Given 3D salinity, temperature, and pressure or depth data arranged on a
@@ -138,7 +138,7 @@ def omega_surf(S, T, P, edges, **kwargs):
 
     Other Parameters
     ----------------
-    edges, geometry, vert_dim, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
 
         See `potential_surf`
 
@@ -258,10 +258,6 @@ def omega_surf(S, T, P, edges, **kwargs):
     TOL_LRPD_MAV = kwargs.get("TOL_LRPD_MAV", 1e-7)
     TOL_P_CHANGE_RMS = kwargs.get("TOL_P_CHANGE_RMS", 0.0)
     OMEGA_FORMULATION = kwargs.get("OMEGA_FORMULATION", "poisson")
-    geometry = kwargs.get("geometry", (1.0, 1.0))
-    dist = geometry[0]
-    distperp = geometry[1]
-
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
@@ -284,20 +280,21 @@ def omega_surf(S, T, P, edges, **kwargs):
     pin_cast = np.ravel_multi_index(pin_cast, surf_shape)
 
     # Prepare grid ratios for matrix problem.
-    distratio = distperp / dist
+    distratio = grid["distperp"] / grid["dist"]
+
+    # Pre-calculate grid adjacency needed for Breadth First Search
+    edges = grid["edges"]
+    graph = edges_to_graph(edges, N)
 
     if OMEGA_FORMULATION.lower() == "poisson":
         global_solver = _omega_matsolve_poisson
     elif OMEGA_FORMULATION.lower() == "gradient":
-        global_solver = _omega_matsolve_gradlsqr
+        global_solver = _omega_matsolve_gradient
         distratio = np.sqrt(distratio)
     else:
         raise ValueError(
             f"Unknown OMEGA_FORMULATION. Given {OMEGA_FORMULATION}"
         )
-
-    # Pre-calculate grid adjacency needed for Breadth First Search:
-    graph = edges_to_graph(edges, N)
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
@@ -365,7 +362,6 @@ def omega_surf(S, T, P, edges, **kwargs):
     if np.isnan(p[pin_cast]):
         raise RuntimeError("The initial surface is NaN at the reference cast.")
 
-    # Calculate bottom of mixed layer from given options
     if ITER_MAX > 1 and isinstance(p_ml, dict):
         # Compute the mixed layer from parameter inputs
         p_ml = mixed_layer(S, T, P, eos, **p_ml)
@@ -374,6 +370,9 @@ def omega_surf(S, T, P, edges, **kwargs):
         # Prepare array as needed for bfs_conncomp1_wet
         p_ml = np.full(p.shape, -np.inf)
         # p_ml = np.broadcast_to(-np.inf, (ni, nj))  # DEV: Doesn't work with @numba.njit
+    else:
+        # Ensure p_ml is 1D array, in case it was given as a 2D array.
+        p_ml = np.reshape(p_ml, -1)
 
     # ensure same nan structure between s, t, and p. Just in case user gives
     # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
@@ -382,7 +381,7 @@ def omega_surf(S, T, P, edges, **kwargs):
     if diags:
         d["timer"][0] = time() - timer
 
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, geometry)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
         d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))
@@ -438,6 +437,7 @@ def omega_surf(S, T, P, edges, **kwargs):
                 p_ml,
             )
         else:
+            # TODO: change isfinite(p) to isfinite(s)?
             qu, qt = bfs_conncomp1(
                 graph.indptr, graph.indices, pin_cast, np.isfinite(p)
             )
@@ -488,9 +488,7 @@ def omega_surf(S, T, P, edges, **kwargs):
             d["timer_bfs"][iter_] = timer_bfs
 
             # Diagnostics about the state AFTER this iteration
-            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(
-                s, t, p, eos_s_t, edges, geometry
-            )
+            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
             d["ϵ_RMS"][iter_], d["ϵ_MAV"][iter_] = ϵ_RMS, ϵ_MAV
 
             n_wet = np.sum(np.isfinite(p))
@@ -526,7 +524,7 @@ def omega_surf(S, T, P, edges, **kwargs):
     return s, t, p, d
 
 
-def _omega_matsolve_gradlsqr(
+def _omega_matsolve_gradient(
     s, t, p, edges, sqrtdistratio, qu, qt, mr, eos_s_t
 ):
     """Solve the Gradient formulation of the omega-surface global matrix problem
@@ -556,6 +554,8 @@ def _omega_matsolve_gradlsqr(
     # non-periodic boundary
     n_nodes = p.size
 
+    a, b = edges
+
     # --- Build & solve sparse matrix problem
     ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)
 
@@ -576,7 +576,7 @@ def _omega_matsolve_gradlsqr(
     # We will not sort.  To sort, uncomment the following line.
     # m = np.sort(m)
 
-    ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
+    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
 
     bad = np.isnan(ϵ)
     ϵ[bad] = 0.0
@@ -606,9 +606,9 @@ def _omega_matsolve_gradlsqr(
     remap[m] = np.arange(N)
 
     # Build logical array of good edges
-    ge = (remap[edges[:, 0]] >= 0) & (remap[edges[:, 1]] >= 0)
+    ge = (remap[a] >= 0) & (remap[b] >= 0)
 
-    rhs = -ϵ[ge]
+    rhs = np.concatenate((-ϵ[ge], [0.0]))  # add 0 for pinning equation
 
     # Build the RHS of the matrix problem
     #  rhs = ϵ[m] # no...
@@ -618,25 +618,33 @@ def _omega_matsolve_gradlsqr(
     # Build indices for the columns of the sparse matrix
     # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
     # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
-    # c = np.column_stack((remap[adjnodes[m]], np.arange(N)))
-    # c = remap[edges[ge, :]]
-    # E = c.shape[0]
-    # c = c.reshape(-1)
-    c = remap[edges[ge, :]].reshape(-1)
-    E = len(c) // 2  # # of equations ==  # of rows in matrix
+    # c = remap[intersperse(a[ge], b[ge])]
+    # c = remap[np.stack((a[ge], b[ge]), axis=1).reshape(-1)]
+    # E = len(c) // 2  # # of equations ==  # of rows in matrix
 
     # Build indices for the rows of the sparse matrix, namely
-    # r = np.repeat(np.arange(E), 2).reshape(E, 2)  # [[0,0], ..., [E-1,E-1]]
-    r = np.repeat(np.arange(E), 2)  # [0, 0, ..., E-1, E-1]
+    # r = np.repeat(np.arange(E), 2)  # [0, 0, ..., E-1, E-1]
 
     # Build the values of the sparse matrix.
     # v is [1, -1, 1, -1, ..., 1, -1] when distratio == 1.
     # When distratio is an array of length edges.shape[0], each pair of 1 and -1
     # from above is scaled according to distratio for the appropriate edge.
-    v = fac[ge]
-    v = np.stack((v, -v), axis=1).reshape(-1)
+    # v = fac[ge]
+    # v = np.stack((v, -v), axis=1).reshape(-1)
     # v = np.repeat(fac[ge], 2)
     # v[1::2] *= -1  # slower than above
+
+    # Build columns for matrix, including extra entry for pinning equation
+    c = remap[np.concatenate((a[ge], b[ge], [mr]))]
+
+    # E = no. rows in matrix. Round down ignores pinning equation
+    E = len(c) // 2
+
+    # r = [0, 1, ..., E-1, 0, 1, ..., E-1, E]
+    r = np.concatenate((np.tile(np.arange(E), 2), [E]))
+
+    # When distratio = 1, v is [1, 1, ..., 1, -1, -1, ..., -1, 1e-2]
+    v = np.concatenate((fac[ge], -fac[ge], [1e-2]))
 
     # Prune the entries to
     # ignore connections to adjacent pixels that are dry (including those
@@ -672,10 +680,12 @@ def _omega_matsolve_gradlsqr(
 
     # Build the sparse matrix with one extra row for the pinning equation.
     # (Could code this more efficiently by building data for the extra row into r, c, v.)
+    # mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
+    # i = remap[mr]  # index for reference cast in matrix-vector problem
+    # mat[E, i] = 1e-2  # chosen empirically from tests on 1x1deg OCCA data
+
     mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
-    i = remap[mr]  # index for reference cast in matrix-vector problem
-    mat[E, i] = 1e-2  # chosen empirically from tests on 1x1deg OCCA data
-    rhs = np.concatenate((rhs, np.zeros(1)))  # add 0 to end of rhs vector
+
     sol = lsqr(mat, rhs)
     ϕ[m] = sol[0]
 
@@ -684,7 +694,6 @@ def _omega_matsolve_gradlsqr(
     ϕ -= ϕ[mr]
 
     ϕ = ϕ.reshape(surf_shape)
-
     return ϕ
 
 
@@ -697,15 +706,16 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
 
         Salinity, temperature, pressure on the surface
 
-    edges : ndarray
+    edges : tuple of length 2 of 1D arrays
 
-        See `omega_surf`
+        See grid['edges'] from `omega_surf`
 
     distratio : array
 
         The distance of the interface between adjacent water columns divided by
-        the distance between adjacent water columns.  That is, `distperp / dist`
-        where `distperp` and `dist` are as in the `geoemtry` input to `omega_surf`.
+        the distance between adjacent water columns, in the same order as `edges`.
+        That is, `grid['distperp'] / grid['dist']` where `grid` is as input
+        to `omega_surf`.
 
     qu : ndarray
 
@@ -730,8 +740,8 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     ϕ : ndarray
 
         Locally referenced potential density (LRPD) perturbation.
-        Vertically heaving the surface so that its LRPD in water column i
-        increases by the i'th element of ϕ will yield a more neutral surface.
+        Vertically heaving the surface so that its LRPD in water column m
+        increases by the m'th element of ϕ will yield a more neutral surface.
     """
 
     surf_shape = p.shape
@@ -739,6 +749,8 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     # This value appears in A4 to index neighbours that would go across a
     # non-periodic boundary
     n_nodes = p.size
+
+    a, b = edges
 
     # --- Build & solve sparse matrix problem
     ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)
@@ -762,13 +774,15 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     remap[m] = np.arange(N)
 
     # Build logical array of good edges
-    ge = (remap[edges[:, 0]] >= 0) & (remap[edges[:, 1]] >= 0)
+    ge = (remap[a] >= 0) & (remap[b] >= 0)
 
     # Select only the good edges
-    edges = edges[ge, :]
+    a = a[ge]
+    b = b[ge]
 
-    # Calculate neutrality errors between each pair of adjacent water columns in the surface
-    ϵ = ntp_ϵ_errors(s, t, p, eos_s_t, edges)
+    # Calculate neutrality errors between each pair of adjacent water columns
+    # in the surface, without division by distances.
+    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
 
     # bad = np.isnan(ϵ)
     # assert not np.any(bad)  # assert that bad is all False
@@ -793,18 +807,21 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     # D[mr] = 0.0
 
     # Henceforth we only refer to nodes in the connected component, so remap edges now
-    edges = remap[edges]
+    a = remap[a]
+    b = remap[b]
 
     # Prepare diagonal entries of negative Laplacian.  For uniform geometry,
     # this simply counts the number of edges incident upon each node.  For
     # rectilinear grids, this value will be 4 for a typical node, but can be
     # less near boundaries of the connected component.
-    diag = aggsum(fac, edges[:, 0], N) + aggsum(fac, edges[:, 1], N)
+    diag = aggsum(fac, a, N) + aggsum(fac, b, N)
 
     # Divergence of ϵ -- for the connected component only
-    D = aggsum(ϵ, edges[:, 1], N) - aggsum(ϵ, edges[:, 0], N)
+    D = aggsum(ϵ, b, N) - aggsum(ϵ, a, N)
 
     # Build the rows, columns, and values of the sparse matrix
+    # TODO: build r,c,v a different order to avoid calling np.stack ?
+    edges = np.stack((a, b), axis=1)
     r = np.concatenate((edges.reshape(-1), np.arange(N)))
     c = np.concatenate((edges[:, [1, 0]].reshape(-1), np.arange(N)))
     v = np.concatenate((-fac.repeat(2), diag))  # negative Laplacian
@@ -833,4 +850,5 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     # Solve the matrix problem, L ϕ = D
     ϕ[m] = spsolve(L, D)
 
-    return ϕ.reshape(surf_shape)
+    ϕ = ϕ.reshape(surf_shape)
+    return ϕ

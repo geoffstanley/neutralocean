@@ -3,9 +3,7 @@ import xarray as xr
 import xgcm
 
 
-def build_edges_and_geometry(
-    n, face_connections, dims, dxC, dyC, dxG, dyG, xsh, ysh
-):
+def build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dxG, dyG):
     """
     Make a list of edges between adjacent nodes in a graph consisting of
     rectilinear tiles, with adjacency between tiles specified as for xgcm;
@@ -39,18 +37,6 @@ def build_edges_and_geometry(
 
         Example: in ECCOv4r4, `dims == ('tile', 'j', 'i')`.
 
-    dxC : ndarray
-        Distance between adjacent grid points in the 'i' dimension.
-
-    dyC : ndarray
-        Distance between adjacent grid points in the 'j' dimension
-
-    dxG : ndarray
-        Distance of the face between adjacent grid points in the 'j' dimension
-
-    dyG : ndarray
-        Distance of the face between adjacent grid points in the 'i' dimension
-
     xsh : str
         The direction of shifting in the 'i' dimension.  Can be either "left"
         or "right".
@@ -71,27 +57,44 @@ def build_edges_and_geometry(
         If "right", then `dyC` is the distance between the local grid point (i, j)
         and the next grid point in the 'j' dimension, at (i, j+1).
 
+    dxC : ndarray
+        Distance between adjacent grid points in the 'i' dimension.
+
+    dyC : ndarray
+        Distance between adjacent grid points in the 'j' dimension
+
+    dxG : ndarray
+        Distance of the face between adjacent grid points in the 'j' dimension
+
+    dyG : ndarray
+        Distance of the face between adjacent grid points in the 'i' dimension
+
 
     Returns
     -------
-    edges : 2d array of int
-        Array of shape (E, 2), where E is the number of edges in the grid's graph,
-        i.e. the number of pairs of adjacent water columns in the grid.
-        For each i, edges[i,:] is a 2-element array giving linear indices to
-        a pair of adjacent nodes (water columns).
+    grid : dict
+        Containing the following:
 
-    dist : 1d array
-        Distance between adjacent grid points.  `dist[m]` is the distance
-        between nodes (water columns) whose linear indices are `edges[m,0]` and
-        `edges[m,1]`.
+        edges : tuple of length 2
+            Each element is an array of int of length E, where E is the number of
+            edges in the grid's graph, i.e. the number of pairs of adjacent water
+            columns (including land) in the grid.
+            If `edges = (a, b)`, the nodes (water columns) whose linear indices are
+            `a[i]` and `b[i]` are adjacent.
 
-    distperp : 1d array
-        Distance of the face between adjacent grid points.
-        `distperp[m]` is the distance of the face between nodes (water columns)
-        whose linear indices are `edges[m,0]` and `edges[m,1]`.
+        dist : 1d array
+            Horizontal distance between adjacent water columns (nodes).
+            `dist[i]` is the distance between nodes whose linear indices are
+            `edges[0][i]` and `edges[1][i]`.
+
+        distperp : 1d array
+            Horizontal distance of the face between adjacent water columns (nodes).
+            `distperp[i]` is the distance of the interface between nodes whose
+            linear indices are `edges[0][i]` and `edges[1][i]`.
 
     """
 
+    # Process inputs
     assert xsh[0] in ("l", "r"), "Expected xsh to be either 'left' or 'right'"
     assert ysh[0] in ("l", "r"), "Expected ysh to be either 'left' or 'right'"
 
@@ -106,6 +109,89 @@ def build_edges_and_geometry(
     dxC, dyC, dxG, dyG = (
         x.values if hasattr(x, "values") else x for x in (dxC, dyC, dxG, dyG)
     )
+
+    im1, jm1 = _build_im1_jm1(n, face_connections, dims, xsh, ysh)
+    N = im1.size
+
+    grid = dict()
+
+    # Build list of pairs of adjacent nodes.  The first N entries are [m,n]
+    # where m is the local node and n is its neighbour in the j dimension.
+    # The second N entries are [m,n] where m is the local node and n is its
+    # neighbour in the i dimension.
+    a = np.tile(np.arange(N), 2)
+    b = np.empty(N * 2, dtype=int)  # prealloc space
+    b[:N] = jm1.values.reshape(-1)
+    b[N:] = im1.values.reshape(-1)
+
+    # Build list of distances between adjacent nodes, in the same order as the
+    # pairs of nodes built by edges.
+    dist = np.empty(N * 2, dtype=float)
+    dist[:N] = dyC.reshape(-1)
+    dist[N:] = dxC.reshape(-1)
+
+    # Build list of distances of the faces between adjacent nodes, in the same
+    # order as the pairs of nodes built by edges.
+    distperp = np.empty(N * 2, dtype=float)
+    distperp[:N] = dxG.reshape(-1)
+    distperp[N:] = dyG.reshape(-1)
+
+    # Trim out invalid edges, i.e. those for which one of the two nodes was
+    # filled by `apply_as_grid_ufunc` to have a value of -1.
+    good = b >= 0
+    a, b, dist, distperp = (x[good] for x in (a, b, dist, distperp))
+
+    grid["edges"] = (a, b)
+    grid["dist"] = dist
+    grid["distperp"] = distperp
+    return grid
+
+
+def edgedata_to_maps(edgedata, n, face_connections, dims, xsh, ysh):
+    """
+    Convert 1D array of data living on edges into two nD arrays, one for each
+    spatial dimension, for a rectilinear grid
+
+    Parameters
+    ----------
+    edgedata : array
+        1D array of data that lives on edges of the grid's graph, given in the
+        same order as the edges cosntructed from `build_grid`.
+        If `a, b, ... = build_grid(...)`, then `edgedata[i]` is the
+        data that lives at the interface between the grid cells indexed by
+        `a[i]` and `b[i]`.
+
+    n, face_connections, dims, xsh, ysh :
+        See `build_grid`
+
+    Returns
+    -------
+    Fi, Fj : ndarray
+        `Fi` contains the values from `edgedata` that correspond to data living
+        between grid points in the first dimension, and similarly for `Fj` but
+        in the second dimension.
+    """
+
+    im1, jm1 = _build_im1_jm1(n, face_connections, dims, xsh, ysh)
+    N = im1.size
+
+    Fi, Fj = (np.full(N, np.nan) for x in (0, 1))
+
+    goodi = im1.values.reshape(-1) >= 0
+    Ni = np.sum(goodi)
+
+    # Build linear indices for grid cells (i,j) where (i-1,j) is valud
+    idx_goodim1 = np.flatnonzero(im1 >= 0)
+    Ni = len(idx_goodim1)
+
+    Fi[idx_goodim1] = edgedata[:Ni]
+    Fj[np.flatnonzero(jm1 >= 0)] = edgedata[Ni:]
+
+    Fi, Fj = (np.reshape(x, im1.shape) for x in (Fi, Fj))
+    return Fi, Fj
+
+
+def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
 
     # Access first (and only) key / value of face_connections
     tile = next(
@@ -125,7 +211,7 @@ def build_edges_and_geometry(
     if not (dims.__contains__("i") and dims.__contains__("j")):
         raise ValueError(f"Expected to find 'i' and 'j' in `dims` == {dims}.")
 
-    N = n * n * nf  # number of Nodes (water columns)
+    N = nf * n * n  # number of Nodes (water columns)
 
     # Shape of water columns (e.g. shape of ndarray storing sea surface temperature data)
     shape = [n, n, n]
@@ -220,32 +306,4 @@ def build_edges_and_geometry(
             fill_value=-1,
         )
 
-    # Build list of pairs of adjacent nodes.  The first N entries are [m,n]
-    # where m is the local node and n is its neighbour in the j dimension.
-    # The second N entries are [m,n] where m is the local node and n is its
-    # neighbour in the i dimension.
-    edges = np.empty((N * 2, 2), dtype=int)
-    edges[:, 0] = np.tile(np.arange(N), 2)
-    edges[:N, 1] = jm1.values.reshape(-1)
-    edges[N:, 1] = im1.values.reshape(-1)
-
-    # Build list of distances between adjacent nodes, in the same order as the
-    # pairs of nodes built by edges.
-    dist = np.empty(N * 2, dtype=float)
-    dist[:N] = dyC.reshape(-1)
-    dist[N:] = dxC.reshape(-1)
-
-    # Build list of distances of the faces between adjacent nodes, in the same
-    # order as the pairs of nodes built by edges.
-    distperp = np.empty(N * 2, dtype=float)
-    distperp[:N] = dxG.reshape(-1)
-    distperp[N:] = dyG.reshape(-1)
-
-    # Trim out invalid edges, i.e. those for which one of the two nodes was
-    # filled by `apply_as_grid_ufunc` to have a value of -1.
-    good = np.all(edges >= 0, axis=1)
-    edges = edges[good, :]
-    dist = dist[good]
-    distperp = distperp[good]
-
-    return edges, dist, distperp
+    return im1, jm1

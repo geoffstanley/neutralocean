@@ -16,7 +16,7 @@ from .gsw import rho_p as rho_p_gsw
 
 
 def _make_eos(eos, eos_dict, grav=None, rho_c=None, num_p_derivs=0):
-    if isinstance(eos, str) and eos in eos_dict.keys():
+    if isinstance(eos, str) and eos in eos_dict:
         eos = eos_dict[eos]
 
         if grav != None and rho_c != None:
@@ -114,7 +114,11 @@ def make_eos_p(eos, grav=None, rho_c=None):
         Function returning the partial derivative with respect to the third
         argument (pressure) of the desired equation of state.
     """
-    eos_dict = {"jmd95": rho_p_jmd95, "jmdfwg06": rho_p_jmdfwg06, "gsw": rho_p_gsw}
+    eos_dict = {
+        "jmd95": rho_p_jmd95,
+        "jmdfwg06": rho_p_jmdfwg06,
+        "gsw": rho_p_gsw,
+    }
     return _make_eos(eos, eos_dict, grav, rho_c, 1)
 
 
@@ -160,7 +164,7 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
             return fn(s, t, z * z_to_p)
 
     else:
-        factor = z_to_p ** num_p_derivs
+        factor = z_to_p**num_p_derivs
 
         @nb.njit
         def fn_bsq(s, t, z):

@@ -113,46 +113,37 @@ def potential_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    edges : ndarray of int
+    grid : dict
+        Containing the following:
 
-        A 2D array with `edges.shape[1] == 2` that specifies pairs of water
-        columns that are adjacent.  Each water column (including land) is
-        indexed by an integer: 0, 1, 2, ... N.  So, the water columns indexed
-        by `edges[i,0]` and `edges[i,1]` are adjacent, for any valid `i`.
+        edges : tuple of length 2
+            Each element is an array of int of length E, where E is the number of
+            edges in the grid's graph, i.e. the number of pairs of adjacent water
+            columns (including land) in the grid.
+            If `edges = (a, b)`, the nodes (water columns) whose linear indices are
+            `a[i]` and `b[i]` are adjacent.
+            Required if `diags` is True
 
-        For a rectilinear grid (e.g. latitude-longitude), use
-            `neutralocean.grid.rectilinear.build_edges`
+        dist : 1d array
+            Horizontal distance between adjacent water columns (nodes).
+            `dist[i]` is the distance between nodes whose linear indices are
+            `edges[0][i]` and `edges[1][i]`.
+            If absent, a value of 1.0 is assumed for all edges.
 
-        For a tiled rectilinear grid, such as works with XGCM, use
-            `neutralocean.grid.xgcm.build_edges_and_geometry`
-
-        For a general grid given as a graph, use
-            `neutralocean.grid.graph.graph_to_edges`
-
-        Required if `diags` is True
-
-    geometry : tuple, Default (1.0, 1.0)
-        The geometry of the horizontal grid, a tuple of length 2 with the following:
-
-        dist : 1d array of float, or float
-            Distance [m] between nodes connected by edges. `dist[i]` is the
-            distance between water columns `edges[i,0]` and `edges[i,1]`.
-
-        distperp : 1d array of float, or float
-            Distance [m] of the face between nodes connected by edges.
-            `distperp[i]` is the distance of the face between water
-            columns `edges[i,0]` and `edges[i,1]`.
-
-        When `dist` or `distperp` is a float, this value is assumed for all edges.
+        distperp : 1d array
+            Horizontal distance of the face between adjacent water columns (nodes).
+            `distperp[i]` is the distance of the interface between nodes whose
+            linear indices are `edges[0][i]` and `edges[1][i]`.
+            If absent, a value of 1.0 is assumed for all edges.
 
         For a rectilinear grid (e.g. latitude-longitude), use
-            `neutralocean.grid.rectilinear.build_edge_data`
+            `neutralocean.grid.rectilinear.build_grid`
 
         For a tiled rectilinear grid, such as works with XGCM, use
-            `neutralocean.grid.xgcm.build_edges_and_geometry`
+            `neutralocean.grid.xgcm.build_grid`
 
-        For a general grid given as a graph, use
-            `neutralocean.grid.graph.graph_to_edge_data`
+        For a general grid given as a graph, see the example in
+            `neutralocean.examples.run_example_4casts`
 
     vert_dim : int or str, Default -1
 
@@ -310,7 +301,7 @@ def anomaly_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    edges, geometry, vert_dim, eos, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, eos, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
         See `potential_surf`
 
     Examples
@@ -361,10 +352,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     grav = kwargs.get("grav")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
-
-    edges = kwargs.get("edges")
-    geometry = kwargs.get("geometry", (1.0, 1.0))
-
+    grid = kwargs.get("grid")
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
@@ -377,8 +365,8 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
-    if diags:
-        assert edges is not None, "edges must be provided when diags is True"
+    if diags and not (isinstance(grid, dict) and "edges" in grid):
+        raise ValueError("grid['edges'] must be provided when diags is True")
 
     # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
     # selection to (ref, isoval) pair
@@ -404,7 +392,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     d = dict()
     if diags:
         d["timer"] = time() - timer
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, edges, geometry)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
         d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))

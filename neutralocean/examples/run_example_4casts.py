@@ -2,60 +2,85 @@
 
 import numpy as np
 
-# Functions to compute various approximately neutral surfaces
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
+from neutralocean.eos import make_eos_s_t
+from neutralocean.ntp import ntp_ϵ_errors
 
 # In[Create an ocean of 4 water columns]
 
-nc = 4  # Number of water columns
-nk = 20  # Number of grid points per water column
+# Make up simple Salt, Temperature, and Pressure data for 4 casts
+nc = 4  # Number of casts (water columns)
+nk = 20  # Number of grid points per cast
 pbot = 4000.0  # Pressure at bottom grid point
 
 P = np.linspace(0, 1, nk) ** 3 * pbot  # pressure increasing cubicly going down
 
 S = np.linspace(34, 36, nk).reshape((1, -1))  # saltier going down
-S = S + np.arange(0, 0.1 * nc, 0.1).reshape((-1, 1))  # some lateral structure
+S = S + np.linspace(0, 0.9, nc).reshape((-1, 1))  # some lateral structure
 
-T = np.linspace(20, -2, nk).reshape((1, -1))  # warmer going down
-T = T + np.arange(0, 0.1 * nc, 0.1).reshape((-1, 1))  # some lateral structure
+T = np.linspace(14, -2, nk).reshape((1, -1))  # warmer going down
+T = T + np.linspace(0, 6, nc).reshape((-1, 1))  # some lateral structure
 
 # Arrange the 4 casts (labelled 0, 1, 2, 3) with connections as follows:
 #   0
 #   |\
-#   1-2--3
-edges = np.array([[0, 1], [0, 2], [1, 2], [2, 3]])  # pairs of adjacent casts
-dist = np.array([1, 1.4, 1, 2]) * 1e5  # 100km to 200km between casts
-distperp = np.array([1, 1, 1, 1]) * 1e5  # ~100km interface between casts
+#   1-2-3
+a = np.array([0, 0, 1, 2])  # a[i] and b[i] are a pair of adjacent casts
+b = np.array([1, 2, 2, 3])
+edges = (a, b)
 
+# Invent distances `dist` between pairs of casts, roughly 100km
+dist = np.array([1, 1.4, 1, 1]) * 1e5
+
+# Invent distances `distperp` of the interfaces between pairs of casts.
+# The product of `dist` and `distperp` gives an area associated to the region
+# between casts, which is where the ϵ neutrality errors live. We seek to minimize
+# these ϵ neutrality errors, weighted by these areas.
+distperp = np.array([1, 1, 1, 1]) * 1e5
+
+# Package the grid information into a dict, for neutralocean.
+grid = {"edges": edges, "dist": dist, "distperp": distperp}
+
+"""
 # Note, more complex examples may have the water column adjacency specified by
-# a graph structure, such as
-# graph_dist = np.zeros((nc, nc))
-# graph_dist[0, :] = [0.0, 1.0, 1.4, 0.0] * 1e5
-# graph_dist[1, :] = [1.0, 0.0, 1.0, 0.0] * 1e5
-# graph_dist[2, :] = [1.4, 1.0, 0.0, 2.0] * 1e5
-# graph_dist[3, :] = [0.0, 0.0, 2.0, 0.0] * 1e5
-# graph_distperp = graph_dist.sign() * 1e5
-# To construct the edges, dist, and distperp arrays from a pair of such graphs,
-# do the following:
-# from neutralocean.grid.graph import graph_to_edges, graph_to_edge_data
-# edges = graph_to_edges(graph_dist)
-# dist = graph_to_edge_data(graph_dist)
-# distperp = graph_to_edge_data(graph_distperp)
+# a graph structure, represented as a (sparse) matrix.  For example (with a
+# dense matrix here given the smallness of this example), suppose we have two
+# graphs, each with the same sparsity structure, one storing the distances
+# between adjacent water columns and the other storing the length of the
+# interfaces between adjacent water columns.
+graph_dist = np.zeros((nc, nc))
+graph_dist[0, :] = [0.0, 1.0, 1.4, 0.0]
+graph_dist[1, :] = [1.0, 0.0, 1.0, 0.0]
+graph_dist[2, :] = [1.4, 1.0, 0.0, 2.0]
+graph_dist[3, :] = [0.0, 0.0, 2.0, 0.0]
+graph_dist *= 1e5
+graph_distperp = np.sign(graph_dist) * 1e5
+
+# To convert these graphs into the format for the `grid` argument to
+# neutralocean functions, simply call:
+from neutralocean.grid.graph import build_grid
+grid = build_grid({"dist": graph_dist, "distperp": graph_distperp})
+
+# Essentially, this `build_grid` function gets the row and column indices as
+# well as the data for all non-zero entries.  If matrix the matrix is symmetric,
+# only the upper triangle is used.  (In fact, if the sparsity structure of the
+# matrix is symmetric, then only the upper triangle is used.)  So, it's 
+# essentially doing the following (assuming symmetric matrices): 
+from scipy.sparse import find, triu
+a, b, dist = find(triu(graph_dist))
+_, _, distperp = find(triu(graph_distperp))
+grid = {"edges": (a, b), "dist": dist, "distperp": distperp}
+"""
 
 
-# Some methods below will pin the surface to reference pressure the reference cast
-c0 = 0  # reference cast
-p0 = 1500.0  # reference pressure
+# In[Approx Neutral Surfaces]
 
-# In[Potential Density surfaces]
-
-# Provide reference pressure (actually depth, in Boussinesq) and isovalue
+# Potential density surface, with given reference pressure (actually depth, in Boussinesq) and isovalue
 s, t, p, d = potential_surf(
     S,
     T,
     P,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos="gsw",
     ref=0.0,
     isoval=1027.5,
@@ -63,59 +88,16 @@ s, t, p, d = potential_surf(
 print(
     f" ** The potential density surface (referenced to {d['ref']}dbar)"
     f" with isovalue = {d['isoval']}kg m-3"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4."
 )
 
-# Provide pin_cast and pin_p: the reference location and depth that the surface intersects
-s, t, p, d = potential_surf(
-    S,
-    T,
-    P,
-    edges=edges,
-    geometry=(dist, distperp),
-    eos="gsw",
-    ref=0.0,
-    pin_cast=c0,
-    pin_p=p0,
-)
-print(
-    f" ** The potential density surface (referenced to {d['ref']}dbar)"
-    f" intersecting the cast indexed by {c0} at pressure {p0}dbar"
-    f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
-)
-
-# Provide just the location to intersect `(pin_cast, pin_p)`.
-# This takes the reference depth `ref` to match `pin_p`.
-# Also use PCHIPs as the vertical interpolants.
-s, t, p, d = potential_surf(
-    S,
-    T,
-    P,
-    edges=edges,
-    geometry=(dist, distperp),
-    eos="gsw",
-    pin_cast=c0,
-    pin_p=p0,
-    interp="pchip",
-)
-print(
-    f" ** The potential density surface (referenced to {d['ref']}dbar)"
-    f" intersecting the cast at indexed by {c0} at pressure {p0}dbar"
-    f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
-)
-
-# In[Delta surfaces]
-
-# Provide reference salinity and potential temperature values
+# In-situ density anomaly, with given reference salinity and potential temperature values
 s0, t0 = 34.5, 4.0
 s, t, p, d = anomaly_surf(
     S,
     T,
     P,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos="gsw",
     ref=(s0, t0),
     isoval=0.0,
@@ -123,85 +105,29 @@ s, t, p, d = anomaly_surf(
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" with isovalue = {d['isoval']}kg m-3"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4."
 )
 
-# Provide pin_cast and pin_p: the reference location and depth that the surface intersects
-s, t, p, d = anomaly_surf(
-    S,
-    T,
-    P,
-    edges=edges,
-    geometry=(dist, distperp),
-    eos="gsw",
-    ref=(s0, t0),
-    pin_cast=c0,
-    pin_p=p0,
-)
-print(
-    f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
-    f" intersecting the cast indexed by {c0} at pressure {p0}dbar"
-    f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
-)
 
-# Provide just the location to intersect: depth `pin_p` on cast `pin_cast`
-# This takes the reference S and T values from that location.
-s, t, p, d = anomaly_surf(
-    S,
-    T,
-    P,
-    edges=edges,
-    geometry=(dist, distperp),
-    eos="gsw",
-    pin_cast=c0,
-    pin_p=p0,
-)
-print(
-    f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
-    f" intersecting the cast indexed by {c0} at pressure {p0}dbar"
-    f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
-)
-
-# In[Omega surfaces]
-
-# Initialize omega surface with a (locally referenced) potential density surface.
-s, t, p, d = omega_surf(
-    S, T, P, edges, geometry=(dist, distperp), pin_cast=c0, pin_p=p0, eos="gsw"
-)
+# omega-surface, initialized by a potential density surface, pinning the surface
+# to be 1500dbar on cast 0.
+s, t, p, d = omega_surf(S, T, P, grid, pin_cast=0, pin_p=1500.0, eos="gsw")
 print(
     f" ** The omega-surface"
-    f" initialized from a potential density surface (referenced to {p0}dbar)"
-    f" intersecting the cast indexed by {c0} at pressure {p0}dbar"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS'][-1]} kg m-4"
+    f" initialized from a potential density surface (referenced to 1500 dbar)"
+    f" intersecting the cast labelled '0' at pressure 1500 bar"
+    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS'][-1]} kg m-4."
 )
 
-# Initialize omega surface with a (locally referenced) in-situ density anomaly surface.
-# Use PCHIP interpolation rather than the default, linear interpolation.
-# Remove the mixed layer, calculated internally according to the given parameters --
-#   see `mixed_layer` for details on these parameters.
-s, t, p, d = omega_surf(
-    S,
-    T,
-    P,
-    edges,
-    geometry=(dist, distperp),
-    ref=(None, None),
-    pin_cast=c0,
-    pin_p=p0,
-    eos="gsw",
-    interp="pchip",
-    p_ml={"bottle_index": 1, "ref_p": 0.0},
-)
+# Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
+eos_s_t = make_eos_s_t("gsw")
+ϵ = ntp_ϵ_errors(s, t, p, grid, eos_s_t)
+print("The ϵ neutrality errors on the ω-surface are as follows:")
+for i in range(len(a)):
+    print(f"  From cast {a[i]} to cast {b[i]}, ϵ = {ϵ[i]} kg m^-4")
 print(
-    f" ** The omega-surface"
-    f" initialized from an in-situ density anomaly surface (referenced locally to cast {c0} at {p0}dbar)"
-    f" intersecting the cast indexed by {c0} at pressure {p0}dbar"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS'][-1]} kg m-4"
+    "Note that the connection between casts 2 and 3 has virtually 0 neutrality "
+    "error.  This is because cast 3 is ONLY connected to cast 2, so this link "
+    "can be along the (discrete) neutral tangent plane joining cast 2 and 3. "
+    "The ω-surface finds this."
 )
-
-
-# In[Show more...]
-# TODO: Show that ϵ is zero for the link from 2 to 3.
-# Show neutral trajectory?

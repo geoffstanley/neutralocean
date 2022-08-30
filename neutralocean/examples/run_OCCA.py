@@ -9,7 +9,7 @@ from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 # Functions to load OCCA data
 from neutralocean.examples.load_OCCA import load_OCCA
 
-from neutralocean.grid.rectilinear import build_edges, build_edge_data
+from neutralocean.grid.rectilinear import build_grid, edgedata_to_maps
 
 # In[Load OCCA data]
 
@@ -31,10 +31,10 @@ z0 = 1500.0
 eos = make_eos("jmd95", g["grav"], g["ρ_c"])
 eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
 
-# Package up grid distance information for neutralocean functions:
-edges = build_edges((ni, nj), g["wrap"])
-dist = build_edge_data((ni, nj), g["wrap"], (g["DXCvec"], g["DYCsc"]))
-distperp = build_edge_data((ni, nj), g["wrap"], (g["DYGsc"], g["DXGvec"]))
+# Build grid adjacency and distance information for neutralocean functions
+grid = build_grid(
+    (ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
+)
 
 # In[Potential Density surfaces]
 
@@ -43,10 +43,8 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos="jmd95",
-    wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=0.0,
     isoval=1027.5,
@@ -62,10 +60,8 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos="jmd95",
-    wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=0.0,
     pin_cast=(i0, j0),
@@ -87,10 +83,8 @@ s, t, z, d = potential_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos=(eos, eos_s_t),
-    wrap="Longitude_t",
     vert_dim="Depth_c",
     pin_cast={"Longitude_t": 180.5, "Latitude_t": 0.5},
     pin_p=z0,
@@ -111,10 +105,8 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos=(eos, eos_s_t),
-    wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=(s0, t0),
     isoval=0.0,
@@ -130,10 +122,8 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos=(eos, eos_s_t),
-    wrap="Longitude_t",
     vert_dim="Depth_c",
     ref=(s0, t0),
     pin_cast=(i0, j0),
@@ -152,10 +142,8 @@ s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos=(eos, eos_s_t),
-    wrap="Longitude_t",
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
@@ -175,8 +163,7 @@ s, t, z, d = omega_surf(
     S,
     T,
     Z,
-    edges,
-    geometry=(dist, distperp),
+    grid,
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
@@ -199,8 +186,7 @@ s, t, z, d = omega_surf(
     S,
     T,
     Z,
-    edges,
-    geom=(dist, distperp),
+    grid,
     ref=(None, None),
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
@@ -250,10 +236,8 @@ s, t, z, d = omega_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geom=(dist, distperp),
+    grid,
     ref=(None, None),
-    wrap="Longitude_t",
     vert_dim="Depth_c",
     pin_cast=(i0, j0),
     pin_p=z0,
@@ -269,9 +253,15 @@ s, t, z, d = omega_surf(
 # z[z < z_ml] = np.nan
 
 # In[Neutrality errors on a surface]
-ϵ = ntp_ϵ_errors(s, t, z, eos_s_t, edges, dist)
-ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, eos_s_t, edges, dist, distperp)
+ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, grid, eos_s_t)
 print(f"RMS of ϵ is {ϵ_RMS : 4e} [kg m-4])")
+
+# Calculate ϵ neutrality errors on all pairs of adjacent water columns
+ϵ = ntp_ϵ_errors(s, t, z, eos_s_t, grid)
+
+# Convert ϵ above into two 2D maps, one for zonal ϵ errors and one for meridional ϵ errors
+ϵx, ϵy = edgedata_to_maps(ϵ, (ni, nj), (True, False))
+# These can then be mapped...
 
 # In[Neutral Tangent Plane bottle to cast]
 
@@ -284,7 +274,9 @@ s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 n_good = find_first_nan(S1)[()]
 ppc_fn = select_ppc("linear", "1")
 S1ppc, T1ppc = (ppc_fn(Z, C) for C in (S1, T1))
-s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1ppc, T1ppc, Z, n_good, 1e-4, eos)
+s1, t1, z1 = _ntp_bottle_to_cast(
+    sB, tB, zB, S1ppc, T1ppc, Z, n_good, 1e-4, eos
+)
 
 
 # In[Work with Numpy arrays instead of xarrays]
@@ -299,8 +291,8 @@ s, t, z, d = anomaly_surf(
     Snp,
     Tnp,
     Znp,
+    grid=grid,
     eos=(eos, eos_s_t),
-    wrap=(True, False),
     vert_dim=-1,
     ref=(s0, t0),
     isoval=0.0,
@@ -320,7 +312,9 @@ Earth_day = 86164
 f = 2 * (2 * np.pi / Earth_day) * np.sin(g["YCvec"] * (np.pi / 180))
 
 linterp_dx_utwo = make_interpolator("linear", deriv=1, kind="u", two=True)
-sz, tz = linterp_dx_utwo(z, Z, S.values, T.values)  # ∂S/∂Z and ∂T/∂Z, on the surface
+sz, tz = linterp_dx_utwo(
+    z, Z, S.values, T.values
+)  # ∂S/∂Z and ∂T/∂Z, on the surface
 rs, rt = eos_s_t(s, t, z)  # ∂ρ/∂S and ∂ρ/∂T, on the surface
 
 # ∂δ/∂z on the surface, where δ is the in-situ density anomaly

@@ -7,9 +7,10 @@ import xarray as xr
 from neutralocean.eos import make_eos, make_eos_s_t
 
 # Functions to compute various approximately neutral surfaces
-from neutralocean.surface import potential_surf, omega_surf
+from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 
-from neutralocean.grid.xgcm import build_edges_and_geometry
+from neutralocean.grid.xgcm import build_grid, edgedata_to_maps
+from neutralocean.ntp import ntp_ϵ_errors
 
 # %% Load data
 folder_ecco4 = "/home/stanley/work/data/ECCOv4r4/"  # edit as needed...
@@ -76,13 +77,16 @@ face_connections = {'tile': {
     12:{'X': ((11, 'X', False), None),
         'Y': ((9, 'Y', False),  (0, 'X', False))}}}
 # fmt: on
-nf = len(next(iter(face_connections.values())))  # len(faces_connections only value)
+nf = len(
+    next(iter(face_connections.values()))
+)  # len(faces_connections only value)
 N = n * n * nf  # number of nodes
 
 # Build list of adjacent water columns and distances between those water column pairs
 dims = g.Depth.dims  # ('tile', 'j', 'i')
-edges, dist, distperp = build_edges_and_geometry(
-    n, face_connections, dims, g.dxC, g.dyC, g.dxG, g.dyG, "left", "left"
+xsh = ysh = "left"
+grid = build_grid(
+    n, face_connections, dims, xsh, ysh, g.dxC, g.dyC, g.dxG, g.dyG
 )
 
 
@@ -111,26 +115,31 @@ s, t, z, _ = potential_surf(
     S, T, Z, eos=eos, vert_dim="k", ref=0.0, isoval=1027.5, diags=False
 )
 
-# As above, but with diagnostics.
-s, t, z, d = potential_surf(
+# Build in-situ density anomaly surface with given reference salinity and
+# potential temperature values and an isovalue of 0, which means the surface
+# will intersect any point where the local (S,T) equals the reference values.
+# Also return diagnostics.
+s0, t0 = 34.5, 4.0
+s, t, z, d = anomaly_surf(
     S,
     T,
     Z,
-    edges=edges,
-    geometry=(dist, distperp),
+    grid=grid,
     eos=(eos, eos_s_t),
     vert_dim="k",
-    ref=0.0,
-    isoval=1027.5,
+    ref=(s0, t0),
+    isoval=0.0,
 )
 
-# Initialize omega surface with a (locally referenced) potential density surface.
+# Build an omega surface that intersects the reference cast `pin_cast` at the
+# reference depth `pin_p`, initialized from a potential density surface that
+# also intersects this `pin_cast` at `pin_p` and uses a local reference
+# depth, namely `pin_p`.
 s, t, z, d = omega_surf(
     S,
     T,
     Z,
-    edges,
-    geometry=(dist, distperp),
+    grid=grid,
     vert_dim="k",
     pin_cast=pin_cast,
     pin_p=z0,
@@ -139,3 +148,10 @@ s, t, z, d = omega_surf(
     ITER_MAX=10,
     ITER_START_WETTING=1,
 )
+
+# Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
+ϵ = ntp_ϵ_errors(s, t, z, grid, eos_s_t)
+
+# Convert the 1D array of ϵ values into two maps of ϵ neutrality errors, one
+# for the errors in each of the two lateral ('i' and 'j') dimensions.
+ϵi, ϵj = edgedata_to_maps(ϵ, n, face_connections, dims, xsh, ysh)
