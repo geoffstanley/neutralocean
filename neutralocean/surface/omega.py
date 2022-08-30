@@ -820,11 +820,9 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     D = aggsum(ϵ, b, N) - aggsum(ϵ, a, N)
 
     # Build the rows, columns, and values of the sparse matrix
-    # TODO: build r,c,v a different order to avoid calling np.stack ?
-    edges = np.stack((a, b), axis=1)
-    r = np.concatenate((edges.reshape(-1), np.arange(N)))
-    c = np.concatenate((edges[:, [1, 0]].reshape(-1), np.arange(N)))
-    v = np.concatenate((-fac.repeat(2), diag))  # negative Laplacian
+    r = np.concatenate((a, b, np.arange(N)))
+    c = np.concatenate((b, a, np.arange(N)))
+    v = np.concatenate((np.tile(-fac, 2), diag))  # negative Laplacian
 
     # Build the (negative) Laplacian sparse matrix with N rows and N columns
     L = csc_matrix((v, (r, c)), shape=(N, N))
