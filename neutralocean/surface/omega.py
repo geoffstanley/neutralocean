@@ -437,7 +437,7 @@ def omega_surf(S, T, P, grid, **kwargs):
                 p_ml,
             )
         else:
-            # TODO: change isfinite(p) to isfinite(s)?
+            # TODO: change isfinite(p) to isfinite(s)?   No need, since `p[np.isnan(s)] = np.nan` is run before entering this loop.
             qu, qt = bfs_conncomp1(
                 graph.indptr, graph.indices, pin_cast, np.isfinite(p)
             )
@@ -576,113 +576,40 @@ def _omega_matsolve_gradient(
     # We will not sort.  To sort, uncomment the following line.
     # m = np.sort(m)
 
-    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
+    # `remap` changes from linear indices (0, 1, ..., n_nodes) for the entire
+    # space (including land), into linear indices (0, 1, ..., N-1) for the
+    # current connected component
+    remap = np.full(n_nodes, -1, dtype=int)
+    remap[m] = np.arange(N)
 
-    bad = np.isnan(ϵ)
-    ϵ[bad] = 0.0
+    # Select a subset of edges, namely those between two "wet" casts
+    a, b = edges
+    ge = (remap[a] >= 0) & (remap[b] >= 0)  # good edges
+    a, b = a[ge], b[ge]
+
+    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
 
     if np.isscalar(sqrtdistratio):
         fac = np.full(ϵ.shape, sqrtdistratio)
         if sqrtdistratio != 1.0:
             ϵ *= fac  # scale ϵ
     else:
-        fac = sqrtdistratio.copy()
-        fac[bad] = 0.0
+        fac = sqrtdistratio[ge]
         ϵ *= fac  # scale ϵ
 
-    # `remap` changes from linear indices for the entire 2D space (0, 1, ..., ni*nj-1) into linear
-    # indices for the current connected component (0, 1, ..., N-1)
-    # If the domain were doubly periodic, we would want `remap` to be a 2D array
-    # of size (ni,nj). However, with a potentially non-periodic domain, we need
-    # one more value for `A4` to index into.  Hence we use `remap` as a vector
-    # with ni*nj+1 elements, the last one corresponding to non-periodic boundaries.
-    # Water columns that are not in this connected component, and dry water columns (i.e. land),
-    # and the fake water column for non-periodic boundaries are all left
-    # to have a remap value of -1.
-    # remap = np.full(n_nodes + 1, -1, dtype=int)
-
-    # With `edges`, we no longer need extra element to index into for non-periodic boundaries.
-    remap = np.full(n_nodes, -1, dtype=int)
-    remap[m] = np.arange(N)
-
-    # Build logical array of good edges
-    ge = (remap[a] >= 0) & (remap[b] >= 0)
-
-    rhs = np.concatenate((-ϵ[ge], [0.0]))  # add 0 for pinning equation
-
-    # Build the RHS of the matrix problem
-    #  rhs = ϵ[m] # no...
-    # How to do this?  Probably need to use np.argsort
-    # Or, change to using edgescompact rather than edges.
-
-    # Build indices for the columns of the sparse matrix
-    # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
-    # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
-    # c = remap[intersperse(a[ge], b[ge])]
-    # c = remap[np.stack((a[ge], b[ge]), axis=1).reshape(-1)]
-    # E = len(c) // 2  # # of equations ==  # of rows in matrix
-
-    # Build indices for the rows of the sparse matrix, namely
-    # r = np.repeat(np.arange(E), 2)  # [0, 0, ..., E-1, E-1]
-
-    # Build the values of the sparse matrix.
-    # v is [1, -1, 1, -1, ..., 1, -1] when distratio == 1.
-    # When distratio is an array of length edges.shape[0], each pair of 1 and -1
-    # from above is scaled according to distratio for the appropriate edge.
-    # v = fac[ge]
-    # v = np.stack((v, -v), axis=1).reshape(-1)
-    # v = np.repeat(fac[ge], 2)
-    # v[1::2] *= -1  # slower than above
+    rhs = np.concatenate((-ϵ, [0.0]))  # add 0 for pinning equation
 
     # Build columns for matrix, including extra entry for pinning equation
-    c = remap[np.concatenate((a[ge], b[ge], [mr]))]
+    c = remap[np.concatenate((a, b, [mr]))]
 
-    # E = no. rows in matrix. Round down ignores pinning equation
+    # E = number rows in matrix. Round down ignores pinning equation
     E = len(c) // 2
 
     # r = [0, 1, ..., E-1, 0, 1, ..., E-1, E]
     r = np.concatenate((np.tile(np.arange(E), 2), [E]))
 
     # When distratio = 1, v is [1, 1, ..., 1, -1, -1, ..., -1, 1e-2]
-    v = np.concatenate((fac[ge], -fac[ge], [1e-2]))
-
-    # Prune the entries to
-    # ignore connections to adjacent pixels that are dry (including those
-    # that are "adjacent" across a non-periodic boundary), and
-    # good = (c >= 0)
-    # badc = (c < 0)
-
-    # Build the sparse matrix with E rows & N columns
-    # mat = csc_matrix((v, (r, c)), shape=(E, N))
-
-    # raise RuntimeError
-
-    # Apply Normal Equations: multiply by matrix transpose.
-    # This is slow because .transpose() apparently converts the above
-    # csr_matrix to a csc_matrix.
-    # rhs = mat.transpose() * rhs
-    # mat = mat.transpose() * mat
-
-    # Change equation for pinning cast to be 1 * ϕ = 0.  Keep matrix symmetric.
-    # This is slow because it changes the sparsity structure of the matrix.
-    # i = remap[mr]
-    # rhs[i] = 0.0
-    # mat[:, i] = 0.0
-    # mat[i, :] = 0.0
-    # mat[i, i] = 1.0
-
-    # Solve the matrix problem
-    # factor = cholesky(mat)
-    # ϕ[m] = factor(rhs)
-
-    # spsolve (requires ``good = (c >= 0)`` above) is slower than using cholesky
-    # ϕ[m] = spsolve(mat, rhs)
-
-    # Build the sparse matrix with one extra row for the pinning equation.
-    # (Could code this more efficiently by building data for the extra row into r, c, v.)
-    # mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
-    # i = remap[mr]  # index for reference cast in matrix-vector problem
-    # mat[E, i] = 1e-2  # chosen empirically from tests on 1x1deg OCCA data
+    v = np.concatenate((fac, -fac, [1e-2]))
 
     mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
 
@@ -746,20 +673,16 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
 
     surf_shape = p.shape
 
-    # This value appears in A4 to index neighbours that would go across a
-    # non-periodic boundary
     n_nodes = p.size
 
-    a, b = edges
+    ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)  # prealloc space
 
-    # --- Build & solve sparse matrix problem
-    ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)
+    N = qt + 1  # number of water columns.  N == len(m)
 
     # If there is only one water column, there are no equations to solve,
     # and the solution is simply phi = 0 at that water column, and nan elsewhere.
     # Note, qt > 0 (N >= 1) should be guaranteed by omega_surf(), so N <= 1 should
     # imply N == 1.  If qt > 0 weren't guaranteed, this could throw an error.
-    N = qt + 1  # # of water columns.  N == len(m)
     if N <= 1:  # There are definitely no equations to solve
         ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
         return ϕ.reshape(surf_shape)
@@ -773,42 +696,25 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     remap = np.full(n_nodes, -1, dtype=int)
     remap[m] = np.arange(N)
 
-    # Build logical array of good edges
-    ge = (remap[a] >= 0) & (remap[b] >= 0)
-
-    # Select only the good edges
-    a = a[ge]
-    b = b[ge]
+    # Select a subset of edges, namely those between two "wet" casts
+    a, b = edges
+    ge = (remap[a] >= 0) & (remap[b] >= 0)  # good edges
+    a, b = a[ge], b[ge]
 
     # Calculate neutrality errors between each pair of adjacent water columns
     # in the surface, without division by distances.
     ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
-
-    # bad = np.isnan(ϵ)
-    # assert not np.any(bad)  # assert that bad is all False
-    # ϵ[bad] = 0.0
 
     if np.isscalar(distratio):
         fac = np.full(ϵ.shape, distratio)
         if distratio != 1.0:
             ϵ *= fac  # scale ϵ
     else:
-        # fac = distratio.copy()
-        # fac[bad] = 0.0
         fac = distratio[ge]
         ϵ *= fac  # scale ϵ
 
-    # Divergence of ϵ
-    # D = aggsum(ϵ, edges[:, 1], n_nodes) - aggsum(ϵ, edges[:, 0], n_nodes)
-
-    # diag = aggsum(fac, edges[:, 0], n_nodes) + aggsum(fac, edges[:, 1], n_nodes)
-
-    # Pin surface at mr by changing the mr'th equation to be 1 * ϕ[mr] = 0.
-    # D[mr] = 0.0
-
     # Henceforth we only refer to nodes in the connected component, so remap edges now
-    a = remap[a]
-    b = remap[b]
+    a, b = remap[a], remap[b]
 
     # Prepare diagonal entries of negative Laplacian.  For uniform geometry,
     # this simply counts the number of edges incident upon each node.  For
@@ -827,23 +733,18 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     # Build the (negative) Laplacian sparse matrix with N rows and N columns
     L = csc_matrix((v, (r, c)), shape=(N, N))
 
-    # Prune the entries to ignore the upper triangle of the matrix, since
-    # cholesky only accessses the lower triangular part of the matrix.
-
-    # Pinning
+    # Pinning surface at mr by ADDING the equation 1 * ϕ[mr] = 0 to the mr'th equation
     i = remap[mr]  # index for reference cast in matrix-vector problem
     L[i, i] += 1
-    # alternative pinning strategy.  Basically same output to many sig figs.
+
+    # Alternative pinning strategy: change the mr'th equation to be 1 * ϕ[mr] = 0.
+    # Then, since ϕ[mr] = 0, values of L in mr'th column are irrelevant, so set
+    # these to zero to maintain symmetry.
+    # Resulting output is same as above to many sig figs.
     # L[:, i] = 0
     # L[i, :] = 0
     # L[i, i] = 1
     # D[i] = 0
-
-    # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
-    # function, so that this can be njit'ed.  But numba doesn't support
-    # np.roll as we need it...  (nor ravel_multi_index, but we could just do
-    # that one ourselves)
-    # return r[good], c[good], v[good], N, D, m
 
     # Solve the matrix problem, L ϕ = D
     ϕ[m] = spsolve(L, D)
