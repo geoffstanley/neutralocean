@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-from scipy.sparse import coo_matrix, csr_matrix, find, triu
+from scipy.sparse import coo_matrix, csr_matrix, find, triu, issparse
 
 
 @nb.njit
@@ -18,7 +18,6 @@ def graph_binary_fcn(edges, nodevals, binary_fcn):
         a, b : array of int
             Pairs of adjacent nodes in the graph.
             Nodes `a[i]` and `b[i]`, are adjacent.
-            If one of `a[i]` or `b[i]` is less than 0, that edge does not exist. # TODO:  Is this necessary?
 
     nodevals : array-like
         values at the nodes in a graph
@@ -38,13 +37,8 @@ def graph_binary_fcn(edges, nodevals, binary_fcn):
 
     ev = np.empty(len(a), dtype=nodevals.dtype)
     d = nodevals.reshape(-1)
-    for i in range(len(ev)):
-        m = a[i]
-        n = b[i]
-        if m >= 0 and n >= 0:  # TODO:  Is this necessary?
-            ev[i] = binary_fcn(d[m], d[n])
-        else:
-            ev[i] = np.nan
+    for i in range(len(a)):
+        ev[i] = binary_fcn(d[a[i]], d[b[i]])
     return ev
 
 
@@ -98,7 +92,7 @@ def build_grid(Gs):
         Dictionary of (sparse) matrices, each with the same sparsity structure.
         Letting `G` be one of elements of `Gs`, the associated undirected graph
         has an edge between nodes `m` and `n` iff `G[m,n]` is nonzero or
-        `G[m,n]` is nonzero.  If `G` is symmetric or anti-symmetric, only its
+        `G[m,n]` is nonzero.  If `G` has symmetric sparsity structure, only its
         upper triangle is used.  Should have 'dist' and 'distperp' entries.
 
     Returns
@@ -123,8 +117,7 @@ def build_grid(Gs):
     first = True
     for key in Gs:
         G = Gs[key]
-        if np.max(abs(G - G.T)) == 0 or np.max(abs(G + G.T)) == 0:
-            # symmetric or anti-symmetric
+        if sym_structure(G):  # check for symmetric sparsity structure
             G = triu(G)
         a_, b_, data = find(G)
         if first:
@@ -139,3 +132,19 @@ def build_grid(Gs):
         grid[key] = data
 
     return grid
+
+
+def sym_structure(A):
+    """
+    Determine whether the sparsity structure of martix `A` is symmetric.
+    Returns True iff `A[i,j] == 0` implies `A[j,i] == 0` for all valid.
+    Also returns False if A is not a square matrix.
+    """
+
+    if len(A.shape) != 2 or A.shape[0] != A.shape[1]:
+        return False  # A is not a square matrix
+
+    if issparse(A):
+        return ((A != 0) != (A.T != 0)).nnz == 0
+    else:
+        return np.all((A == 0) == (A.T == 0))
