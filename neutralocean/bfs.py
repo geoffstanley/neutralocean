@@ -34,20 +34,11 @@ def bfs_conncomp1(indptr, indices, root, good):
     -------
     qu : ndarray of int
 
-        The BFS search queue: a 1D array of length equal to the number of nodes
-        in the full graph (i.e. the same length as `good`).
-        `qu[0:qt]` are the indices to nodes that are in the connected component
-        containing the `root` node, given in the order that the BFS discovered
-        them.
-        E.g., `qu[0] == root` (provided the root node is valid, `good[root] == True`).
-        Elements after `qt`, i.e. `qu[qt+1 : -1]`, are meaningless.
-
-    qt : int
-
-        The queue tail, i.e. the index to the last meaningful entry in `qu`.
-        Hence, `qt+1` is the number of valid nodes in the connected region
-        containing the root node. If the root node is invalid (`good[root] ==
-        False`) then `qt == -1`.
+        The BFS search queue.  A 1D array giving the indices to nodes in the
+        connected component containing the `root` node, in the order that the
+        BFS discovered them.
+        If the root node is valid (`good[root] == True`), then `qu[0] == root`.
+        Otherwise, the BFS goes nowhere and `qu` is an empty array.
     """
 
     N = len(good)
@@ -75,12 +66,12 @@ def bfs_conncomp1(indptr, indices, root, good):
                     good[n] = False  # mark n as discovered
     # else, root node is invalid.  Leave qt as -1, so qu[0:qt+1] is empty
 
-    return qu, qt
+    return qu[0 : qt + 1]
 
 
 @nb.njit
 def bfs_conncomp1_wet(
-    s, t, p, S, T, P, n_good, indptr, indices, root, tol_p, eos, ppc_fn, p_ml
+    indptr, indices, root, s, t, p, S, T, P, n_good, tol_p, eos, ppc_fn, p_ml
 ):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting.
@@ -96,6 +87,9 @@ def bfs_conncomp1_wet(
 
     Parameters
     ----------
+    indptr, indices, root :
+         As in `bfs_conncomp1`
+
     s, t, p : ndarray
 
         2D practical / Absolute salinity and potential / Conservative
@@ -112,12 +106,6 @@ def bfs_conncomp1_wet(
 
         Pre-computed number of ocean data points in each water column.
         This should be computed as ``n_good = lib.find_first_nan(S)``.
-
-    indptr, indices : ndarray of int
-         As in `bfs_conncomp1`
-
-    root : int
-        As in `bfs_conncomp1`
 
     tol_p : float
 
@@ -151,8 +139,7 @@ def bfs_conncomp1_wet(
     -------
     qu : ndarray
         As in `bfs_conncomp1`
-    qt : int
-        As in `bfs_conncomp1`.
+
     newly_wet : int
         Number of newly wet water columns.
 
@@ -231,4 +218,4 @@ def bfs_conncomp1_wet(
                         dry[n] = False
                         newly_wet += 1  # augment counter of newly wet casts
 
-    return qu, qt, newly_wet
+    return qu[0 : qt + 1], newly_wet

@@ -420,7 +420,10 @@ def omega_surf(S, T, P, grid, **kwargs):
         # --- Determine the connected component containing the reference cast, via Breadth First Search
         timer_loc = time()
         if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
-            qu, qt, n_newly_wet = bfs_conncomp1_wet(
+            bfsqu, n_newly_wet = bfs_conncomp1_wet(
+                graph.indptr,
+                graph.indices,
+                pin_cast,
                 s,
                 t,
                 p,
@@ -428,9 +431,6 @@ def omega_surf(S, T, P, grid, **kwargs):
                 T,
                 P,
                 n_good,
-                graph.indptr,
-                graph.indices,
-                pin_cast,
                 TOL_P_SOLVER,
                 eos,
                 ppc_fn,
@@ -438,7 +438,7 @@ def omega_surf(S, T, P, grid, **kwargs):
             )
         else:
             # TODO: change isfinite(p) to isfinite(s)?   No need, since `p[np.isnan(s)] = np.nan` is run before entering this loop.
-            qu, qt = bfs_conncomp1(
+            bfsqu = bfs_conncomp1(
                 graph.indptr, graph.indices, pin_cast, np.isfinite(p)
             )
             n_newly_wet = 0
@@ -446,7 +446,10 @@ def omega_surf(S, T, P, grid, **kwargs):
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        ϕ = global_solver(s, t, p, edges, distratio, qu, qt, pin_cast, eos_s_t)
+        # Pre-sort the BFS queue: tests in both MATLAB and Python on OCCA data
+        # show this gives an overall speedup for both Poisson and Gradient formulations.
+        bfsqu = np.sort(bfsqu)
+        ϕ = global_solver(s, t, p, edges, distratio, bfsqu, pin_cast, eos_s_t)
         timer_mat = time() - timer_loc
 
         # --- Update the surface (mutating s, t, p by vertsolve)
@@ -524,14 +527,12 @@ def omega_surf(S, T, P, grid, **kwargs):
     return s, t, p, d
 
 
-def _omega_matsolve_gradient(
-    s, t, p, edges, sqrtdistratio, qu, qt, mr, eos_s_t
-):
+def _omega_matsolve_gradient(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t):
     """Solve the Gradient formulation of the omega-surface global matrix problem
 
     Parameters
     ----------
-    s, t, p, edges, qu, qt, mr, eos_s_t :
+    s, t, p, edges, m, mref, eos_s_t :
         See `_omega_matsolve_poisson`
 
     sqrtdistratio : array
@@ -547,60 +548,27 @@ def _omega_matsolve_gradient(
         See `_omega_matsolve_poisson`
 
     """
-
-    surf_shape = p.shape
-
-    # This value appears in A4 to index neighbours that would go across a
-    # non-periodic boundary
-    n_nodes = p.size
-
-    a, b = edges
-
-    # --- Build & solve sparse matrix problem
-    ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)
+    N = len(m)  # Number of water columns
+    ϕ = np.full(p.size, np.nan, dtype=p.dtype)
 
     # If there is only one water column, there are no equations to solve,
-    # and the solution is simply phi = 0 at that water column, and nan elsewhere.
-    # Note, qt > 0 (N >= 1) should be guaranteed by omega_surf(), so N <= 1 should
-    # imply N == 1.  If qt > 0 weren't guaranteed, this could throw an error.
-    N = qt + 1  # Number of water columns
+    # then the solution is simply phi = 0 at that water column, and nan elsewhere.
+    # Note, N >= 1 should be guaranteed by omega_surf(), so N <= 1 should imply
+    # N == 1.  If N >= 1 weren't guaranteed (m empty), this would throw an error.
     if N <= 1:  # There are definitely no equations to solve
-        ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
-        return ϕ.reshape(surf_shape)
+        ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
+        return ϕ.reshape(p.shape)
 
-    # Collect linear indices to all pixels in this region.
-    m = qu[0 : qt + 1]
-    # Tests from MATLAB rectilinear code showed that sorting m made the matrix
-    # better structured and gave an overall speedup.
-    # Tests in Python with general edge structure suggest that is not so.
-    # We will not sort.  To sort, uncomment the following line.
-    # m = np.sort(m)
-
-    # `remap` changes from linear indices (0, 1, ..., n_nodes) for the entire
-    # space (including land), into linear indices (0, 1, ..., N-1) for the
-    # current connected component
-    remap = np.full(n_nodes, -1, dtype=int)
-    remap[m] = np.arange(N)
-
-    # Select a subset of edges, namely those between two "wet" casts
-    a, b = edges
-    ge = (remap[a] >= 0) & (remap[b] >= 0)  # good edges
-    a, b = a[ge], b[ge]
-
-    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
-
-    if np.isscalar(sqrtdistratio):
-        fac = np.full(ϵ.shape, sqrtdistratio)
-        if sqrtdistratio != 1.0:
-            ϵ *= fac  # scale ϵ
-    else:
-        fac = sqrtdistratio[ge]
-        ϵ *= fac  # scale ϵ
+    a, b, ϵ, fac, ref = _omega_matsolve_helper(
+        s, t, p, edges, sqrtdistratio, m, mref, eos_s_t
+    )
 
     rhs = np.concatenate((-ϵ, [0.0]))  # add 0 for pinning equation
 
-    # Build columns for matrix, including extra entry for pinning equation
-    c = remap[np.concatenate((a, b, [mr]))]
+    # Build columns for matrix, including extra entry for pinning equation.
+    # Note m[ref] is the reference cast, so the ref'th entry in the solution
+    # vector of the matrix column corresponds to ϕ at the reference cast.
+    c = np.concatenate((a, b, [ref]))
 
     # E = number rows in matrix. Round down ignores pinning equation
     E = len(c) // 2
@@ -613,18 +581,19 @@ def _omega_matsolve_gradient(
 
     mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
 
-    sol = lsqr(mat, rhs)
-    ϕ[m] = sol[0]
+    sol = lsqr(mat, rhs)[0]
 
     # Heave solution to be exactly 0 at pinning cast (to fix any intolerance
     # caused by lsqr converging before reaching the exact solution)
-    ϕ -= ϕ[mr]
+    sol -= sol[ref]
 
-    ϕ = ϕ.reshape(surf_shape)
+    ϕ[m] = sol
+
+    ϕ = ϕ.reshape(p.shape)
     return ϕ
 
 
-def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
+def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     """Solve the Poisson formulation of the omega-surface global matrix problem
 
     Parameters
@@ -644,16 +613,14 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
         That is, `grid['distperp'] / grid['dist']` where `grid` is as input
         to `omega_surf`.
 
-    qu : ndarray
+    m : array
 
-        The nodes visited by the BFS in order from 0 to `qt` (see bfs_conncomp1
-        in bfs.py).
+        Linear indices to the nodes in order of the BFS, ie all casts in this
+        connected component.
+        That is, `m = qu[0:qt+1]` where `qu` and `qt` are outputs from
+        `bfs_conncomp1` in bfs.py.
 
-    qt : int
-
-        The tail index of `qu` (see bfs_conncomp1 in bfs.py).
-
-    mr : int
+    mref : int
 
         Linear index to the reference cast, at which ϕ will be zero
 
@@ -670,51 +637,20 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
         Vertically heaving the surface so that its LRPD in water column m
         increases by the m'th element of ϕ will yield a more neutral surface.
     """
-
-    surf_shape = p.shape
-
-    n_nodes = p.size
-
-    ϕ = np.full(n_nodes, np.nan, dtype=s.dtype)  # prealloc space
-
-    N = qt + 1  # number of water columns.  N == len(m)
+    N = len(m)  # number of water columns
+    ϕ = np.full(p.size, np.nan, dtype=p.dtype)  # prealloc space
 
     # If there is only one water column, there are no equations to solve,
-    # and the solution is simply phi = 0 at that water column, and nan elsewhere.
-    # Note, qt > 0 (N >= 1) should be guaranteed by omega_surf(), so N <= 1 should
-    # imply N == 1.  If qt > 0 weren't guaranteed, this could throw an error.
+    # then the solution is simply phi = 0 at that water column, and nan elsewhere.
+    # Note, N >= 1 should be guaranteed by omega_surf(), so N <= 1 should imply
+    # N == 1.  If N >= 1 weren't guaranteed (m empty), this would throw an error.
     if N <= 1:  # There are definitely no equations to solve
-        ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
-        return ϕ.reshape(surf_shape)
+        ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
+        return ϕ.reshape(p.shape)
 
-    # Collect linear indices to all pixels in this region
-    m = qu[0:N]
-
-    # `remap` changes from linear indices (0, 1, ..., n_nodes) for the entire
-    # space (including land), into linear indices (0, 1, ..., N-1) for the
-    # current connected component
-    remap = np.full(n_nodes, -1, dtype=int)
-    remap[m] = np.arange(N)
-
-    # Select a subset of edges, namely those between two "wet" casts
-    a, b = edges
-    ge = (remap[a] >= 0) & (remap[b] >= 0)  # good edges
-    a, b = a[ge], b[ge]
-
-    # Calculate neutrality errors between each pair of adjacent water columns
-    # in the surface, without division by distances.
-    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
-
-    if np.isscalar(distratio):
-        fac = np.full(ϵ.shape, distratio)
-        if distratio != 1.0:
-            ϵ *= fac  # scale ϵ
-    else:
-        fac = distratio[ge]
-        ϵ *= fac  # scale ϵ
-
-    # Henceforth we only refer to nodes in the connected component, so remap edges now
-    a, b = remap[a], remap[b]
+    a, b, ϵ, fac, ref = _omega_matsolve_helper(
+        s, t, p, edges, distratio, m, mref, eos_s_t
+    )
 
     # Prepare diagonal entries of negative Laplacian.  For uniform geometry,
     # this simply counts the number of edges incident upon each node.  For
@@ -733,21 +669,64 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, qu, qt, mr, eos_s_t):
     # Build the (negative) Laplacian sparse matrix with N rows and N columns
     L = csc_matrix((v, (r, c)), shape=(N, N))
 
-    # Pinning surface at mr by ADDING the equation 1 * ϕ[mr] = 0 to the mr'th equation
-    i = remap[mr]  # index for reference cast in matrix-vector problem
-    L[i, i] += 1
+    # Pinning surface at reference cast by ADDING the equation
+    # 1 * ϕ[ref] = 0 to the ref'th equation.  Note, m[ref] is the reference cast.
+    # If the BFS queue (m) were not sorted, then ref == 0 and m[0] would be the
+    # reference cast, since the BFS is initialized from the reference cast.
+    L[ref, ref] += 1
 
-    # Alternative pinning strategy: change the mr'th equation to be 1 * ϕ[mr] = 0.
-    # Then, since ϕ[mr] = 0, values of L in mr'th column are irrelevant, so set
+    # Alternative pinning strategy: change the mref'th equation to be 1 * ϕ[mref] = 0.
+    # Then, since ϕ[mref] = 0, values of L in mref'th column are irrelevant, so set
     # these to zero to maintain symmetry.
     # Resulting output is same as above to many sig figs.
-    # L[:, i] = 0
-    # L[i, :] = 0
-    # L[i, i] = 1
-    # D[i] = 0
+    # L[:, ref] = 0
+    # L[ref, :] = 0
+    # L[ref, ref] = 1
+    # D[ref] = 0
 
     # Solve the matrix problem, L ϕ = D
     ϕ[m] = spsolve(L, D)
 
-    ϕ = ϕ.reshape(surf_shape)
+    ϕ = ϕ.reshape(p.shape)
     return ϕ
+
+
+def _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t):
+    """
+    Compute ϵ neutrality errors and geometry on the list of edges in the graph
+    that are between pairs of "wet" casts.  Also prune the list of edges to
+    just these edges, and remap the nodes they are incident upon from being
+    labelled (0, 1, ... ni*nj-1) for the entire 2D grid, to being labelled
+    (0, 1, ..., N-1) where N is the number of wet casts.
+    """
+
+    N = len(m)
+
+    # `remap` changes from linear indices (0, 1, ..., ni*nj-1) for the entire
+    # space (including land), into linear indices (0, 1, ..., N-1) for the
+    # current connected component
+    remap = np.full(p.size, -1, dtype=int)
+    remap[m] = np.arange(N)
+
+    # Select a subset of edges, namely those between two "wet" casts
+    a, b = edges
+    ge = (remap[a] >= 0) & (remap[b] >= 0)  # good edges
+    a, b = a[ge], b[ge]
+
+    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
+
+    if np.isscalar(distratio):
+        fac = np.full(ϵ.shape, distratio)
+        if distratio != 1.0:
+            ϵ *= fac  # scale ϵ
+    else:
+        fac = distratio[ge]
+        ϵ *= fac  # scale ϵ
+
+    # Henceforth we only refer to nodes in the connected component, so remap edges now
+    a, b = remap[a], remap[b]
+
+    # Also remap the index for the reference cast from 2D space to 1D list of wet casts
+    ref = remap[mref]
+
+    return a, b, ϵ, fac, ref
