@@ -13,39 +13,50 @@ from neutralocean.grid.xgcm import build_grid, edgedata_to_maps
 from neutralocean.ntp import ntp_ϵ_errors
 
 # %% Load data
-folder_ecco4 = "/home/stanley/work/data/ECCOv4r4/"  # edit as needed...
-file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
 
-file_salt = folder_ecco4 + "nctiles_daily/SALT/SALT_2002_12_23.nc"
-file_theta = folder_ecco4 + "nctiles_daily/THETA/THETA_2002_12_23.nc"
+print(
+    "To get started, download the ECCOv4r4 grid information at\n"
+    "  https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/ECCO_L4_GEOMETRY_LLC0090GRID_V4R4/GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
+    "\nand one day of Salinity and Temperature 3D data at\n"
+    "  https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4/OCEAN_TEMPERATURE_SALINITY_day_mean_2002-12-23_ECCO_V4r4_native_llc0090.nc"
+    "\nYou will have to create an Earthdata Login first."
+    "Then edit the below variable, `folder_ecc4`, to point to the directory"
+    " where you saved these two files."
+)
+
+folder_ecco4 = "~/work/data/ECCOv4r4/"  # << EDIT AS NEEDED >>
+file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
+date = "2002-12-23"
+file_ST = (
+    folder_ecco4
+    + "OCEAN_TEMPERATURE_SALINITY_day_mean_"
+    + date
+    + "_ECCO_V4r4_native_llc0090.nc"
+)
+
+# Load horizontal grid information
+ds = xr.open_dataset(file_grid)
+XC, YC, dxC, dyC, dxG, dyG = (
+    ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dxG", "dyG")
+)
+ds.close()
 
 # Load hydrographic data
-ds = xr.open_dataset(file_salt)
-S = ds.SALT.squeeze().load()
-ds.close()
-
-ds = xr.open_dataset(file_theta)
-T = ds.THETA.squeeze().load()
-ds.close()
-
-# Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
-dims = (*tuple(x for x in S.dims if x != "k"), "k")
-S, T = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T))
-
-# This DataSet appears to be lacking info about missing values. Use S == 0.
-bad = S.values == 0.0
-S.values[bad] = np.nan
-T.values[bad] = np.nan
-del bad
-
-# size of each horizontal dimension in each square tile
-n = ds.nx
-
-g = xr.open_dataset(file_grid)
+ds = xr.open_dataset(file_ST)
+S, T = (ds[x].squeeze().load() for x in ("SALT", "THETA"))
 
 # Create depth xarray.
-Z = -g.Z  # Make Z > 0 and increasing down
+Z = -ds.Z.load()  # Make Z > 0 and increasing down
 Z.attrs.update({"positive": "down"})  # Update attrs to match.
+
+n = len(ds.i)  # size of each horizontal dimension in each square tile
+ds.close()
+
+# Get order of non-vertical dimensions
+dims = tuple(x for x in S.dims if x != "k")
+
+# Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
+S, T = (x.transpose(*dims, "k").astype(np.float64, order="C") for x in (S, T))
 
 # define the connectivity between faces for the ECCOv4 LLC grid:
 # fmt: off
@@ -77,17 +88,13 @@ face_connections = {'tile': {
     12:{'X': ((11, 'X', False), None),
         'Y': ((9, 'Y', False),  (0, 'X', False))}}}
 # fmt: on
-nf = len(
-    next(iter(face_connections.values()))
-)  # len(faces_connections only value)
-N = n * n * nf  # number of nodes
+
+# Number of Faces -- len(faces_connections only value)
+nf = len(next(iter(face_connections.values())))
 
 # Build list of adjacent water columns and distances between those water column pairs
-dims = g.Depth.dims  # ('tile', 'j', 'i')
 xsh = ysh = "left"
-grid = build_grid(
-    n, face_connections, dims, xsh, ysh, g.dxC, g.dyC, g.dxG, g.dyG
-)
+grid = build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dxG, dyG)
 
 
 # Make Boussinesq version of the Jackett and McDougall (1995) equation of state
@@ -97,14 +104,12 @@ grav, rho_c = 9.81, 1027.5
 eos = make_eos("jmd95", grav, rho_c)
 eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
 
-# %% Select pinning cast and pinning depth
-# pin_cast = (11, 0, 14)  # hardcoded cast at (-127.5, 0.2)
-
-x0, y0 = (-172, -4)
+# Select pinning cast, picking the cast closest to (x0,y0)
+x0, y0 = (-172, -4)  # longitude, latitude -- Pacific equatorial ocean
 pin_cast = np.unravel_index(
-    ((g.XC.values - x0) ** 2 + (g.YC.values - y0) ** 2).argmin(), g.XC.shape
+    ((XC.values - x0) ** 2 + (YC.values - y0) ** 2).argmin(), XC.shape
 )
-z0 = 1500.0
+z0 = 1500.0  # pinning depth
 
 # %% Build approximately neutral surfaces!
 
