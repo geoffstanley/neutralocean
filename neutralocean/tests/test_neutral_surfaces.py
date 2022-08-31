@@ -28,7 +28,14 @@ def test_potential_surf():
     z_ref = 0.0
     isoval = 1027.0
     s, t, z, _ = potential_surf(
-        S, T, Z, ref=z_ref, isoval=isoval, eos=eos, TOL_P_SOLVER=1e-8, diags=False
+        S,
+        T,
+        Z,
+        ref=z_ref,
+        isoval=isoval,
+        eos=eos,
+        TOL_P_SOLVER=1e-8,
+        diags=False,
     )
 
     σ = np.ma.masked_invalid(eos_ufunc(s, t, z_ref))
@@ -55,31 +62,28 @@ def test_potential_surf():
 
 
 def test_anomaly_surf():
-    # Test delta_surf using prescribed reference values and a given cast and depth
-    # that the surface will intersect.
+    # Test delta_surf using prescribed reference values and isovalue
     S, T, Z = make_simple_stp((16, 32, 50))
     s_ref, t_ref = 34.5, 4.0
-    i0, j0 = (int(x / 2) for x in S.shape[:-1])  # ref cast in middle of domain
-    pin_z = 1000.0  # find surface through this depth at ref cast
-    s, t, z, d = anomaly_surf(
+    isoval = 0.0
+    s, t, z, _ = anomaly_surf(
         S,
         T,
         Z,
         ref=(s_ref, t_ref),
-        pin_cast=(i0, j0),
-        pin_p=pin_z,
-        eos=(eos,eos_s_t),
+        isoval=isoval,
+        eos=eos,
         TOL_P_SOLVER=1e-8,
-        diags=True,  # True to get isoval output
-        wrap=(False, False),  # Only needed since diags=True
+        diags=False,
     )
 
-    isoval = d["isoval"]
     δ = np.ma.masked_invalid(eos_ufunc(s, t, z) - eos_ufunc(s_ref, t_ref, z))
     assert np.ma.allclose(δ, isoval)
 
     # Calculate surface potential density
-    δ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], Z[0]) - eos_ufunc(s_ref, t_ref, Z[0])
+    δ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], Z[0]) - eos_ufunc(
+        s_ref, t_ref, Z[0]
+    )
 
     # Calculate seafloor potential density
     n_good = find_first_nan(S)
@@ -90,7 +94,7 @@ def test_anomaly_surf():
 
     # check for each cast that
     # in-situ density anomaly on surface nearly matches isovalue,
-    # or the surface does not intersect this cast (σ is nan) because of one of
+    # or the surface does not intersect this cast (δ is nan) because of one of
     # three conditions: the cast was land, the surface outcropped, or the surface incropped.
     assert np.all(
         (np.abs(δ - isoval) < 1e-8)
