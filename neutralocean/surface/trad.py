@@ -142,8 +142,10 @@ def potential_surf(S, T, P, **kwargs):
         For a tiled rectilinear grid, such as works with XGCM, use
             `neutralocean.grid.xgcm.build_grid`
 
-        For a general grid given as a graph, see the example in
-            `neutralocean.examples.run_example_4casts`
+        For a general grid given as a graph, use
+            `neutralocean.grid.graph.build_grid`
+
+        Also see the examples in `neutralocean.examples`.
 
     vert_dim : int or str, Default -1
 
