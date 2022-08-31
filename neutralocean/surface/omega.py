@@ -1,30 +1,31 @@
 """Omega surfaces"""
-
 import numpy as np
 from time import time
 from scipy.sparse import csc_matrix
+from scipy.sparse.linalg import lsqr
 from scipy.sparse.linalg import spsolve
 
 from neutralocean.surface.trad import _traditional_surf
 from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
-from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet, grid_adjacency
-from neutralocean.ntp import ntp_ϵ_errors_norms
+from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
+from neutralocean.grid.graph import edges_to_graph
+from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
 from neutralocean.lib import (
     xr_to_np,
-    _xr_in,
+    _xrs_in,
     _xr_out,
     _process_pin_cast,
-    _process_wrap,
     _process_casts,
     _process_n_good,
     _process_eos,
+    aggsum,
 )
 from neutralocean.mixed_layer import mixed_layer
 
 
-def omega_surf(S, T, P, **kwargs):
+def omega_surf(S, T, P, grid, **kwargs):
     """Calculate an omega surface from structured ocean data.
 
     Given 3D salinity, temperature, and pressure or depth data arranged on a
@@ -137,8 +138,7 @@ def omega_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, grav, rho_c,
-    interp, n_good, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
 
         See `potential_surf`
 
@@ -147,7 +147,7 @@ def omega_surf(S, T, P, **kwargs):
         As in `potential_surf`, excluding the option to pass a single function.
         The omega surface algorithm relies on knowing the partial derivatives
         of the equation of state with respect to salinity and temperature, so
-        the `eos_s_t` function is also required.
+        the `eos_s_t` function is also required if given as a tuple of functions.
 
     ITER_MIN : int, Default 1
 
@@ -198,6 +198,13 @@ def omega_surf(S, T, P, **kwargs):
 
         If None, the mixed layer is not removed.
 
+    OMEGA_FORMULATION : str, Default 'poisson'
+
+        Specify how the matrix problem is set up and solved.  Options are:
+        - 'poisson', to solve the Poisson problem as in [1]_ with Cholesky, or
+        - 'gradient', to solve the overdetermined gradient equations as in [2]_
+            using LSQR.
+
     Examples
     --------
     omega surfaces require a pinning cast and initial surface.  The surface is
@@ -207,12 +214,9 @@ def omega_surf(S, T, P, **kwargs):
 
     >>> omega_surf(S, T, P, pin_cast, p_init, ...)
 
-    Alternatively, a
-    potential density surface
-    or a
-    in-situ density (specific volume) anomaly surface
-    can be used as the initial
-    surface.  To do this, use one of the following two methods
+    Alternatively, a potential density surface or an in-situ density (specific
+    volume) anomaly surface can be used as the initial surface.  To do this,
+    use one of the following two methods:
 
     >>> omega_surf(S, T, P, ref, isoval, pin_cast, ...)
 
@@ -241,7 +245,6 @@ def omega_surf(S, T, P, **kwargs):
     p_init = kwargs.get("p_init")
     vert_dim = kwargs.get("vert_dim", -1)
     p_ml = kwargs.get("p_ml")
-    wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
     eos = kwargs.get("eos", "gsw")
@@ -254,46 +257,44 @@ def omega_surf(S, T, P, **kwargs):
     TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
     TOL_LRPD_MAV = kwargs.get("TOL_LRPD_MAV", 1e-7)
     TOL_P_CHANGE_RMS = kwargs.get("TOL_P_CHANGE_RMS", 0.0)
-    # fmt: off
-    # grid distances.  (soft notation: i = I-1/2; j = J-1/2)
-    # dist1_iJ = kwargs.get('dist1_iJ', 1.) # Distance [m] in 1st dim centred at (I-1/2, J)
-    # dist1_Ij = kwargs.get('dist1_Ij', 1.) # Distance [m] in 1st dim centred at (I, J-1/2)
-    # dist2_Ij = kwargs.get('dist2_Ij', 1.) # Distance [m] in 2nd dim centred at (I, J-1/2)
-    # dist2_iJ = kwargs.get('dist2_iJ', 1.) # Distance [m] in 2nd dim centred at (I-1/2, J)
-    # fmt: on
-    # dist2on1_iJ = dist2_iJ / dist1_iJ
-    # dist1on2_Ij = dist1_Ij / dist2_Ij
-    geom = [
-        kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
-    ]
-
+    OMEGA_FORMULATION = kwargs.get("OMEGA_FORMULATION", "poisson")
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
     ppc_fn = select_ppc(interp, "1")
     interp_u_two = make_interpolator(interp, 0, "u", True)
 
-    sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
+    sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
-    wrap = _process_wrap(wrap, sxr, True)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
-    ni, nj = n_good.shape
+
+    # Save shape of horizontal dimensions, then flatten horiz dims to 1D.
+    surf_shape = n_good.shape
+    N = n_good.size  # number of nodes (water columns)
+    S, T, P = (np.reshape(X, (N, -1)) for X in (S, T, P))
+    n_good = np.reshape(n_good, -1)
+
+    # Update pinning cast to a linear index.
+    pin_cast = np.ravel_multi_index(pin_cast, surf_shape)
 
     # Prepare grid ratios for matrix problem.
-    if not np.all(geom == 1.0):
-        geom = [np.broadcast_to(x, (ni, nj)) for x in geom]
-    dist2on1_iJ = geom[3] / geom[0]  # dist2_iJ / dist1_iJ
-    dist1on2_Ij = geom[1] / geom[2]  # dist1_Ij / dist2_Ij
+    distratio = grid["distperp"] / grid["dist"]
 
-    if not isinstance(pin_cast, (tuple, list)):
-        raise TypeError("`pin_cast` must be a tuple or list")
+    # Pre-calculate grid adjacency needed for Breadth First Search
+    edges = grid["edges"]
+    graph = edges_to_graph(edges, N)
 
-    pin_cast_1 = np.ravel_multi_index(pin_cast, (ni, nj))  # linear index
-
-    # Pre-calculate grid adjacency needed for Breadth First Search:
-    A4 = grid_adjacency((ni, nj), 4, wrap)  # using 4-connectivity
+    if OMEGA_FORMULATION.lower() == "poisson":
+        global_solver = _omega_matsolve_poisson
+    elif OMEGA_FORMULATION.lower() == "gradient":
+        global_solver = _omega_matsolve_gradient
+        distratio = np.sqrt(distratio)
+    else:
+        raise ValueError(
+            f"Unknown OMEGA_FORMULATION. Given {OMEGA_FORMULATION}"
+        )
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
@@ -328,10 +329,10 @@ def omega_surf(S, T, P, **kwargs):
 
         # Update arguments with pre-processed values
         kwargs["n_good"] = n_good
-        kwargs["wrap"] = wrap
         kwargs["vert_dim"] = -1  # Since S, T, P already reordered
         kwargs["diags"] = False  # Will make our own diags next
         kwargs["eos"] = eos
+        kwargs["pin_cast"] = pin_cast  # update with the 1D value
         s, t, p, _ = _traditional_surf(ans_type, S, T, P, **kwargs)
 
     else:
@@ -341,11 +342,12 @@ def omega_surf(S, T, P, **kwargs):
             raise TypeError(
                 'If provided, "p_init" or "p_init.values" must be an ndarray'
             )
-        if p_init.shape != (ni, nj):
+        if p_init.shape != surf_shape:
             raise ValueError(
-                f'"p_init" should contain a 2D array of size ({ni}, {nj});'
+                f'"p_init" should contain a 2D array of size {surf_shape};'
                 f" found size {p_init.shape}"
             )
+        p_init = np.reshape(p_init, -1)  # now reshape to 1D
 
         if pin_p is not None and pin_p != p_init[pin_cast]:
             raise ValueError("pin_p does not match p_init at pin_cast")
@@ -360,15 +362,17 @@ def omega_surf(S, T, P, **kwargs):
     if np.isnan(p[pin_cast]):
         raise RuntimeError("The initial surface is NaN at the reference cast.")
 
-    # Calculate bottom of mixed layer from given options
     if ITER_MAX > 1 and isinstance(p_ml, dict):
         # Compute the mixed layer from parameter inputs
         p_ml = mixed_layer(S, T, P, eos, **p_ml)
 
     if p_ml is None:
         # Prepare array as needed for bfs_conncomp1_wet
-        p_ml = np.full((ni, nj), -np.inf)
+        p_ml = np.full(p.shape, -np.inf)
         # p_ml = np.broadcast_to(-np.inf, (ni, nj))  # DEV: Doesn't work with @numba.njit
+    else:
+        # Ensure p_ml is 1D array, in case it was given as a 2D array.
+        p_ml = np.reshape(p_ml, -1)
 
     # ensure same nan structure between s, t, and p. Just in case user gives
     # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
@@ -377,7 +381,7 @@ def omega_surf(S, T, P, **kwargs):
     if diags:
         d["timer"][0] = time() - timer
 
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
         d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))
@@ -410,13 +414,16 @@ def omega_surf(S, T, P, **kwargs):
         timer = time()
 
         # --- Remove the Mixed Layer
-        if iter_ > 1 and p_ml[0, 0] != -np.inf:
+        if p_ml is not None and iter_ > 1:
             p[p < p_ml] = np.nan
 
         # --- Determine the connected component containing the reference cast, via Breadth First Search
         timer_loc = time()
         if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
-            qu, qt, n_newly_wet = bfs_conncomp1_wet(
+            bfsqu, n_newly_wet = bfs_conncomp1_wet(
+                graph.indptr,
+                graph.indices,
+                pin_cast,
                 s,
                 t,
                 p,
@@ -424,23 +431,25 @@ def omega_surf(S, T, P, **kwargs):
                 T,
                 P,
                 n_good,
-                A4,
-                pin_cast_1,
                 TOL_P_SOLVER,
                 eos,
                 ppc_fn,
-                p_ml=p_ml,
+                p_ml,
             )
         else:
-            qu, qt = bfs_conncomp1(np.isfinite(p.flatten()), A4, pin_cast_1)
+            # TODO: change isfinite(p) to isfinite(s)?   No need, since `p[np.isnan(s)] = np.nan` is run before entering this loop.
+            bfsqu = bfs_conncomp1(
+                graph.indptr, graph.indices, pin_cast, np.isfinite(p)
+            )
             n_newly_wet = 0
         timer_bfs = time() - timer_loc
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        ϕ = _omega_matsolve_poisson(
-            s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A4, qu, qt, pin_cast, eos_s_t
-        )
+        # Pre-sort the BFS queue: tests in both MATLAB and Python on OCCA data
+        # show this gives an overall speedup for both Poisson and Gradient formulations.
+        bfsqu = np.sort(bfsqu)
+        ϕ = global_solver(s, t, p, edges, distratio, bfsqu, pin_cast, eos_s_t)
         timer_mat = time() - timer_loc
 
         # --- Update the surface (mutating s, t, p by vertsolve)
@@ -482,7 +491,7 @@ def omega_surf(S, T, P, **kwargs):
             d["timer_bfs"][iter_] = timer_bfs
 
             # Diagnostics about the state AFTER this iteration
-            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
             d["ϵ_RMS"][iter_], d["ϵ_MAV"][iter_] = ϵ_RMS, ϵ_MAV
 
             n_wet = np.sum(np.isfinite(p))
@@ -499,7 +508,9 @@ def omega_surf(S, T, P, **kwargs):
                 )
 
         # --- Check for convergence
-        if (ϕ_MAV < TOL_LRPD_MAV or Δp_RMS < TOL_P_CHANGE_RMS) and iter_ >= ITER_MIN:
+        if (
+            ϕ_MAV < TOL_LRPD_MAV or Δp_RMS < TOL_P_CHANGE_RMS
+        ) and iter_ >= ITER_MIN:
             break
 
     if diags:
@@ -507,14 +518,82 @@ def omega_surf(S, T, P, **kwargs):
         for k, v in d.items():
             d[k] = v[0 : iter_ + (k in ("ϵ_MAV", "ϵ_RMS"))]
 
-    s, t, p = (_xr_out(x, xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr)))
+    # Reshape (from 1D arrays) and put into DataArrays if appropriate
+    s, t, p = (
+        _xr_out(np.reshape(x, surf_shape), xxr)
+        for (x, xxr) in ((s, sxr), (t, txr), (p, pxr))
+    )
 
     return s, t, p, d
 
 
-def _omega_matsolve_poisson(
-    s, t, p, dist2on1_iJ, dist1on2_Ij, wrap, A4, qu, qt, mr, eos_s_t
-):
+def _omega_matsolve_gradient(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t):
+    """Solve the Gradient formulation of the omega-surface global matrix problem
+
+    Parameters
+    ----------
+    s, t, p, edges, m, mref, eos_s_t :
+        See `_omega_matsolve_poisson`
+
+    sqrtdistratio : array
+        The square-root of the distance of the interface between adjacent
+        water columns divided by the square-root of the distance between
+        adjacent water columns.  That is, `np.sqrt(distperp / dist)`,
+        where `distperp` and `dist` are as in the `geoemtry` input to
+        `omega_surf`.
+
+    Returns
+    -------
+    ϕ : ndarray
+        See `_omega_matsolve_poisson`
+
+    """
+    N = len(m)  # Number of water columns
+    ϕ = np.full(p.size, np.nan, dtype=p.dtype)
+
+    # If there is only one water column, there are no equations to solve,
+    # then the solution is simply phi = 0 at that water column, and nan elsewhere.
+    # Note, N >= 1 should be guaranteed by omega_surf(), so N <= 1 should imply
+    # N == 1.  If N >= 1 weren't guaranteed (m empty), this would throw an error.
+    if N <= 1:  # There are definitely no equations to solve
+        ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
+        return ϕ.reshape(p.shape)
+
+    a, b, ϵ, fac, ref = _omega_matsolve_helper(
+        s, t, p, edges, sqrtdistratio, m, mref, eos_s_t
+    )
+
+    rhs = np.concatenate((-ϵ, [0.0]))  # add 0 for pinning equation
+
+    # Build columns for matrix, including extra entry for pinning equation.
+    # Note m[ref] is the reference cast, so the ref'th entry in the solution
+    # vector of the matrix column corresponds to ϕ at the reference cast.
+    c = np.concatenate((a, b, [ref]))
+
+    # E = number rows in matrix. Round down ignores pinning equation
+    E = len(c) // 2
+
+    # r = [0, 1, ..., E-1, 0, 1, ..., E-1, E]
+    r = np.concatenate((np.tile(np.arange(E), 2), [E]))
+
+    # When distratio = 1, v is [1, 1, ..., 1, -1, -1, ..., -1, 1e-2]
+    v = np.concatenate((fac, -fac, [1e-2]))
+
+    mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
+
+    sol = lsqr(mat, rhs)[0]
+
+    # Heave solution to be exactly 0 at pinning cast (to fix any intolerance
+    # caused by lsqr converging before reaching the exact solution)
+    sol -= sol[ref]
+
+    ϕ[m] = sol
+
+    ϕ = ϕ.reshape(p.shape)
+    return ϕ
+
+
+def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     """Solve the Poisson formulation of the omega-surface global matrix problem
 
     Parameters
@@ -523,41 +602,25 @@ def _omega_matsolve_poisson(
 
         Salinity, temperature, pressure on the surface
 
-    dist2on1_iJ : ndarray or float
+    edges : tuple of length 2 of 1D arrays
 
-        The grid distance in the second dimension divided by the grid distance
-        in the first dimension, both centred at (I-1/2,J). Equivalently, the
-        square root of the area of a grid cell centred at(I-1/2,J), divided
-        by the distance from (I-1,J) to (I,J).
+        See grid['edges'] from `omega_surf`
 
-    dist1on2_Ij : ndarray or float
+    distratio : array
 
-        The grid distance in the first dimension divided by the grid distance
-        in the second dimension, both centred at (I-1/2,J). Equivalently, the
-        square root of the area of a grid cell centred at(I,J-1/2), divided
-        by the distance from (I,J-1) to (I,J).
+        The distance of the interface between adjacent water columns divided by
+        the distance between adjacent water columns, in the same order as `edges`.
+        That is, `grid['distperp'] / grid['dist']` where `grid` is as input
+        to `omega_surf`.
 
-    wrap : tuple of bool of length 2
+    m : array
 
-        ``wrap(i)`` is true iff the domain is periodic in the i'th lateral
-        dimension.
+        Linear indices to the nodes in order of the BFS, ie all casts in this
+        connected component.
+        That is, `m = qu[0:qt+1]` where `qu` and `qt` are outputs from
+        `bfs_conncomp1` in bfs.py.
 
-    A4 : ndarray
-
-        four-connectivity adjacency matrix, computed as
-        ``A4 = grid_adjacency(s.shape, 4, wrap)``.
-        See `grid_adjacency` in `bfs.py`
-
-    qu : ndarray
-
-        The nodes visited by the BFS in order from 0 to `qt`(see bfs_conncomp1
-        in bfs.py).
-
-    qt : int
-
-        The tail index of `qu` (see bfs_conncomp1 in bfs.py).
-
-    mr : int
+    mref : int
 
         Linear index to the reference cast, at which ϕ will be zero
 
@@ -570,206 +633,100 @@ def _omega_matsolve_poisson(
     -------
     ϕ : ndarray
 
-        Locally referenced potential density (LRPD) perturbation.  Vertically heaving the surface
-        so that its LRPD changes by ϕ will yield a more neutral surface.
+        Locally referenced potential density (LRPD) perturbation.
+        Vertically heaving the surface so that its LRPD in water column m
+        increases by the m'th element of ϕ will yield a more neutral surface.
     """
-
-    ni, nj = p.shape
-
-    # The value nij appears in A4 to index neighbours that would go across a
-    # non-periodic boundary
-    nij = ni * nj
-
-    # --- Build & solve sparse matrix problem
-    ϕ = np.full(nij, np.nan, dtype=np.float64)
+    N = len(m)  # number of water columns
+    ϕ = np.full(p.size, np.nan, dtype=p.dtype)  # prealloc space
 
     # If there is only one water column, there are no equations to solve,
-    # and the solution is simply phi = 0 at that water column, and nan elsewhere.
-    # Note, qt > 0 (N >= 1) should be guaranteed by omega_surf(), so N <= 1 should
-    # imply N == 1.  If qt > 0 weren't guaranteed, this could throw an error.
-    N = qt + 1  # Number of water columns
+    # then the solution is simply phi = 0 at that water column, and nan elsewhere.
+    # Note, N >= 1 should be guaranteed by omega_surf(), so N <= 1 should imply
+    # N == 1.  If N >= 1 weren't guaranteed (m empty), this would throw an error.
     if N <= 1:  # There are definitely no equations to solve
-        ϕ[qu[0]] = 0.0  # Leave this isolated pixel at current pressure
-        return ϕ.reshape(ni, nj)
+        ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
+        return ϕ.reshape(p.shape)
 
-    # Collect & sort linear indices to all pixels in this region
-    # sorting here makes matrix better structured; overall speedup.
-    m = np.sort(qu[0 : qt + 1])
-
-    # If both gridding variables are 1, then grid is uniform
-    UNIFORM_GRID = (
-        isinstance(dist2on1_iJ, float)
-        and dist2on1_iJ == 1
-        and isinstance(dist1on2_Ij, float)
-        and dist1on2_Ij == 1
+    a, b, ϵ, fac, ref = _omega_matsolve_helper(
+        s, t, p, edges, distratio, m, mref, eos_s_t
     )
 
-    # Begin building D = divergence of ϵ,
-    # and L = Laplacian operator (compact representation)
+    # Prepare diagonal entries of negative Laplacian.  For uniform geometry,
+    # this simply counts the number of edges incident upon each node.  For
+    # rectilinear grids, this value will be 4 for a typical node, but can be
+    # less near boundaries of the connected component.
+    diag = aggsum(fac, a, N) + aggsum(fac, b, N)
 
-    # L refers to neighbours in this order (so does A4, except without the 5'th entry):
-    # . 1 .
-    # 0 4 3
-    # . 2 .
-    IM = 0  # (I  ,J-1)
-    MJ = 1  # (I-1,J  )
-    PJ = 2  # (I+1,J  )
-    IP = 3  # (I  ,J+1)
-    IJ = 4  # (I  ,J  )
-    L = np.zeros((ni, nj, 5))  # pre-alloc space
+    # Divergence of ϵ -- for the connected component only
+    D = aggsum(ϵ, b, N) - aggsum(ϵ, a, N)
 
-    # Create views into L
-    L_IM = L[:, :, IM]
-    L_MJ = L[:, :, MJ]
-    L_PJ = L[:, :, PJ]
-    L_IP = L[:, :, IP]
-    L_IJ = L[:, :, IJ]
+    # Build the rows, columns, and values of the sparse matrix
+    r = np.concatenate((a, b, np.arange(N)))
+    c = np.concatenate((b, a, np.arange(N)))
+    v = np.concatenate((np.tile(-fac, 2), diag))  # negative Laplacian
 
-    # Aliases
-    sm = s
-    tm = t
-    pm = p
+    # Build the (negative) Laplacian sparse matrix with N rows and N columns
+    L = csc_matrix((v, (r, c)), shape=(N, N))
 
-    # --- m = (i, j) & n = (i-1, j),  then also n = (i+1, j) by symmetry
-    sn = im1(sm)
-    tn = im1(tm)
-    pn = im1(pm)
-    if not wrap[0]:
-        sn[0, :] = np.nan
+    # Pinning surface at reference cast by ADDING the equation
+    # 1 * ϕ[ref] = 0 to the ref'th equation.  Note, m[ref] is the reference cast.
+    # If the BFS queue (m) were not sorted, then ref == 0 and m[0] would be the
+    # reference cast, since the BFS is initialized from the reference cast.
+    L[ref, ref] += 1
 
-    # A stripped down version of ntp_ϵ_errors
-    vs, vt = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
-    # (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 1500)  # DEV: testing omega software to find potential density surface()
-    ϵ = vs * (sm - sn) + vt * (tm - tn)
+    # Alternative pinning strategy: change the mref'th equation to be 1 * ϕ[mref] = 0.
+    # Then, since ϕ[mref] = 0, values of L in mref'th column are irrelevant, so set
+    # these to zero to maintain symmetry.
+    # Resulting output is same as above to many sig figs.
+    # L[:, ref] = 0
+    # L[ref, :] = 0
+    # L[ref, ref] = 1
+    # D[ref] = 0
 
-    bad = np.isnan(ϵ)
-    ϵ[bad] = 0.0
+    # Solve the matrix problem, L ϕ = D
+    ϕ[m] = spsolve(L, D)
 
-    if UNIFORM_GRID:
-        fac = np.float64(~bad)  # 0 and 1
-    else:
-        fac = dist2on1_iJ.copy()
-        fac[bad] = 0.0
-        ϵ *= fac  # scale ϵ
+    ϕ = ϕ.reshape(p.shape)
+    return ϕ
 
-    D = -ϵ + ip1(ϵ)
 
-    L_IJ[:] = fac + ip1(fac)
+def _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t):
+    """
+    Compute ϵ neutrality errors and geometry on the list of edges in the graph
+    that are between pairs of "wet" casts.  Also prune the list of edges to
+    just these edges, and remap the nodes they are incident upon from being
+    labelled (0, 1, ... ni*nj-1) for the entire 2D grid, to being labelled
+    (0, 1, ..., N-1) where N is the number of wet casts.
+    """
 
-    L_MJ[:] = -fac
+    N = len(m)
 
-    L_PJ[:] = -ip1(fac)
-
-    # --- m = (i, j) & n = (i, j-1),  then also n = (i, j+1) by symmetry
-    sn = jm1(sm)
-    tn = jm1(tm)
-    pn = jm1(pm)
-    if not wrap[1]:
-        sn[:, 0] = np.nan
-
-    # A stripped down version of ntp_ϵ_errors
-    (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 0.5 * (pm + pn))
-    # (vs, vt) = eos_s_t(0.5 * (sm + sn), 0.5 * (tm + tn), 1500)  # DEV: testing omega software to find potential density surface()
-
-    ϵ = vs * (sm - sn) + vt * (tm - tn)
-    bad = np.isnan(ϵ)
-    ϵ[bad] = 0.0
-
-    if UNIFORM_GRID:
-        fac = np.float64(~bad)  # 0 and 1
-    else:
-        fac = dist1on2_Ij.copy()
-        fac[bad] = 0.0
-        ϵ *= fac  # scale ϵ
-
-    D += -ϵ + jp1(ϵ)
-
-    L_IJ[:] += fac + jp1(fac)
-
-    L_IM[:] = -fac
-
-    L_IP[:] = -jp1(fac)
-
-    # --- Build matrix
-    # `remap` changes from linear indices for the entire 2D space (0, 1, ..., ni*nj-1) into linear
-    # indices for the current connected component (0, 1, ..., N-1)
-    # If the domain were doubly periodic, we would want `remap` to be a 2D array
-    # of size (ni,nj). However, with a potentially non-periodic domain, we need
-    # one more value for `A4` to index into.  Hence we use `remap` as a vector
-    # with ni*nj+1 elements, the last one corresponding to non-periodic boundaries.
-    # Water columns that are not in this connected component, and dry water columns (i.e. land),
-    # and the fake water column for non-periodic boundaries are all left
-    # to have a remap value of -1.
-    remap = np.full(nij + 1, -1, dtype=int)
+    # `remap` changes from linear indices (0, 1, ..., ni*nj-1) for the entire
+    # space (including land), into linear indices (0, 1, ..., N-1) for the
+    # current connected component
+    remap = np.full(p.size, -1, dtype=int)
     remap[m] = np.arange(N)
 
-    # Pin surface at mr by changing the mr'th equation to be 1 * ϕ[mr] = 0.
-    D[mr] = 0.0
-    L[mr] = 0.0
-    L[mr][IJ] = 1.0
+    # Select a subset of edges, namely those between two "wet" casts
+    a, b = edges
+    ge = (remap[a] >= 0) & (remap[b] >= 0)  # good edges
+    a, b = a[ge], b[ge]
 
-    L = L.reshape((nij, 5))
-    D = D.reshape(nij)
+    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
 
-    # The above change renders the mr'th column on all rows irrelevant
-    # since ϕ[mr] will be zero.  So, we may also set this column to 0
-    # which we do here by setting the appropriate links in L to 0. This
-    # maintains symmetry of the matrix, enabling the use of a Cholesky solver.
-    mrI = np.ravel_multi_index(mr, (ni, nj))  # get linear index for mr
-    if A4[mrI, IP] != nij:
-        L[A4[mrI, IP], IM] = 0
-    if A4[mrI, PJ] != nij:
-        L[A4[mrI, PJ], MJ] = 0
-    if A4[mrI, MJ] != nij:
-        L[A4[mrI, MJ], PJ] = 0
-    if A4[mrI, IM] != nij:
-        L[A4[mrI, IM], IP] = 0
+    if np.isscalar(distratio):
+        fac = np.full(ϵ.shape, distratio)
+        if distratio != 1.0:
+            ϵ *= fac  # scale ϵ
+    else:
+        fac = distratio[ge]
+        ϵ *= fac  # scale ϵ
 
-    # Build the RHS of the matrix problem
-    rhs = D[m]
+    # Henceforth we only refer to nodes in the connected component, so remap edges now
+    a, b = remap[a], remap[b]
 
-    # Build indices for the rows of the sparse matrix, namely
-    # [[0,0,0,0,0], ..., [N-1,N-1,N-1,N-1,N-1]]
-    r = np.repeat(range(N), 5).reshape(N, 5)
+    # Also remap the index for the reference cast from 2D space to 1D list of wet casts
+    ref = remap[mref]
 
-    # Build indices for the columns of the sparse matrix
-    # `remap` changes global indices to local indices for this region, numbered 0, 1, ... N-1
-    # Below is equiv to ``c = remap[A5[m]]`` for A5 built with 5 connectivity
-    c = np.column_stack((remap[A4[m]], np.arange(N)))
-
-    # Build the values of the sparse matrix
-    v = L[m]
-
-    # Prune the entries to ignore connections to adjacent pixels that are dry
-    # (including those that are "adjacent" across a non-periodic boundary).
-    good = c >= 0
-
-    # DEV: Could try exiting here, and do csc_matrix, spsolve inside main
-    # function, so that this can be njit'ed.  But numba doesn't support
-    # np.roll as we need it...  (nor ravel_multi_index, but we could just do
-    # that one ourselves)
-    # return r[good], c[good], v[good], N, rhs, m
-
-    # Build the sparse matrix; with N rows & N columns
-    mat = csc_matrix((v[good], (r[good], c[good])), shape=(N, N))
-
-    # --- Solve the matrix problem
-    ϕ[m] = spsolve(mat, rhs)
-
-    return ϕ.reshape(ni, nj)
-
-
-def im1(F):  # G[i,j] == F[i-1,j]
-    return np.roll(F, 1, axis=0)
-
-
-def ip1(F):  # G[i,j] == F[i+1,j]
-    return np.roll(F, -1, axis=0)
-
-
-def jm1(F):  # G[i,j] == F[i,j-1]
-    return np.roll(F, 1, axis=1)
-
-
-def jp1(F):  # G[i,j] == F[i,j+1]
-    return np.roll(F, -1, axis=1)
+    return a, b, ϵ, fac, ref

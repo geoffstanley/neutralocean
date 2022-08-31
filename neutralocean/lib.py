@@ -1,13 +1,13 @@
 """Library of simple functions for neutral_surfaces"""
 
 import numpy as np
-import numba
+import numba as nb
 import xarray as xr
 
 from .eos import make_eos, make_eos_s_t
 
 
-@numba.njit
+@nb.njit
 def find_first_nan(a):
     """The index to the first NaN along the last axis
 
@@ -34,6 +34,72 @@ def find_first_nan(a):
                 k[n] = i
                 break
     return k
+
+
+@nb.njit
+def take_fill(a, idx, fillval=np.nan):
+    """
+    Like numpy.take but fills with nan when indices are out of range
+
+    Parameters
+    ----------
+    a : ndarray
+        input data
+
+    idx : 1d array
+        linear indices to elements of `a`
+
+    Returns
+    -------
+    b : ndarray
+        The i'th element of b (in linear order) is the `idx[i]`'th element of `a`,
+        (in linear order), or nan if `idx[i] < 0`.  Same shape as `idx`.
+    """
+    b = np.empty(idx.size, dtype=a.dtype)
+    a_ = a.reshape(-1)
+    for i in range(len(b)):
+        if idx[i] >= 0:
+            b[i] = a_[idx[i]]
+        else:
+            b[i] = fillval
+    return b
+
+
+@nb.njit
+def aggsum(a, idx, n):
+    """
+    Aggregate data into groups and then sum each group.
+
+    Parameters
+    ----------
+    a : array
+        Input data to be aggregated into groups and summed.
+
+    idx : array of int
+        Group label for each element of `a`.  To exclude element `i` of `a`
+        from any group, let `idx[i]` be a negative int.  Must be same size
+        as `a`.
+
+    n : int
+        Number of groups, including empty groups.
+        As this is also the length of `b`, must satisfy `n >= np.max(idx) + 1`.
+
+    Returns
+    -------
+    b : array
+        The sum of each group of data from `a`.
+
+    Notes
+    -----
+    This is a simple implementation of `numpy_groupies.aggregate`.
+    See https://github.com/ml31415/numpy-groupies/
+
+    """
+    b = np.zeros(n, dtype=a.dtype)
+    for i in range(len(idx)):
+        if idx[i] >= 0:
+            b[idx[i]] += a[i]
+    return b
 
 
 def val_bot(T, n_good):
@@ -81,7 +147,9 @@ def val_bot(T, n_good):
         T_bot = T[n_good - 1]
         T_bot[n_good == 0] = np.nan
     else:
-        raise ValueError("T must be 1 dimensional or have 1 more dimension than n_good")
+        raise ValueError(
+            "T must be 1 dimensional or have 1 more dimension than n_good"
+        )
     return T_bot
 
 
@@ -104,12 +172,31 @@ def _xr_in(S, drop_dim):
         return None
 
 
+def _xrs_in(S, T, P, drop_dim):
+    # Prepare xarray containers for output: like inputs S, T, P but without
+    # the dimension labelled `drop_dim`.  Doing S, T, P together allows for
+    # pxr to be an xarray even if P is an ndarray -- it just won't have attributes.
+    sxr, txr = (_xr_in(X, drop_dim) for X in (S, T))
+
+    if sxr is None:
+        pxr = None
+    else:
+        pxr = sxr.copy()
+        try:
+            pxr.attrs.update(P.attrs)
+        except:
+            pxr.attrs.clear()
+
+    return sxr, txr, pxr
+
+
 def _xr_out(s, sxr):
     # Return xarrays if inputs were xarrays
     if isinstance(sxr, xr.core.dataarray.DataArray):
         sxr.data = s
-        s = sxr
-    return s
+        return sxr
+    else:
+        return s
 
 
 def _process_vert_dim(vert_dim, S):
@@ -152,13 +239,16 @@ def _process_casts(S, T, P, vert_dim):
 
     vert_dim = _process_vert_dim(vert_dim, S)
 
-    # Broadcast a 1D vector for P into a 3D array like S
+    S, T, P = (xr_to_np(x) for x in (S, T, P))
+
+    # Broadcast a 1D vector for P into a ND array like S
     if P.ndim < S.ndim:
         # First make P a 3D array with its non-singleton dimension be `vert_dim`
-        P = np.reshape(P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim)))
+        P = np.reshape(
+            P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim))
+        )
         P = np.broadcast_to(P, S.shape)
 
-    S, T, P = (xr_to_np(x) for x in (S, T, P))
     S, T, P = (_contiguous_casts(x, vert_dim) for x in (S, T, P))
     return S, T, P
 
@@ -213,15 +303,25 @@ def _process_wrap(wrap, s=None, diags=False):
 
 
 def _process_pin_cast(pin_cast, S):
-    # Convert pinning cast from a coordinate representation, suitable for ``S.sel(pin_cast)``
-    # when S is an xarray, into an index representation, suitable for ``S[pin_cast]``
-    # when S is an ndarray.
-
-    # DEV: There must be a better way of doing this...
+    """
+    If pinning cast is a dict:
+        convert from a coordinate representation,
+        suitable for `S.sel(pin_cast)` where S is an xarray,
+        into an index representation,
+        suitable for `S[pin_cast]` where S is an ndarray.
+    If pinning cast is an int:
+        wrap it into a 1-element tuple, so np.ravel_multi_index works
+    Otherwise, just return the input `pin_cast`.
+    """
+    # TODO: There must be a better way of doing this...
     # One issue is this always rounds one way, whereas a "nearest" neighbour
     # type behaviour would be preferred, as in xr.DataArray.sel
     if isinstance(pin_cast, dict):
-        return tuple(int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items())
+        return tuple(
+            int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items()
+        )
+    elif isinstance(pin_cast, int):
+        return (pin_cast,)
     else:
         return pin_cast
 

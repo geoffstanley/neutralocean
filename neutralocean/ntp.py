@@ -1,13 +1,62 @@
 """Neutral Tangent Plane and related functions"""
 
 import numpy as np
+import numba as nb
 
-from neutralocean.lib import _process_wrap, xr_to_np
+from neutralocean.lib import xr_to_np
+from neutralocean.grid.graph import graph_binary_fcn
+from neutralocean.eos.tools import make_eos_s_t
 
 
-def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
+def ntp_ϵ_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
     """
     Calculate ϵ neutrality errors on an approximately neutral surface
+
+    Parameters
+    ----------
+    s, t, p, eos_s_t, grav, rho_c :
+        See `ntp_ϵ_errors_norms`.
+
+    grid : dict
+        See `ntp_ϵ_errors_norms`.
+        Need not have the `distperp` element, as this is not used.
+        If the `dist` element is missing, a value of 1.0 will be used.
+        Can alternatively pass a 2 element tuple that is just `grid['edges']`,
+        in which case `dist` will be taken as 1.0.
+
+
+    Returns
+    -------
+    ϵ : array
+        The ϵ neutrality errors on the surface.
+        `ϵ[i]` is the neutrality error between nodes `a[i]` and `b[i]`, where
+        `a, b = grid['edges']`.
+    """
+
+    if isinstance(grid, tuple):
+        edges = grid
+        dist = 1.0
+    elif isinstance(grid, dict):
+        edges = grid["edges"]
+        dist = grid.get("dist", 1.0)
+
+    eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
+
+    s, t, p = (xr_to_np(x) for x in (s, t, p))
+
+    sa, ta, pa = (graph_binary_fcn(edges, x, avg1) for x in (s, t, p))
+    ds, dt = (graph_binary_fcn(edges, x, dif1) for x in (s, t))
+
+    rsa, rta = eos_s_t(sa, ta, pa)
+    ϵ = rsa * ds + rta * dt
+    if dist is not float or dist != 1.0:
+        ϵ = ϵ / dist
+    return ϵ
+
+
+def ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
+    """
+    Calculate norms of the ϵ neutrality errors on an approximately neutral surface
 
     Parameters
     ----------
@@ -15,70 +64,37 @@ def ntp_ϵ_errors(s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist2_Ij=1.0):
         practical / Absolute Salinity, potential / Conservative temperature,
         and pressure / depth on the surface
 
+    grid : dict
+        Containing the following:
+
+        edges : tuple of length 2, Required
+            Each element is an array of int of length E, where E is the number of
+            edges in the grid's graph, i.e. the number of pairs of adjacent water
+            columns (including land) in the grid.
+            If `edges = (a, b)`, the nodes (water columns) whose linear indices are
+            `a[i]` and `b[i]` are adjacent.
+            If one of `a[i]` or `b[i]` is less than 0, that edge does not exist. # TODO:  Is this necessary?
+
+        dist : 1d array, Default 1.0
+            Horizontal distance between adjacent water columns (nodes).
+            `dist[i]` is the distance between nodes whose linear indices are
+            `edges[0][i]` and `edges[1][i]`.
+
+        distperp : 1d array, Default 1.0
+            Horizontal distance of the face between adjacent water columns (nodes).
+            `distperp[i]` is the distance of the interface between nodes whose
+            linear indices are `edges[0][i]` and `edges[1][i]`.
+
     eos_s_t : function
         Equation of state for the partial derivatives of density or specific
         volume with respect to `S` and `T` as a function of `S`, `T`, and `P`
         inputs.
 
-    wrap : tuple of bool, or tuple of str
+    grav : float, Default None
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
 
-        Specifies which dimensions are periodic.
-
-        As a tuple of bool, this must be length two.  The first and second
-        dimensions of `s` and `t` are periodic iff ``wrap[0]`` and
-        ``wrap[1]`` is True, respectively.
-
-        As a tuple of str, simply name the periodic dimensions of `s` and
-        `t`.
-
-    dist1_iJ, dist2_Ij, : float or ndarray, Default 1.0
-
-        Grid distances [m] in either the 1st or 2nd lateral dimension, and
-        centred at the location specified.  The naming uses a soft notation:
-        the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
-        `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
-        `dist2_Ij[5,3]` is the distance between cells (5,3) and (5,2).
-
-    Returns
-    -------
-    ϵx, ϵy : ndarray
-        The ϵ neutrality errors (in the first and second lateral directions)
-        on the surface.  Results live on the half grids, midway between where
-        `s`, `t`, and `p` live.
-    """
-
-    wrap = _process_wrap(wrap, s)
-
-    s, t, p = (xr_to_np(x) for x in (s, t, p))
-
-    # Use backward differences; results are on the U, V grids.
-    ϵx = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, im1, dist1_iJ)
-    ϵy = _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, jm1, dist2_Ij)
-
-    return ϵx, ϵy
-
-
-def ntp_ϵ_errors_norms(
-    s, t, p, eos_s_t, wrap, dist1_iJ=1.0, dist1_Ij=1.0, dist2_Ij=1.0, dist2_iJ=1.0
-):
-    """
-    Calculate norms of the ϵ neutrality errors on an approximately neutral surface
-
-    Parameters
-    ----------
-    s, t, p, eos_s_t, wrap :
-        See ntp_ϵ_errors
-
-    dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ : float or ndarray, Default 1.0
-
-        Grid distances [m] in either the 1st or 2nd lateral dimension, and
-        centred at the location specified.  The naming uses a soft notation:
-        the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
-        `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
-        `dist2_iJ[5,3]` is the distance of the face between cells (5,3) and
-        (4,3). Similarly, `dist2_Ij[5,3]` is the distance between cells
-        (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
-        between cells (5,3) and (5,2).
+    rho_c : float, Default None
+        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
 
     Returns
     -------
@@ -90,91 +106,41 @@ def ntp_ϵ_errors_norms(
 
     """
 
+    eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
+
     # Calculate ϵ neutrality errors.  Here, treat all distances = 1.
     # The actual distances will be handled in computing the norms
-    ϵ_iJ, ϵ_Ij = ntp_ϵ_errors(s, t, p, eos_s_t, wrap)
+    ϵ = ntp_ϵ_errors(s, t, p, {"edges": grid["edges"]}, eos_s_t)
 
-    ni, nj = s.shape
-
-    # fmt: off
-    # Expand grid distances.  Soft notation: i = I-1/2; j = J-1/2
-    dist1_iJ = np.broadcast_to(dist1_iJ, (ni, nj))  # Distance [m] in 1st dim centred at (I-1/2, J)
-    dist1_Ij = np.broadcast_to(dist1_Ij, (ni, nj))  # Distance [m] in 1st dim centred at (I, J-1/2)
-    dist2_Ij = np.broadcast_to(dist2_Ij, (ni, nj))  # Distance [m] in 2nd dim centred at (I, J-1/2)
-    dist2_iJ = np.broadcast_to(dist2_iJ, (ni, nj))  # Distance [m] in 2nd dim centred at (I-1/2, J)
-    AREA_iJ = dist1_iJ * dist2_iJ  # Area [m^2] centred at (I-1/2, J)
-    AREA_Ij = dist1_Ij * dist2_Ij  # Area [m^2] centred at (I, J-1/2)
+    area = grid["dist"] * grid["distperp"]  # Area [m^2] centred on edges
 
     # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
-    # Here, weights are AREA_iJ and AREA_Ij.
-    # But also need to divide epsilon by grid distances dist1_iJ and dist2_Ij.
+    # Here, weights are `area`.
+    # But also need to divide epsilon by grid distances `dist`.
     # Thus, the numerator of L2 norm needs to multiply epsilon^2 by
-    #     AREA_iJ ./ dist1_iJ.^2 = dist2_iJ ./ dist1_iJ ,
-    # and AREA_Ij ./ dist2_Ij.^2 = dist1_Ij ./ dist2_Ij .
+    #     area / dist^2 = distperp / dist,
     ϵ_RMS = np.sqrt(
-        (np.nansum(dist2_iJ / dist1_iJ * ϵ_iJ ** 2) + np.nansum(dist1_Ij / dist2_Ij * ϵ_Ij ** 2)) /
-        (   np.sum(AREA_iJ * np.isfinite(ϵ_iJ))     +    np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
+        np.nansum(grid["distperp"] / grid["dist"] * ϵ**2)
+        / np.sum(area * np.isfinite(ϵ))
     )
 
-
     # L1 norm of vector [a_i], weighted by vector [w_i], is sum( w_i * |a_i| ) / sum( w_i )
-    # Here, weights are AREA_iJ and AREA_Ij.
-    # But also need to divide epsilon by grid distances dist1_iJ and dist2_Ij.
+    # Here, weights are `area`.
+    # But also need to divide epsilon by grid distances `dist`.
     # Thus, the numerator of L1 norm needs to multiply epsilon by
-    #     AREA_iJ ./ dist1_iJ = dist2_iJ ,
-    # and AREA_Ij ./ dist2_Ij = dist1_Ij .
-    ϵ_MAV = (
-        (np.nansum(dist2_iJ        * abs(ϵ_iJ)) + np.nansum(dist1_Ij         * abs(ϵ_Ij)))
-        / ( np.sum(AREA_iJ * np.isfinite(ϵ_iJ)) +     np.sum(AREA_Ij * np.isfinite(ϵ_Ij)))
-       )
-    # fmt: on
+    #     area ./ dist = distperp ,
+    ϵ_MAV = np.nansum(grid["distperp"] * abs(ϵ)) / np.sum(
+        area * np.isfinite(ϵ)
+    )
 
     return ϵ_RMS, ϵ_MAV
 
 
-def _ntp_ϵ_error1(s, t, p, eos_s_t, wrap, shift, dist=1.0):
-    # Calculate neutrality error on a surface in one direction.
-
-    sa, ta, pa = (avg(x, shift, wrap) for x in (s, t, p))
-    ds, dt = (dif(x, shift, wrap) for x in (s, t))
-    rsa, rta = eos_s_t(sa, ta, pa)
-    ϵ = rsa * ds + rta * dt
-    if dist is not float or dist != 1.0:
-        ϵ = ϵ / dist
-    return ϵ
+@nb.njit
+def avg1(a, b):
+    return (a + b) * 0.5
 
 
-def im1(F, wrap, fill=np.nan):  # G[i,j] == F[i-1,j]
-    G = np.roll(F, 1, axis=0)
-    if not wrap[0]:
-        G[0, :] = fill
-    return G
-
-
-def ip1(F, wrap, fill=np.nan):  # G[i,j] == F[i+1,j]
-    G = np.roll(F, -1, axis=0)
-    if not wrap[0]:
-        G[-1, :] = fill
-    return G
-
-
-def jm1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j-1]
-    G = np.roll(F, 1, axis=1)
-    if not wrap[1]:
-        G[:, 0] = fill
-    return G
-
-
-def jp1(F, wrap, fill=np.nan):  # G[i,j] == F[i,j+1]
-    G = np.roll(F, -1, axis=1)
-    if not wrap[1]:
-        G[:, -1] = fill
-    return G
-
-
-def avg(F, shift, wrap):
-    return (F + shift(F, wrap)) * 0.5
-
-
-def dif(F, shift, wrap):
-    return F - shift(F, wrap)
+@nb.njit
+def dif1(a, b):
+    return a - b

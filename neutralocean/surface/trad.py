@@ -11,10 +11,9 @@ from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.ppinterp import ppval1_two, select_ppc
 from neutralocean.ntp import ntp_ϵ_errors_norms
 from neutralocean.lib import (
-    _xr_in,
+    _xrs_in,
     _xr_out,
     _process_pin_cast,
-    _process_wrap,
     _process_casts,
     _process_n_good,
     _process_eos,
@@ -114,18 +113,39 @@ def potential_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap : tuple of bool, or tuple of str
+    grid : dict
+        Containing the following:
 
-        Specifies which dimensions are periodic.
+        edges : tuple of length 2
+            Each element is an array of int of length E, where E is the number of
+            edges in the grid's graph, i.e. the number of pairs of adjacent water
+            columns (including land) in the grid.
+            If `edges = (a, b)`, the nodes (water columns) whose linear indices are
+            `a[i]` and `b[i]` are adjacent.
+            Required if `diags` is True
 
-        As a tuple of bool, this must be length two.  The first or second
-        non-vertical dimension of `S` and `T` is periodic iff ``wrap[0]`` or
-        ``wrap[1]`` is True, respectively.
+        dist : 1d array
+            Horizontal distance between adjacent water columns (nodes).
+            `dist[i]` is the distance between nodes whose linear indices are
+            `edges[0][i]` and `edges[1][i]`.
+            If absent, a value of 1.0 is assumed for all edges.
 
-        As a tuple of str, simply name the periodic dimensions of `S` and
-        `T`.
+        distperp : 1d array
+            Horizontal distance of the face between adjacent water columns (nodes).
+            `distperp[i]` is the distance of the interface between nodes whose
+            linear indices are `edges[0][i]` and `edges[1][i]`.
+            If absent, a value of 1.0 is assumed for all edges.
 
-        Required if `diags` is True
+        For a rectilinear grid (e.g. latitude-longitude), use
+            `neutralocean.grid.rectilinear.build_grid`
+
+        For a tiled rectilinear grid, such as works with XGCM, use
+            `neutralocean.grid.xgcm.build_grid`
+
+        For a general grid given as a graph, use
+            `neutralocean.grid.graph.build_grid`
+
+        Also see the examples in `neutralocean.examples`.
 
     vert_dim : int or str, Default -1
 
@@ -139,18 +159,6 @@ def potential_surf(S, T, P, **kwargs):
         naming the vertical dimension of `S` and `T`.
 
         Ideally, `vert_dim` is -1.  See `Notes`.
-
-    dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ : float or ndarray, Default 1.0
-
-        Grid distances [m] in either the 1st or 2nd lateral dimension, and
-        centred at the location specified.  The naming uses a soft notation:
-        the central grid point is(I,J), and i = I-1/2 and j = J-1/2.  Thus,
-        `dist1_iJ[5,3]` is the distance between cells (5,3) and (4,3), while
-        `dist2_iJ[5,3]` is the distance of the face between cells (5,3) and
-        (4,3). Similarly, `dist2_Ij[5,3]` is the distance between cells
-        (5,3) and (5,2), while `dist1_Ij[5,3]` is the distance of the face
-        between cells (5,3) and (5,2).
-
 
     eos : str or function or tuple of functions, Default 'gsw'
 
@@ -295,8 +303,7 @@ def anomaly_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    wrap, vert_dim, dist1_iJ, dist1_Ij, dist2_Ij, dist2_iJ, eos, grav, rho_c,
-    interp, n_good, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, eos, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
         See `potential_surf`
 
     Examples
@@ -345,13 +352,9 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     eos = kwargs.get("eos", "gsw")
     rho_c = kwargs.get("rho_c")
     grav = kwargs.get("grav")
-    wrap = kwargs.get("wrap")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
-    geom = (
-        kwargs.get(x, 1.0) for x in ("dist1_iJ", "dist1_Ij", "dist2_Ij", "dist2_iJ")
-    )
-
+    grid = kwargs.get("grid")
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
@@ -359,18 +362,17 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     ppc_fn = select_ppc(interp, "1")
 
     # Process arguments
-    sxr, txr, pxr = (_xr_in(X, vert_dim) for X in (S, T, P))  # before _process_casts
+    sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
-    wrap = _process_wrap(wrap, sxr, diags)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
-
-    ni, nj = n_good.shape
+    if diags and not (isinstance(grid, dict) and "edges" in grid):
+        raise ValueError("grid['edges'] must be provided when diags is True")
 
     # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
     # selection to (ref, isoval) pair
-    _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj)
+    _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S)
     ref, isoval = _choose_ref_isoval(
         ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
     )
@@ -392,7 +394,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     d = dict()
     if diags:
         d["timer"] = time() - timer
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, eos_s_t, wrap, *geom)
+        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
         d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
 
         n_wet = np.sum(np.isfinite(p))
@@ -412,7 +414,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     return s, t, p, d
 
 
-def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
+def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     """Error checking on ref / isoval / pin_cast / pin_p combinations for "potential"
     and "anomaly" surfaces
     """
@@ -447,24 +449,12 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
 
     # Error checking on pin_cast.  Let dict inputs (for xarray) pass through fine...
     if not isinstance(pin_cast, (type(None), dict)):
-        if (
-            isinstance(pin_cast, (tuple, list))
-            and len(pin_cast) == 2
-            and all(isinstance(x, int) for x in pin_cast)
-        ):
-            if (
-                pin_cast[0] < 0
-                or pin_cast[1] < 0
-                or pin_cast[0] >= ni
-                or pin_cast[1] >= nj
-            ):
-                raise ValueError(
-                    '"pin_cast" must index a cast within the domain; '
-                    f'found "pin_cast" = {pin_cast} outside the bounds (0,{ni-1}) x (0,{nj-1})'
-                )
-        else:
-            raise TypeError(
-                'If provided, "pin_cast" must be a tuple or list of 2 integers'
+        try:
+            S[pin_cast]
+        except:
+            raise ValueError(
+                'If provided, "pin_cast" must be able to index all but the'
+                " vertical dimension of S"
             )
 
     # Error checking on pin_p
@@ -472,7 +462,9 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, ni, nj):
         raise TypeError('If provided, "pin_p" must be a float')
 
 
-def _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn):
+def _choose_ref_isoval(
+    ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
+):
     # Handle the three valid calls in the following order of precedence:
     # >>> _traditional_surf(ans_type, S, T, P, ref, isoval)
     # >>> _traditional_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
