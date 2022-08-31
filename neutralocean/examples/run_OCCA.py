@@ -257,7 +257,7 @@ s, t, z, d = omega_surf(
 print(f"RMS of ϵ is {ϵ_RMS : 4e} [kg m-4])")
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
-ϵ = ntp_ϵ_errors(s, t, z, eos_s_t, grid)
+ϵ = ntp_ϵ_errors(s, t, z, grid, eos_s_t)
 
 # Convert ϵ above into two 2D maps, one for zonal ϵ errors and one for meridional ϵ errors
 ϵx, ϵy = edgedata_to_maps(ϵ, (ni, nj), (True, False))
