@@ -2,32 +2,35 @@
 import functools as ft
 import numba as nb
 
-from .jmd95 import rho as rho_jmd95
-from .jmd95 import rho_s_t as rho_s_t_jmd95
-from .jmd95 import rho_p as rho_p_jmd95
-
-from .jmdfwg06 import rho as rho_jmdfwg06
-from .jmdfwg06 import rho_s_t as rho_s_t_jmdfwg06
-from .jmdfwg06 import rho_p as rho_p_jmdfwg06
-
-from .gsw import rho as rho_gsw
-from .gsw import rho_s_t as rho_s_t_gsw
-from .gsw import rho_p as rho_p_gsw
+# List of modules in the same directory as this file, each of which must have
+# the following numba.njit'ed functions:  rho, rho_s_t, rho_p.
+modules = ("gsw", "jmd95", "jmdfwg06")
 
 
-def _make_eos(eos, eos_dict, grav=None, rho_c=None, num_p_derivs=0):
-    if isinstance(eos, str) and eos in eos_dict:
-        eos = eos_dict[eos]
+def _make_eos(eos, fcn_name, num_p_derivs=0, grav=None, rho_c=None):
+    if isinstance(eos, str):
+        if eos in modules:
+            fn = __import__(
+                "." + eos, globals(), locals(), [fcn_name], 1
+            ).__getattribute__(fcn_name)
+        else:
+            raise ValueError(
+                f"Equation of state {eos} not (yet) implemented."
+                " Currently, eos must be one of " + modules.__str__()
+            )
 
-        if grav != None and rho_c != None:
-            eos = make_bsq(eos, grav, rho_c, num_p_derivs)
+    elif callable(eos):
+        fn = eos
 
-    if not callable(eos):
+    else:
         raise TypeError(
-            f'First input must be a function, "gsw", "jmd95", or "jmdfwg06"; found {eos}'
+            f"Since eos was not a string, eos must be a callalbe function; found {eos}"
         )
 
-    return eos
+    if grav != None and rho_c != None:
+        fn = make_bsq(fn, grav, rho_c, num_p_derivs)
+
+    return fn
 
 
 def make_eos(eos, grav=None, rho_c=None):
@@ -70,8 +73,8 @@ def make_eos(eos, grav=None, rho_c=None):
        Journal of Atmospheric and Oceanic Technology, 23(12), 1709–1728.
        https://doi.org/10.1175/JTECH1946.1
     """
-    eos_dict = {"jmd95": rho_jmd95, "jmdfwg06": rho_jmdfwg06, "gsw": rho_gsw}
-    return _make_eos(eos, eos_dict, grav, rho_c)
+
+    return _make_eos(eos, "rho", 0, grav, rho_c)
 
 
 def make_eos_s_t(eos, grav=None, rho_c=None):
@@ -91,12 +94,8 @@ def make_eos_s_t(eos, grav=None, rho_c=None):
         potential / Conservative temperature) of the desired equation of
         state.
     """
-    eos_dict = {
-        "jmd95": rho_s_t_jmd95,
-        "jmdfwg06": rho_s_t_jmdfwg06,
-        "gsw": rho_s_t_gsw,
-    }
-    return _make_eos(eos, eos_dict, grav, rho_c)
+
+    return _make_eos(eos, "rho_s_t", 0, grav, rho_c)
 
 
 def make_eos_p(eos, grav=None, rho_c=None):
@@ -114,12 +113,8 @@ def make_eos_p(eos, grav=None, rho_c=None):
         Function returning the partial derivative with respect to the third
         argument (pressure) of the desired equation of state.
     """
-    eos_dict = {
-        "jmd95": rho_p_jmd95,
-        "jmdfwg06": rho_p_jmdfwg06,
-        "gsw": rho_p_gsw,
-    }
-    return _make_eos(eos, eos_dict, grav, rho_c, 1)
+
+    return _make_eos(eos, "rho_p", 1, grav, rho_c)
 
 
 @ft.lru_cache(maxsize=10)
