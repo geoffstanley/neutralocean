@@ -298,7 +298,7 @@ def omega_surf(S, T, P, grid, **kwargs):
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
-        TOL_LRPD_MAV = TOL_LRPD_MAV * 1000.0**2
+        TOL_LRPD_MAV = TOL_LRPD_MAV / 1000.0**2
 
     # Pre-allocate arrays for diagnostics
     if diags:
