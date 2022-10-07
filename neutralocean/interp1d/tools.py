@@ -226,7 +226,7 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
                         (f4, f4[:], f4[:], f4[:], f4[:], f4[:], f4[:], f4[:]),
                         (f8, f8[:], f8[:], f8[:], f8[:], f8[:], f8[:], f8[:]),
                     ],
-                    "(),(n),(n),(n)->(),()",
+                    "(),(n),(n),(n)->(),(),(),()",
                     nopython=True,
                 )
                 def fcn(x, X, Y, Z, yf, zf, yg, zg):
