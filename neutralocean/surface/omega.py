@@ -664,7 +664,7 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     # Build the rows, columns, and values of the sparse matrix
     r = np.concatenate((a, b, np.arange(N)))
     c = np.concatenate((b, a, np.arange(N)))
-    v = np.concatenate((np.tile(-fac, 2), diag))  # negative Laplacian
+    v = np.concatenate((-fac, -fac, diag))  # negative Laplacian
 
     # Build the (negative) Laplacian sparse matrix with N rows and N columns
     L = csc_matrix((v, (r, c)), shape=(N, N))
