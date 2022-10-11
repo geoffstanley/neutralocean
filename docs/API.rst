@@ -2,35 +2,34 @@ Public Function Reference
 =========================
 
 
-Calculating approximately neutral surfaces
-------------------------------------------
-
 Potential density surfaces
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------
 .. autofunction:: neutralocean.surface.trad.potential_surf
 
 In-situ density / specific volume anomaly surfaces
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------------------
 .. autofunction:: neutralocean.surface.trad.anomaly_surf
 
 Omega surfaces
-~~~~~~~~~~~~~~
+--------------
 .. autofunction:: neutralocean.surface.omega.omega_surf
 
+Neutrality Error
+----------------
+.. autofunction:: neutralocean.ntp.ntp_epsilon_errors
 
-Calculating other neutral things
---------------------------------
+.. autofunction:: neutralocean.ntp.ntp_epsilon_errors_norms
 
-Neutral Tangent Plane
-~~~~~~~~~~~~~~~~~~~~~
+Neutral Tangent Plane - Bottle to Cast
+--------------------------------------
 .. autofunction:: neutralocean.traj.ntp_bottle_to_cast
 
 Neutral Trajectory
-~~~~~~~~~~~~~~~~~~
+------------------
 .. autofunction:: neutralocean.traj.neutral_trajectory
 
 Veronis Density
-~~~~~~~~~~~~~~~
+---------------
 .. autofunction:: neutralocean.label.veronis_density
 
 Choosing the Equation Of State
@@ -85,7 +84,7 @@ TEOS-10 GSW Equation of State
 -----------------------------
 
 rho
----
+~~~
 .. autofunction:: neutralocean.eos.gsw.rho
 
 rho_s_t
@@ -97,16 +96,16 @@ rho_p
 .. autofunction:: neutralocean.eos.gsw.rho_p
 
 
-Vertical Interpolation on the fly
----------------------------------
+Vertical Interpolation: on the fly
+----------------------------------
 
 make_interpolator
 ~~~~~~~~~~~~~~~~~
 .. autofunction:: neutralocean.interp1d.make_interpolator
 
 
-Vertical Interpolation with Piecewise Polynomial (PP) coefficients
-------------------------------------------------------------------
+Vertical Interpolation: Piecewise Polynomial (PP) coefficients
+--------------------------------------------------------------
 
 linear_coeffs
 ~~~~~~~~~~~~~

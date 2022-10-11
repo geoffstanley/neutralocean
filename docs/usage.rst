@@ -4,20 +4,31 @@ Usage
 Installation
 ------------
 
-Install using pip,
+Simply execute either
 
 .. code-block:: console
 
-    $ pip install neutralocean
+	$ pip install neutralocean
 
-At the moment, it seems numba does not work with python3.10, and numpy 1.22 does not work with numba.vectorize right now. How annoying.  So if the above doesn't work, try manually installing the dependencies as follows.  First install numpy 1.21 to get a slightly older version of Python, then pull in the others::
+if you use pip, or
 
-	$ conda install -c conda-forge numpy==1.21 numba
-	$ conda install -c conda-forge xarray scipy scikit-sparse gsw pooch
+.. code-block:: console
 
-We're installing everything from conda-forge since that's where we must get `gsw`, and I find it's better (in terms of resolving the environment) to have everything or nothing from conda-forge.
+	$ conda install -c conda-forge neutralocean
 
+if you use conda.
 
 Getting Started
 ---------------
-Have a look at the script in `run_OCCA.py` in `neutralocean/examples/`
+Try running the example script (changing the initial path as needed):
+
+.. code-block:: console
+
+	python /path/to/neutralocean/neutralocean/examples/run_example_4casts.py
+
+If you use miniconda, that might be in ``~/miniconda3/envs/<YOUR-ENVIRONMENT-NAME>/lib/python<VERSION-NUMBER>/site-packages/neutralocean/``.  You can also find this script `online <https://github.com/geoffstanley/neutralocean/blob/main/neutralocean/examples/run_example_4casts.py>`_.
+If that runs, we're in business.  
+
+Look at that example script, ``run_example_4casts.py``, to learn the basic usage of ``neutralocean``.
+
+Then try running the ``run_OCCA.py`` script in the same folder.  Take a look at that code: it's documented and will walk you through loading an ocean model dataset, selecting an equation of state, calculating various approximately neutral surfaces, and more. 

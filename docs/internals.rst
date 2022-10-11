@@ -44,27 +44,17 @@ ppinterp
 .. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs_1
 
 Root finding in 1D
-------------------
+~~~~~~~~~~~~~~~~~~
 
-brent_guess
-~~~~~~~~~~~
 .. autofunction:: neutralocean.fzero.brent_guess
 
-brent
-~~~~~
 .. autofunction:: neutralocean.fzero.brent
 
-guess_to_bounds
-~~~~~~~~~~~~~~~
 .. autofunction:: neutralocean.fzero.guess_to_bounds
 
 Library functions
------------------
+~~~~~~~~~~~~~~~~~
 
-find_first_nan
-~~~~~~~~~~~~~~
 .. autofunction:: neutralocean.lib.find_first_nan
 
-val_bot
-~~~~~~~
 .. autofunction:: neutralocean.lib.val_bot
