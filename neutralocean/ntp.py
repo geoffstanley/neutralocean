@@ -143,4 +143,4 @@ def avg1(a, b):
 
 @nb.njit
 def dif1(a, b):
-    return a - b
+    return b - a

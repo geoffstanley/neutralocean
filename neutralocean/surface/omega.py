@@ -579,7 +579,7 @@ def _omega_matsolve_gradient(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t):
     r = np.concatenate((np.tile(np.arange(E), 2), [E]))
 
     # When distratio = 1, v is [1, 1, ..., 1, -1, -1, ..., -1, 1e-2]
-    v = np.concatenate((fac, -fac, [1e-2]))
+    v = np.concatenate((-fac, fac, [1e-2]))
 
     mat = csc_matrix((v, (r, c)), shape=(E + 1, N))
 
@@ -660,8 +660,10 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     # less near boundaries of the connected component.
     diag = aggsum(fac, a, N) + aggsum(fac, b, N)
 
-    # Divergence of ϵ -- for the connected component only
-    D = aggsum(e, b, N) - aggsum(e, a, N)
+    # Divergence of ϵ:  D = ∑_{n ∈ N(m)} ε_{mn}.
+    # Note, ϵ = ϵ_{ab} = rs * (sb - sa) + rt * (tb - ta).
+    # For the connected component only.
+    D = aggsum(e, a, N) - aggsum(e, b, N)
 
     # Build the rows, columns, and values of the sparse matrix
     r = np.concatenate((a, b, np.arange(N)))
