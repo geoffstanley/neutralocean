@@ -16,9 +16,9 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
     ----------
     interpolant : str, Default "linear"
 
-        If "linear", build a function for linear interpolation.
-        If "pchip", build a function for Piecewise Cubic Hermite Interpolating
-            Polynomial interpolation.
+        - If "linear", build a function for linear interpolation.
+        - If "pchip", build a function for Piecewise Cubic Hermite Interpolating
+          Polynomial interpolation.
 
     deriv : int or tuple of int, Default 0
 
@@ -32,41 +32,44 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
 
     kind : str, Default "u"
 
-        If "1", a 'numba.njit'ed function is returned that does 1 interpolation.
-        The function's inputs are (see `_interp_1`)
+        - If "1", a 'numba.njit'ed function is returned that does 1 interpolation.
+          The function's inputs are (see `_interp_1`)
+
             - x : float
             - X : ndarray(float, 1d)
             - Y : ndarray(float, 1d)
             - Z : ndarray(float, 1d) -- only if `two` is True.
 
-        If "n", a 'numba.njit'ed function is returned that does many
-        interpolations of dependent data to a single evaluation site on a single
-        independent data array.  The function's inputs are (see `_interp_n`)
+        - If "n", a 'numba.njit'ed function is returned that does many
+          interpolations of dependent data to a single evaluation site on a single
+          independent data array.  The function's inputs are (see `_interp_n`)
+
             - x : float
             - X : ndarray(float, 1d)
             - Y : ndarray(float, nd)
             - Z : ndarray(float, nd) -- only if `two` is True; must have Z.shape == Y.shape
 
-        If "u", a universal function is returned, whose inputs can be
-        multidimensional numpy arrays, so long as they are appropriately
-        broadcastable.  The function's inputs are
+        - If "u", a universal function is returned, whose inputs can be
+          multidimensional numpy arrays, so long as they are appropriately
+          broadcastable.  The function's inputs are
+
             - x : ndarray(float, (n-1)d)
             - X : ndarray(float, nd)
             - Y : ndarray(float, nd)
             - Z : ndarray(float, nd) -- only if `two` is True.
 
-        If all dimensions are full, then the dimensions of `x`  match those of
-        `X` less its last dimension, and all of `X`, `Y`, `Z` have the same
-        dimension.
-        However, these inputs dimensions can be a subset of their "full"
-        dimensions above.  E.g. `X` can be a 1D array of length equal to the
-        size of the last dimension of `Y`.
-        This is achieved via `numba.guvectorize`ing the relevant `_interp_1_*`
-        function.
-        Most users will want this "u" option, as it can do everything the "1" or
-        "n" options can do.  The exception is when a `@numba.njit` function is
-        explicitly needed, such as when this is called inside another
-        `@numba.njit` function.
+          If all dimensions are full, then the dimensions of `x`  match those of
+          `X` less its last dimension, and all of `X`, `Y`, `Z` have the same
+          dimension.
+          However, these inputs dimensions can be a subset of their "full"
+          dimensions above.  E.g. `X` can be a 1D array of length equal to the
+          size of the last dimension of `Y`.
+          This is achieved via `numba.guvectorize`ing the relevant `_interp_1_*`
+          function.
+          Most users will want this "u" option, as it can do everything the "1" or
+          "n" options can do.  The exception is when a `@numba.njit` function is
+          explicitly needed, such as when this is called inside another
+          `@numba.njit` function.
 
     two : bool, Default False
 
@@ -83,14 +86,19 @@ def make_interpolator(interpolant="linear", deriv=0, kind="u", two=False):
             - `x`, the evaluation site,
             - `X`, the independent data, and
             - `Y`, the dependent data
+
         or a fourth input when `two` is True,
             - `Z`, another set of dependent data
+
         This function's output is determined by the inputs `deriv` and `two`.
+        
         For example, with `deriv` = 0 and `two` = False, the output is
             - `y`, the interpolant of `Y` as a function of `X` evaluated at `x`.
+
         If `deriv` = 1 and `two` = True, then the outputs are
             - `y`, the 1st derivative for `Y` as a function of `X` evaluated at `x`,
             - `z`, the 1st derivative for `Z` as a function of `X` evaluated at `x`.
+
         If `deriv` = (0,1) and `two` = True, then the function's output is
             - `y0`, the interpolant of `Y` as a function of `X` evaluated at `x`,
             - `z0`, the interpolant of `Z` as a function of `X` evaluated at `x`,

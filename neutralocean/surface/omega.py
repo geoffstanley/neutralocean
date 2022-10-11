@@ -35,6 +35,7 @@ def omega_surf(S, T, P, grid, **kwargs):
     Parameters
     ----------
     S, T, P : ndarray or xarray.DataArray
+
         See `potential_surf`
 
     p_init : ndarray, Default None
@@ -66,6 +67,7 @@ def omega_surf(S, T, P, grid, **kwargs):
         See Examples section.
 
     pin_p, pin_cast :
+
         See `potential_surf`
 
     Returns
@@ -200,10 +202,10 @@ def omega_surf(S, T, P, grid, **kwargs):
 
     OMEGA_FORMULATION : str, Default 'poisson'
 
-        Specify how the matrix problem is set up and solved.  Options are:
-        - 'poisson', to solve the Poisson problem as in [1]_ with Cholesky, or
-        - 'gradient', to solve the overdetermined gradient equations as in [2]_
-            using LSQR.
+        Specify how the matrix problem is set up and solved.  Options are
+            - 'poisson', to solve the Poisson problem as in [1]_ with Cholesky, or
+            - 'gradient', to solve the overdetermined gradient equations as in [2]_
+              using LSQR.
 
     Examples
     --------
@@ -232,11 +234,11 @@ def omega_surf(S, T, P, grid, **kwargs):
     See `potential_surf` Notes.
 
     .. [1] Stanley, McDougall, Barker 2021, Algorithmic improvements to finding
-     approximately neutral surfaces, Journal of Advances in Earth System
-     Modelling, 13(5).
+       approximately neutral surfaces, Journal of Advances in Earth System
+       Modelling, 13(5).
 
     .. [2] Klocker, McDougall, Jackett 2009, A new method of forming approximately
-     neutral surfaces, Ocean Science, 5, 155-172.
+       neutral surfaces, Ocean Science, 5, 155-172.
     """
 
     ref = kwargs.get("ref")

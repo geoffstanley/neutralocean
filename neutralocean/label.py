@@ -114,11 +114,11 @@ def veronis_density(
     varying salinity and potential temperature.
 
     .. [1] Veronis, G. (1972). On properties of seawater defined by temperature,
-    salinity, and pressure. Journal of Marine Research, 30(2), 227.
+       salinity, and pressure. Journal of Marine Research, 30(2), 227.
 
     .. [2] Stanley, McDougall, Barker 2021, Algorithmic improvements to finding
-     approximately neutral surfaces, Journal of Advances in Earth System
-     Modelling, 13(5).
+       approximately neutral surfaces, Journal of Advances in Earth System
+       Modelling, 13(5).
     """
 
     # assert(all(size(T) == size(S)), 'T must be same size as S')

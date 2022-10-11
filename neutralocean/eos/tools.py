@@ -128,18 +128,22 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
         this is the equation of state, returning the density or specific volume.
         However, it can also be a function for partial derivative(s) of the
         equation of state with respect to salinity, temperature, or pressure.
+
     grav : float
         Gravitational acceleration [m s-2]
+
     rho_c : float
         Boussinesq reference density [kg m-3]
+
     num_p_derivs : int, Default 0
         Number of `p` partial derivatives that relate `fn` to the equation of
         state.  For example,
+
         - if `fn` is the equation of state, or its partial derivative (of
-        any order) with respect to salinity or temperature, pass 0.
+          any order, with respect to salinity or temperature, pass 0.
         - if `fn` is the partial derivative of the equation of state with
           respect to pressure, pass 1.
-        - if `fn is the second partial derivative of the equation of state
+        - if `fn` is the second partial derivative of the equation of state
           with respect to salinity and pressure (i.e. ∂²ρ/∂S∂p), pass 1.
 
     Returns
