@@ -9,7 +9,7 @@ from time import time
 
 from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.ppinterp import ppval1_two, select_ppc
-from neutralocean.ntp import ntp_ϵ_errors_norms
+from neutralocean.ntp import ntp_epsilon_errors_norms
 from neutralocean.lib import (
     _xrs_in,
     _xr_out,
@@ -83,15 +83,15 @@ def potential_surf(S, T, P, **kwargs):
 
         Diagnostics.
 
-        ``"ϵ_MAV"`` : float
+        ``"e_MAV"`` : float
 
             Mean Absolute Value of the ϵ neutrality error on the surface,
             area-weighted.  Units are those of `eos` return values divided by
             those of `dist*` inputs.
 
-        ``"ϵ_RMS"`` : float
+        ``"e_RMS"`` : float
 
-            As ``"ϵ_MAV"`` but for the Root Mean Square.
+            As ``"e_MAV"`` but for the Root Mean Square.
 
         ``"n_wet"``: float
 
@@ -394,8 +394,8 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     d = dict()
     if diags:
         d["timer"] = time() - timer
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
-        d["ϵ_RMS"], d["ϵ_MAV"] = ϵ_RMS, ϵ_MAV
+        e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t)
+        d["e_RMS"], d["e_MAV"] = e_RMS, e_MAV
 
         n_wet = np.sum(np.isfinite(p))
         d["n_wet"] = n_wet
@@ -403,7 +403,7 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
             print(
                 f"{ans_type} done"
                 f" | {n_wet:11d} wet casts"
-                f" | RMS(ϵ) = {ϵ_RMS:.8e}",
+                f" | RMS(ϵ) = {e_RMS:.8e}",
                 f" | {d['timer']:.3f} sec",
             )
 

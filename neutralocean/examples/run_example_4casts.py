@@ -4,7 +4,7 @@ import numpy as np
 
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.eos import make_eos_s_t
-from neutralocean.ntp import ntp_ϵ_errors
+from neutralocean.ntp import ntp_epsilon_errors
 
 # In[Create an ocean of 4 water columns]
 
@@ -88,7 +88,7 @@ s, t, p, d = potential_surf(
 print(
     f" ** The potential density surface (referenced to {d['ref']}dbar)"
     f" with isovalue = {d['isoval']}kg m-3"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4."
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4."
 )
 
 # In-situ density anomaly, with given reference salinity and potential temperature values
@@ -105,7 +105,7 @@ s, t, p, d = anomaly_surf(
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" with isovalue = {d['isoval']}kg m-3"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4."
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4."
 )
 
 
@@ -116,15 +116,15 @@ print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to 1500 dbar)"
     f" intersecting the cast labelled '0' at pressure 1500 bar"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS'][-1]} kg m-4."
+    f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4."
 )
 
 # Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
 eos_s_t = make_eos_s_t("gsw")
-ϵ = ntp_ϵ_errors(s, t, p, grid, eos_s_t)
+e = ntp_epsilon_errors(s, t, p, grid, eos_s_t)
 print("The ϵ neutrality errors on the ω-surface are as follows:")
 for i in range(len(a)):
-    print(f"  From cast {a[i]} to cast {b[i]}, ϵ = {ϵ[i]} kg m^-4")
+    print(f"  From cast {a[i]} to cast {b[i]}, ϵ = {e[i]} kg m^-4")
 print(
     "Note that the connection between casts 2 and 3 has virtually 0 neutrality "
     "error.  This is because cast 3 is ONLY connected to cast 2, so this link "

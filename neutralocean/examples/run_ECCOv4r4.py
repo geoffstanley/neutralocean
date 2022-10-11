@@ -10,7 +10,7 @@ from neutralocean.eos import make_eos, make_eos_s_t
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 
 from neutralocean.grid.xgcm import build_grid, edgedata_to_maps
-from neutralocean.ntp import ntp_ϵ_errors
+from neutralocean.ntp import ntp_epsilon_errors
 
 # %% Load data
 
@@ -155,8 +155,8 @@ s, t, z, d = omega_surf(
 )
 
 # Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
-ϵ = ntp_ϵ_errors(s, t, z, grid, eos_s_t)
+e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert the 1D array of ϵ values into two maps of ϵ neutrality errors, one
 # for the errors in each of the two lateral ('i' and 'j') dimensions.
-ϵi, ϵj = edgedata_to_maps(ϵ, n, face_connections, dims, xsh, ysh)
+ei, ej = edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)

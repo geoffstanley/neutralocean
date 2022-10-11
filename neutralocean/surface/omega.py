@@ -11,7 +11,7 @@ from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
 from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
 from neutralocean.grid.graph import edges_to_graph
-from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
+from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.lib import (
     xr_to_np,
     _xrs_in,
@@ -84,15 +84,15 @@ def omega_surf(S, T, P, grid, **kwargs):
         others give information about what the `i`'th iteration did (and hence
         their 0'th elements are irrelevant).
 
-        ``"ϵ_MAV"`` : array of float
+        ``"e_MAV"`` : array of float
 
             Mean Absolute Value of the ϵ neutrality error on the surface,
             area-weighted.  Units are those of `eos` return values divided by
             those of `dist*` inputs.
 
-        ``"ϵ_RMS"`` : array of float
+        ``"e_RMS"`` : array of float
 
-            As ``"ϵ_MAV"`` but for the Root Mean Square.
+            As ``"e_MAV"`` but for the Root Mean Square.
 
         ``"n_wet"``: array of float
 
@@ -305,8 +305,8 @@ def omega_surf(S, T, P, grid, **kwargs):
     # Pre-allocate arrays for diagnostics
     if diags:
         d = {
-            "ϵ_MAV": np.zeros(ITER_MAX + 1, dtype=np.float64),
-            "ϵ_RMS": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "e_MAV": np.zeros(ITER_MAX + 1, dtype=np.float64),
+            "e_RMS": np.zeros(ITER_MAX + 1, dtype=np.float64),
             "timer": np.zeros(ITER_MAX + 1, dtype=np.float64),
             "ϕ_MAV": np.zeros(ITER_MAX + 1, dtype=np.float64),
             "Δp_MAV": np.zeros(ITER_MAX + 1, dtype=np.float64),
@@ -383,8 +383,8 @@ def omega_surf(S, T, P, grid, **kwargs):
     if diags:
         d["timer"][0] = time() - timer
 
-        ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
-        d["ϵ_RMS"][0], d["ϵ_MAV"][0] = ϵ_RMS, ϵ_MAV
+        e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t)
+        d["e_RMS"][0], d["e_MAV"][0] = e_RMS, e_MAV
 
         n_wet = np.sum(np.isfinite(p))
         d["n_wet"][0] = n_wet
@@ -402,7 +402,7 @@ def omega_surf(S, T, P, grid, **kwargs):
                 f"{0:4d} |"
                 f"                                 |"
                 f" {d['n_wet'][0]:11d}         |"
-                f" {ϵ_RMS:.8e} |"
+                f" {e_RMS:.8e} |"
                 f" {d['timer'][0]:.3f}"
             )
 
@@ -493,8 +493,8 @@ def omega_surf(S, T, P, grid, **kwargs):
             d["timer_bfs"][iter_] = timer_bfs
 
             # Diagnostics about the state AFTER this iteration
-            ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, p, grid, eos_s_t)
-            d["ϵ_RMS"][iter_], d["ϵ_MAV"][iter_] = ϵ_RMS, ϵ_MAV
+            e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t)
+            d["e_RMS"][iter_], d["e_MAV"][iter_] = e_RMS, e_MAV
 
             n_wet = np.sum(np.isfinite(p))
             d["n_wet"][iter_] = n_wet
@@ -505,7 +505,7 @@ def omega_surf(S, T, P, grid, **kwargs):
                     f" {ϕ_MAV:.8e} |"
                     f" {Δp_RMS:.8e} |"
                     f" {n_wet:11d} ({n_newly_wet:5}) |"
-                    f" {ϵ_RMS:.8e} |"
+                    f" {e_RMS:.8e} |"
                     f" {d['timer'][iter_]:.3f}"
                 )
 
@@ -518,7 +518,7 @@ def omega_surf(S, T, P, grid, **kwargs):
     if diags:
         # Trim diagnostics
         for k, v in d.items():
-            d[k] = v[0 : iter_ + (k in ("ϵ_MAV", "ϵ_RMS"))]
+            d[k] = v[0 : iter_ + (k in ("e_MAV", "e_RMS"))]
 
     # Reshape (from 1D arrays) and put into DataArrays if appropriate
     s, t, p = (
@@ -561,11 +561,11 @@ def _omega_matsolve_gradient(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t):
         ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
         return ϕ.reshape(p.shape)
 
-    a, b, ϵ, fac, ref = _omega_matsolve_helper(
+    a, b, e, fac, ref = _omega_matsolve_helper(
         s, t, p, edges, sqrtdistratio, m, mref, eos_s_t
     )
 
-    rhs = np.concatenate((-ϵ, [0.0]))  # add 0 for pinning equation
+    rhs = np.concatenate((-e, [0.0]))  # add 0 for pinning equation
 
     # Build columns for matrix, including extra entry for pinning equation.
     # Note m[ref] is the reference cast, so the ref'th entry in the solution
@@ -650,7 +650,7 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
         ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
         return ϕ.reshape(p.shape)
 
-    a, b, ϵ, fac, ref = _omega_matsolve_helper(
+    a, b, e, fac, ref = _omega_matsolve_helper(
         s, t, p, edges, distratio, m, mref, eos_s_t
     )
 
@@ -661,7 +661,7 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     diag = aggsum(fac, a, N) + aggsum(fac, b, N)
 
     # Divergence of ϵ -- for the connected component only
-    D = aggsum(ϵ, b, N) - aggsum(ϵ, a, N)
+    D = aggsum(e, b, N) - aggsum(e, a, N)
 
     # Build the rows, columns, and values of the sparse matrix
     r = np.concatenate((a, b, np.arange(N)))
@@ -715,15 +715,15 @@ def _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t):
     ge = (remap[a] >= 0) & (remap[b] >= 0)  # good edges
     a, b = a[ge], b[ge]
 
-    ϵ = ntp_ϵ_errors(s, t, p, (a, b), eos_s_t)
+    e = ntp_epsilon_errors(s, t, p, (a, b), eos_s_t)
 
     if np.isscalar(distratio):
-        fac = np.full(ϵ.shape, distratio)
+        fac = np.full(e.shape, distratio)
         if distratio != 1.0:
-            ϵ *= fac  # scale ϵ
+            e *= fac  # scale e
     else:
         fac = distratio[ge]
-        ϵ *= fac  # scale ϵ
+        e *= fac  # scale e
 
     # Henceforth we only refer to nodes in the connected component, so remap edges now
     a, b = remap[a], remap[b]
@@ -731,4 +731,4 @@ def _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t):
     # Also remap the index for the reference cast from 2D space to 1D list of wet casts
     ref = remap[mref]
 
-    return a, b, ϵ, fac, ref
+    return a, b, e, fac, ref

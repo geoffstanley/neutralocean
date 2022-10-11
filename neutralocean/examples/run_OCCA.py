@@ -52,7 +52,7 @@ s, t, z, d = potential_surf(
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" with isovalue = {d['isoval']}kg m-3"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
 
 # Provide pin_cast and pin_p: the reference location and depth that the surface intersects
@@ -71,7 +71,7 @@ print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
 
 # Provide just the location to intersect `(pin_cast, pin_p)`.
@@ -94,7 +94,7 @@ print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" intersecting the cast at (180.5 E, 0.5 N) at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
 
 # In[Delta surfaces]
@@ -114,7 +114,7 @@ s, t, z, d = anomaly_surf(
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" with isovalue = {d['isoval']}kg m-3"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
 
 # Provide pin_cast and pin_p: the reference location and depth that the surface intersects
@@ -133,7 +133,7 @@ print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
 
 # Provide just the location to intersect: depth `pin_p` on cast `pin_cast`
@@ -152,7 +152,7 @@ print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS']} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
 
 # In[Omega surfaces]
@@ -175,7 +175,7 @@ print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to {z0}m)"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS'][-1]} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 
 # Initialize omega surface with a (locally referenced) in-situ density anomaly surface.
@@ -202,7 +202,7 @@ print(
     f" ** The omega-surface"
     f" initialized from an in-situ density anomaly surface (referenced locally to cast {(i0,j0)} at {z0}m)"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
-    f" has root-mean-square ϵ neutrality error {d['ϵ_RMS'][-1]} kg m-4"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 
 
@@ -210,7 +210,7 @@ print(
 
 import numpy as np
 from neutralocean.mixed_layer import mixed_layer
-from neutralocean.ntp import ntp_ϵ_errors, ntp_ϵ_errors_norms
+from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.label import veronis_density
 from neutralocean.lib import _process_casts, find_first_nan
 from neutralocean.interp1d import make_interpolator
@@ -253,14 +253,14 @@ s, t, z, d = omega_surf(
 # z[z < z_ml] = np.nan
 
 # In[Neutrality errors on a surface]
-ϵ_RMS, ϵ_MAV = ntp_ϵ_errors_norms(s, t, z, grid, eos_s_t)
-print(f"RMS of ϵ is {ϵ_RMS : 4e} [kg m-4])")
+e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, z, grid, eos_s_t)
+print(f"RMS of ϵ is {e_RMS : 4e} [kg m-4])")
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
-ϵ = ntp_ϵ_errors(s, t, z, grid, eos_s_t)
+e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert ϵ above into two 2D maps, one for zonal ϵ errors and one for meridional ϵ errors
-ϵx, ϵy = edgedata_to_maps(ϵ, (ni, nj), (True, False))
+ex, ey = edgedata_to_maps(e, (ni, nj), (True, False))
 # These can then be mapped...
 
 # In[Neutral Tangent Plane bottle to cast]
