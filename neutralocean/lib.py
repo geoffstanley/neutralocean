@@ -160,23 +160,24 @@ def xr_to_np(S):
     return S
 
 
-def _xr_in(S, drop_dim):
+def _xr_in(S, vert_dim):
     # Prepare xarray container for output: like input S but without dimension
     # labelled `drop_dim`
     if isinstance(S, xr.core.dataarray.DataArray):
-        if drop_dim is None:
+        if vert_dim is None:
             return xr.full_like(S, 0)
-        else:
-            return xr.full_like(S.isel({drop_dim: 0}).drop_vars(drop_dim), 0)
+        elif isinstance(vert_dim, int):
+            vert_dim = S.dims[vert_dim]  # convert to str
+        return xr.full_like(S.isel({vert_dim: 0}).drop_vars(vert_dim), 0)
     else:
         return None
 
 
-def _xrs_in(S, T, P, drop_dim):
+def _xrs_in(S, T, P, vert_dim):
     # Prepare xarray containers for output: like inputs S, T, P but without
-    # the dimension labelled `drop_dim`.  Doing S, T, P together allows for
+    # the dimension labelled `vert_dim`.  Doing S, T, P together allows for
     # pxr to be an xarray even if P is an ndarray -- it just won't have attributes.
-    sxr, txr = (_xr_in(X, drop_dim) for X in (S, T))
+    sxr, txr = (_xr_in(X, vert_dim) for X in (S, T))
 
     if sxr is None:
         pxr = None
