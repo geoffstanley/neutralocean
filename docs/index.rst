@@ -1,34 +1,45 @@
-.. Neutral surfaces documentation master file, created by
-   sphinx-quickstart on Fri Apr  9 11:29:28 2021.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Welcome to neutralocean's documentation!
+========================================
 
-Neutral Ocean 
-=============
+**neutralocean** is a Python library to calculate oceanic neutral surfaces and related things.
 
-Calculate neutral surfaces in the ocean, using Python.
+The major task of this software is to calculate **omega surfaces**, following the algorithm of `Stanley et al. (2021) <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436>`_.  Omega surfaces are highly accurate approximately neutral surfaces that work by iteratively reducing the neutrality error. 
 
-The major task of this software is to calculate omega-surfaces, following the algorithm of `Stanley et al. (2021) <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436>`_.  Omega surfaces are highly accurate approximately neutral surfaces that work by iteratively reducing the neutrality error. 
-
-There are also routines to calculate potential density surfaces, specific volume anomaly surfaces, neutral trajectories, the Veronis density label, and measures of neutrality error.
+There are also routines to calculate 
+potential density surfaces, 
+specific volume anomaly surfaces,
+neutral trajectories, 
+the Veronis density label, and 
+measures of neutrality error.
 
 Topobaric surfaces `(Stanley, 2019a) <https://www.sciencedirect.com/science/article/pii/S1463500318302221>`_ in their modified form `(Stanley 2019b) <https://www.sciencedirect.com/science/article/pii/S1463500318302233>`_ are the most accurate approximately neutral surfaces that posses an exact geostrophic streamfunction (furnishing an Ertel potential vorticity with no baroclinic production term).  Software to compute topobaric surfaces is significantly more complicated and is currently only available in the original MATLAB `neutral-surfaces <https://github.com/geoffstanley/neutral-surfaces>`_ toolbox.
 
+Check out the :doc:`usage` section for further information, including
+how to :ref:`installation` the project.
+
+.. note::
+
+   The documentation is under active development.
+
+
+Contents
+--------
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   Home <self>
    usage
    API
    internals
+   
 
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`
 
 
 References

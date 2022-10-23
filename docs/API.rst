@@ -1,6 +1,8 @@
 Public Function Reference
 =========================
 
+.. autosummary::
+   :toctree: generated
 
 Potential density surfaces
 --------------------------

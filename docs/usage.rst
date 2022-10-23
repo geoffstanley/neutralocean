@@ -1,6 +1,8 @@
 Usage
 =====
 
+.. _installation:
+
 Installation
 ------------
 
@@ -8,13 +10,13 @@ Simply execute either
 
 .. code-block:: console
 
-	$ pip install neutralocean
+	(.venv) $ pip install neutralocean
 
 if you use pip, or
 
 .. code-block:: console
 
-	$ conda install -c conda-forge neutralocean
+	(.venv) $ conda install -c conda-forge neutralocean
 
 if you use conda.
 
