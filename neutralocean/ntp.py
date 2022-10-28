@@ -4,7 +4,6 @@ import numpy as np
 import numba as nb
 
 from neutralocean.lib import xr_to_np
-from neutralocean.grid.graph import graph_binary_fcn
 from neutralocean.eos.tools import make_eos_s_t
 
 
@@ -42,19 +41,17 @@ def ntp_epsilon_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
 
     eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
 
-    s, t, p = (xr_to_np(x) for x in (s, t, p))
+    s, t, p = (np.reshape(xr_to_np(x), -1) for x in (s, t, p))
+    e = _ntp_epsilon_error1(s, t, p, edges[0], edges[1], eos_s_t)
 
-    sa, ta, pa = (graph_binary_fcn(edges, x, avg1) for x in (s, t, p))
-    ds, dt = (graph_binary_fcn(edges, x, dif1) for x in (s, t))
-
-    rsa, rta = eos_s_t(sa, ta, pa)
-    e = rsa * ds + rta * dt
     if dist is not float or dist != 1.0:
         e = e / dist
     return e
 
 
-def ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
+def ntp_epsilon_errors_norms(
+    s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None
+):
     """
     Calculate norms of the epsilon neutrality errors on an approximately neutral surface
 
@@ -144,3 +141,28 @@ def avg1(a, b):
 @nb.njit
 def dif1(a, b):
     return b - a
+
+
+@nb.njit
+def arg1(a, b):
+    return a
+
+
+@nb.njit
+def arg2(a, b):
+    return b
+
+
+@nb.njit
+def _ntp_epsilon_error1(s, t, p, a, b, eos_s_t):
+    e = np.empty(len(a), dtype=s.dtype)
+    for i in range(len(a)):
+        a_ = a[i]
+        b_ = b[i]
+        rs, rt = eos_s_t(
+            0.5 * (s[a_] + s[b_]),
+            0.5 * (t[a_] + t[b_]),
+            0.5 * (p[a_] + p[b_]),
+        )
+        e[i] = rs * (s[b[i]] - s[a[i]]) + rt * (t[b[i]] - t[a[i]])
+    return e
