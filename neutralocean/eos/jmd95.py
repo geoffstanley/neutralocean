@@ -25,11 +25,65 @@ To make vectorized versions of these functions, see
 import numpy as np
 import numba as nb
 
-# Specify scalar inputs and output.  If ndarray inputs are needed, then apply
-# @nb.vectorize, as in `.tools.vectorize_eos`.  A vectorized function specified
+
+# fmt: off
+# Coefficients nonlinear equation of state in pressure coordinates for
+# 1. density of fresh water at p = 0
+eosJMDCFw0 =    999.842594  
+eosJMDCFw1 =    6.793952e-02
+eosJMDCFw2 = -  9.095290e-03
+eosJMDCFw3 =    1.001685e-04
+eosJMDCFw4 = -  1.120083e-06
+eosJMDCFw5 =    6.536332e-09
+# 2. density of sea water at p = 0
+eosJMDCSw0 =    8.244930e-01
+eosJMDCSw1 = -  4.089900e-03
+eosJMDCSw2 =    7.643800e-05
+eosJMDCSw3 = -  8.246700e-07
+eosJMDCSw4 =    5.387500e-09
+eosJMDCSw5 = -  5.724660e-03
+eosJMDCSw6 =    1.022700e-04
+eosJMDCSw7 = -  1.654600e-06
+eosJMDCSw8 =    4.831400e-04
+# coefficients in pressure coordinates for
+# 3. secant bulk modulus K of fresh water at p = 0
+eosJMDCKFw0 =   1.965933e+05 # .== original * 10
+eosJMDCKFw1 =   1.444304e+03 # .== original * 10
+eosJMDCKFw2 = - 1.706103e+01 # .== original * 10
+eosJMDCKFw3 =   9.648704e-02 # .== original * 10
+eosJMDCKFw4 = - 4.190253e-04 # .== original * 10
+# 4. secant bulk modulus K of sea water at p = 0
+eosJMDCKSw0 =   5.284855e+02 # .== original * 10
+eosJMDCKSw1 = - 3.101089e+00 # .== original * 10
+eosJMDCKSw2 =   6.283263e-02 # .== original * 10
+eosJMDCKSw3 = - 5.084188e-04 # .== original * 10
+eosJMDCKSw4 =   3.886640e+00 # .== original * 10
+eosJMDCKSw5 =   9.085835e-02 # .== original * 10
+eosJMDCKSw6 = - 4.619924e-03 # .== original * 10
+# 5. secant bulk modulus K of sea water at p
+eosJMDCKP0 =   3.186519e+00
+eosJMDCKP1 =   2.212276e-02
+eosJMDCKP2 = - 2.984642e-04
+eosJMDCKP3 =   1.956415e-06
+eosJMDCKP4 =   6.704388e-03
+eosJMDCKP5 = - 1.847318e-04
+eosJMDCKP6 =   2.059331e-07
+eosJMDCKP7 =   1.480266e-04
+eosJMDCKP8 =   2.102898e-05 # .== original / 10
+eosJMDCKP9 = - 1.202016e-06 # .== original / 10
+eosJMDCKP10 =   1.394680e-08 # .== original / 10
+eosJMDCKP11 = - 2.040237e-07 # .== original / 10
+eosJMDCKP12 =   6.128773e-09 # .== original / 10
+eosJMDCKP13 =   6.207323e-11 # .== original / 10
+# The above coeffs need to be defined in the function for
+# compatability with @numba.njit
+# fmt: on
+
+# If ndarray inputs are needed, it is best to use @nb.vectorize.  That is,
+# apply `.tools.vectorize_eos`.  A vectorized function specified
 # for scalars is about twice as fast as a signatureless njit'ed function
 # applied to ndarrays.
-@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
+@nb.njit
 def rho(s, t, p):
     """Fast JMD95 [1]_ in-situ density.
 
@@ -153,105 +207,49 @@ def rho_s_t(s, t, p):
 
     # INPUT CHECKS REMOVED
 
-    # fmt: off
-    # Coefficients nonlinear equation of state in pressure coordinates for
-    # 1. density of fresh water at p = 0
-    eosJMDCFw = [
-       999.842594  ,
-       6.793952e-02,
-    -  9.095290e-03,
-       1.001685e-04,
-    -  1.120083e-06,
-       6.536332e-09]
-    # 2. density of sea water at p = 0
-    eosJMDCSw = [
-       8.244930e-01,
-    -  4.089900e-03,
-       7.643800e-05,
-    -  8.246700e-07,
-       5.387500e-09,
-    -  5.724660e-03,
-       1.022700e-04,
-    -  1.654600e-06,
-       4.831400e-04]
-    # coefficients in pressure coordinates for
-    # 3. secant bulk modulus K of fresh water at p = 0
-    eosJMDCKFw = [
-      1.965933e+05, # .== original * 10
-      1.444304e+03, # .== original * 10
-    - 1.706103e+01, # .== original * 10
-      9.648704e-02, # .== original * 10
-    - 4.190253e-04] # .== original * 10
-    # 4. secant bulk modulus K of sea water at p = 0
-    eosJMDCKSw = [
-      5.284855e+02, # .== original * 10
-    - 3.101089e+00, # .== original * 10
-      6.283263e-02, # .== original * 10
-    - 5.084188e-04, # .== original * 10
-      3.886640e+00, # .== original * 10
-      9.085835e-02, # .== original * 10
-    - 4.619924e-03] # .== original * 10
-    # 5. secant bulk modulus K of sea water at p
-    eosJMDCKP = [
-      3.186519e+00,
-      2.212276e-02,
-    - 2.984642e-04,
-      1.956415e-06,
-      6.704388e-03,
-    - 1.847318e-04,
-      2.059331e-07,
-      1.480266e-04,
-      2.102898e-05, # .== original / 10
-    - 1.202016e-06, # .== original / 10
-      1.394680e-08, # .== original / 10
-    - 2.040237e-07, # .== original / 10
-      6.128773e-09, # .== original / 10
-      6.207323e-11] # .== original / 10
-    # The above coeffs need to be defined in the function for 
-    # compatability with @numba.njit
-    
     s1o2 = np.sqrt(s)
 
+    # fmt: off
     # The secant bulk modulus
-    K =    (        eosJMDCKFw[0] + t*(eosJMDCKFw[1] + t*(eosJMDCKFw[2] + t*(eosJMDCKFw[3] + t*eosJMDCKFw[4])))
-        +   s *    (eosJMDCKSw[0] + t*(eosJMDCKSw[1] + t*(eosJMDCKSw[2] + t* eosJMDCKSw[3]))
-        +   s1o2 * (eosJMDCKSw[4] + t*(eosJMDCKSw[5] + t* eosJMDCKSw[6]) ))
-        + p * (     eosJMDCKP[0] + t*(eosJMDCKP[1] + t*(eosJMDCKP[2] + t*eosJMDCKP[3]))
-        +   s *    (eosJMDCKP[4] + t*(eosJMDCKP[5] + t* eosJMDCKP[6]) + s1o2*eosJMDCKP[7])
-        + p * (     eosJMDCKP[8] + t*(eosJMDCKP[9] + t* eosJMDCKP[10])
-        +   s *    (eosJMDCKP[11] + t*(eosJMDCKP[12] + t* eosJMDCKP[13])) )) )
+    K =    (        eosJMDCKFw0 + t*(eosJMDCKFw1 + t*(eosJMDCKFw2 + t*(eosJMDCKFw3 + t*eosJMDCKFw4)))
+        +   s *    (eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t* eosJMDCKSw3))
+        +   s1o2 * (eosJMDCKSw4 + t*(eosJMDCKSw5 + t* eosJMDCKSw6) ))
+        + p * (     eosJMDCKP0 + t*(eosJMDCKP1 + t*(eosJMDCKP2 + t*eosJMDCKP3))
+        +   s *    (eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*eosJMDCKP7)
+        + p * (     eosJMDCKP8 + t*(eosJMDCKP9 + t* eosJMDCKP10)
+        +   s *    (eosJMDCKP11 + t*(eosJMDCKP12 + t* eosJMDCKP13)) )) )
 
 
     # The partial derivative of K with respect to s
-    # K_s =      ( eosJMDCKSw[0] + t*(eosJMDCKSw[1] + t*(eosJMDCKSw[2] + t* eosJMDCKSw[3]))
-    #     + s1o2 * (1.5*eosJMDCKSw[4] + t*(1.5*eosJMDCKSw[5] + t* (1.5*eosJMDCKSw[6])) )
-    #     + p * ( eosJMDCKP[4] + t*(eosJMDCKP[5] + t* eosJMDCKP[6]) + s1o2*(1.5*eosJMDCKP[7])
-    #     + p * ( eosJMDCKP[11] + t*(eosJMDCKP[12] + t* (eosJMDCKP[13])) )) )
+    # K_s =      ( eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t* eosJMDCKSw3))
+    #     + s1o2 * (1.5*eosJMDCKSw4 + t*(1.5*eosJMDCKSw5 + t* (1.5*eosJMDCKSw6)) )
+    #     + p * ( eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*(1.5*eosJMDCKP7)
+    #     + p * ( eosJMDCKP11 + t*(eosJMDCKP12 + t* (eosJMDCKP13)) )) )
 
     # The partial derivative of K with respect to t
-    # K_t =    (     (eosJMDCKFw[1] + t*(2.0*eosJMDCKFw[2] + t*(3.0*eosJMDCKFw[3] + t*(4.0*eosJMDCKFw[4]))))
-    #     +   s *    (eosJMDCKSw[1] + t*(2.0*eosJMDCKSw[2] + t*(3.0*eosJMDCKSw[3]))
-    #     +   s1o2 * (eosJMDCKSw[5] + t*(2.0*eosJMDCKSw[6]) ))
-    #     + p * (     eosJMDCKP[1] + t*(2.0*eosJMDCKP[2] + t*(3.0*eosJMDCKP[3]))
-    #     +   s *    (eosJMDCKP[5] + t*(2.0*eosJMDCKP[6]))
-    #     + p * (     eosJMDCKP[9] + t*(2.0*eosJMDCKP[10])
-    #     +   s *    (eosJMDCKP[12] + t*(2.0*eosJMDCKP[13])) )) )
+    # K_t =    (     (eosJMDCKFw1 + t*(2.0*eosJMDCKFw2 + t*(3.0*eosJMDCKFw3 + t*(4.0*eosJMDCKFw4))))
+    #     +   s *    (eosJMDCKSw1 + t*(2.0*eosJMDCKSw2 + t*(3.0*eosJMDCKSw3))
+    #     +   s1o2 * (eosJMDCKSw5 + t*(2.0*eosJMDCKSw6) ))
+    #     + p * (     eosJMDCKP1 + t*(2.0*eosJMDCKP2 + t*(3.0*eosJMDCKP3))
+    #     +   s *    (eosJMDCKP5 + t*(2.0*eosJMDCKP6))
+    #     + p * (     eosJMDCKP9 + t*(2.0*eosJMDCKP10)
+    #     +   s *    (eosJMDCKP12 + t*(2.0*eosJMDCKP13)) )) )
 
-    # work =    (    eosJMDCFw[0] + t*(eosJMDCFw[1] + t*(eosJMDCFw[2] + t*(eosJMDCFw[3] + t*(eosJMDCFw[4] + t*eosJMDCFw[5]))))
-    #     + s *    ( eosJMDCSw[0] + t*(eosJMDCSw[1] + t*(eosJMDCSw[2] + t*(eosJMDCSw[3] + t*eosJMDCSw[4])))
-    #     + s1o2 * ( eosJMDCSw[5] + t*(eosJMDCSw[6] + t*eosJMDCSw[7]))
-    #     + s    *   eosJMDCSw[8]   # from here up is the density of sea water at p = 0
+    # work =    (    eosJMDCFw0 + t*(eosJMDCFw1 + t*(eosJMDCFw2 + t*(eosJMDCFw3 + t*(eosJMDCFw4 + t*eosJMDCFw5))))
+    #     + s *    ( eosJMDCSw0 + t*(eosJMDCSw1 + t*(eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
+    #     + s1o2 * ( eosJMDCSw5 + t*(eosJMDCSw6 + t*eosJMDCSw7))
+    #     + s    *   eosJMDCSw8   # from here up is the density of sea water at p = 0
     #     )) * p / (K - p) # this prepares for the final rho_s and rho_t computations.
 
     # The partial derivative of sea water at p = 0, with respect to s
-    # rho_0_S =    (     eosJMDCSw[0] + t*(    eosJMDCSw[1] + t*(    eosJMDCSw[2] + t*(eosJMDCSw[3] + t*eosJMDCSw[4])))
-    #     + s1o2 * ( 1.5*eosJMDCSw[5] + t*(1.5*eosJMDCSw[6] + t*(1.5*eosJMDCSw[7])))
-    #     + s    * ( 2.0*eosJMDCSw[8]))
+    # rho_0_S =    (     eosJMDCSw0 + t*(    eosJMDCSw1 + t*(    eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
+    #     + s1o2 * ( 1.5*eosJMDCSw5 + t*(1.5*eosJMDCSw6 + t*(1.5*eosJMDCSw7)))
+    #     + s    * ( 2.0*eosJMDCSw8))
 
     # The partial derivative of sea water at p = 0, with respect to t
-    # rho_0_T =    ( eosJMDCFw[1] + t*(2.0*eosJMDCFw[2] + t*(3.0*eosJMDCFw[3] + t*(4.0*eosJMDCFw[4] + t*(5.0*eosJMDCFw[5]))))
-    #     + s *    ( eosJMDCSw[1] + t*(2.0*eosJMDCSw[2] + t*(3.0*eosJMDCSw[3] + t*(4.0*eosJMDCSw[4])))
-    #     + s1o2 * ( eosJMDCSw[6] + t*(2.0*eosJMDCSw[7]))))
+    # rho_0_T =    ( eosJMDCFw1 + t*(2.0*eosJMDCFw2 + t*(3.0*eosJMDCFw3 + t*(4.0*eosJMDCFw4 + t*(5.0*eosJMDCFw5))))
+    #     + s *    ( eosJMDCSw1 + t*(2.0*eosJMDCSw2 + t*(3.0*eosJMDCSw3 + t*(4.0*eosJMDCSw4)))
+    #     + s1o2 * ( eosJMDCSw6 + t*(2.0*eosJMDCSw7))))
 
     # The in-situ density is defined as
     #  rho = rho_0 / (1 - p / K)
@@ -270,44 +268,44 @@ def rho_s_t(s, t, p):
 
     # The following expressions are faster and require less memory, though appear more gruesome
     rho_s = (
-                 (     eosJMDCSw[0] + t*(    eosJMDCSw[1] + t*(    eosJMDCSw[2] + t*(eosJMDCSw[3] + t*eosJMDCSw[4])))
-        + s1o2 * ( 1.5*eosJMDCSw[5] + t*(1.5*eosJMDCSw[6] + t*(1.5*eosJMDCSw[7])))
-        + s    * ( 2.0*eosJMDCSw[8])) # rho_0_S
+                 (     eosJMDCSw0 + t*(    eosJMDCSw1 + t*(    eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
+        + s1o2 * ( 1.5*eosJMDCSw5 + t*(1.5*eosJMDCSw6 + t*(1.5*eosJMDCSw7)))
+        + s    * ( 2.0*eosJMDCSw8)) # rho_0_S
         * K
         - 
-              (    eosJMDCFw[0] + t*(eosJMDCFw[1] + t*(eosJMDCFw[2] + t*(eosJMDCFw[3] + t*(eosJMDCFw[4] + t*eosJMDCFw[5]))))
-        + s *    ( eosJMDCSw[0] + t*(eosJMDCSw[1] + t*(eosJMDCSw[2] + t*(eosJMDCSw[3] + t*eosJMDCSw[4])))
-        + s1o2 * ( eosJMDCSw[5] + t*(eosJMDCSw[6] + t*eosJMDCSw[7]))
-        + s    *   eosJMDCSw[8]   # from here up is the density of sea water at p = 0
+              (    eosJMDCFw0 + t*(eosJMDCFw1 + t*(eosJMDCFw2 + t*(eosJMDCFw3 + t*(eosJMDCFw4 + t*eosJMDCFw5))))
+        + s *    ( eosJMDCSw0 + t*(eosJMDCSw1 + t*(eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
+        + s1o2 * ( eosJMDCSw5 + t*(eosJMDCSw6 + t*eosJMDCSw7))
+        + s    *   eosJMDCSw8   # from here up is the density of sea water at p = 0
         )) # rho_0
         * p / (K - p) 
         *
-              ( eosJMDCKSw[0] + t*(eosJMDCKSw[1] + t*(eosJMDCKSw[2] + t* eosJMDCKSw[3]))
-        + s1o2 * (1.5*eosJMDCKSw[4] + t*(1.5*eosJMDCKSw[5] + t* (1.5*eosJMDCKSw[6])) )
-        + p * ( eosJMDCKP[4] + t*(eosJMDCKP[5] + t* eosJMDCKP[6]) + s1o2*(1.5*eosJMDCKP[7])
-        + p * ( eosJMDCKP[11] + t*(eosJMDCKP[12] + t* (eosJMDCKP[13])) )) )  # K_s
+              ( eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t* eosJMDCKSw3))
+        + s1o2 * (1.5*eosJMDCKSw4 + t*(1.5*eosJMDCKSw5 + t* (1.5*eosJMDCKSw6)) )
+        + p * ( eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*(1.5*eosJMDCKP7)
+        + p * ( eosJMDCKP11 + t*(eosJMDCKP12 + t* (eosJMDCKP13)) )) )  # K_s
         ) / (K - p)
     
     rho_t = (
-                 ( eosJMDCFw[1] + t*(2.0*eosJMDCFw[2] + t*(3.0*eosJMDCFw[3] + t*(4.0*eosJMDCFw[4] + t*(5.0*eosJMDCFw[5]))))
-        + s *    ( eosJMDCSw[1] + t*(2.0*eosJMDCSw[2] + t*(3.0*eosJMDCSw[3] + t*(4.0*eosJMDCSw[4])))
-        + s1o2 * ( eosJMDCSw[6] + t*(2.0*eosJMDCSw[7])))) # rho_0_T
+                 ( eosJMDCFw1 + t*(2.0*eosJMDCFw2 + t*(3.0*eosJMDCFw3 + t*(4.0*eosJMDCFw4 + t*(5.0*eosJMDCFw5))))
+        + s *    ( eosJMDCSw1 + t*(2.0*eosJMDCSw2 + t*(3.0*eosJMDCSw3 + t*(4.0*eosJMDCSw4)))
+        + s1o2 * ( eosJMDCSw6 + t*(2.0*eosJMDCSw7)))) # rho_0_T
         * K
         - 
-              (    eosJMDCFw[0] + t*(eosJMDCFw[1] + t*(eosJMDCFw[2] + t*(eosJMDCFw[3] + t*(eosJMDCFw[4] + t*eosJMDCFw[5]))))
-        + s *    ( eosJMDCSw[0] + t*(eosJMDCSw[1] + t*(eosJMDCSw[2] + t*(eosJMDCSw[3] + t*eosJMDCSw[4])))
-        + s1o2 * ( eosJMDCSw[5] + t*(eosJMDCSw[6] + t*eosJMDCSw[7]))
-        + s    *   eosJMDCSw[8]   # from here up is the density of sea water at p = 0
+              (    eosJMDCFw0 + t*(eosJMDCFw1 + t*(eosJMDCFw2 + t*(eosJMDCFw3 + t*(eosJMDCFw4 + t*eosJMDCFw5))))
+        + s *    ( eosJMDCSw0 + t*(eosJMDCSw1 + t*(eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
+        + s1o2 * ( eosJMDCSw5 + t*(eosJMDCSw6 + t*eosJMDCSw7))
+        + s    *   eosJMDCSw8   # from here up is the density of sea water at p = 0
         )) # rho_0
         * p / (K - p) 
         * 
-             (     (eosJMDCKFw[1] + t*(2.0*eosJMDCKFw[2] + t*(3.0*eosJMDCKFw[3] + t*(4.0*eosJMDCKFw[4]))))
-        +   s *    (eosJMDCKSw[1] + t*(2.0*eosJMDCKSw[2] + t*(3.0*eosJMDCKSw[3]))
-        +   s1o2 * (eosJMDCKSw[5] + t*(2.0*eosJMDCKSw[6]) ))
-        + p * (     eosJMDCKP[1] + t*(2.0*eosJMDCKP[2] + t*(3.0*eosJMDCKP[3]))
-        +   s *    (eosJMDCKP[5] + t*(2.0*eosJMDCKP[6]))
-        + p * (     eosJMDCKP[9] + t*(2.0*eosJMDCKP[10])
-        +   s *    (eosJMDCKP[12] + t*(2.0*eosJMDCKP[13])) )) ) # K_t
+             (     (eosJMDCKFw1 + t*(2.0*eosJMDCKFw2 + t*(3.0*eosJMDCKFw3 + t*(4.0*eosJMDCKFw4))))
+        +   s *    (eosJMDCKSw1 + t*(2.0*eosJMDCKSw2 + t*(3.0*eosJMDCKSw3))
+        +   s1o2 * (eosJMDCKSw5 + t*(2.0*eosJMDCKSw6) ))
+        + p * (     eosJMDCKP1 + t*(2.0*eosJMDCKP2 + t*(3.0*eosJMDCKP3))
+        +   s *    (eosJMDCKP5 + t*(2.0*eosJMDCKP6))
+        + p * (     eosJMDCKP9 + t*(2.0*eosJMDCKP10)
+        +   s *    (eosJMDCKP12 + t*(2.0*eosJMDCKP13)) )) ) # K_t
         ) / (K - p)
 
     # fmt: on
@@ -315,7 +313,7 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
-@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
+@nb.njit
 def rho_p(s, t, p):
     """
     Fast pressure derivative of JMD95 in-situ density.
@@ -339,85 +337,29 @@ def rho_p(s, t, p):
     s1o2 = np.sqrt(s)
 
     # fmt: off
-    # Coefficients nonlinear equation of state in pressure coordinates for
-    # 1. density of fresh water at p = 0
-    eosJMDCFw = [
-       999.842594  ,
-       6.793952e-02,
-    -  9.095290e-03,
-       1.001685e-04,
-    -  1.120083e-06,
-       6.536332e-09]
-    # 2. density of sea water at p = 0
-    eosJMDCSw = [
-       8.244930e-01,
-    -  4.089900e-03,
-       7.643800e-05,
-    -  8.246700e-07,
-       5.387500e-09,
-    -  5.724660e-03,
-       1.022700e-04,
-    -  1.654600e-06,
-       4.831400e-04]
-    # coefficients in pressure coordinates for
-    # 3. secant bulk modulus K of fresh water at p = 0
-    eosJMDCKFw = [
-      1.965933e+05, # .== original * 10
-      1.444304e+03, # .== original * 10
-    - 1.706103e+01, # .== original * 10
-      9.648704e-02, # .== original * 10
-    - 4.190253e-04] # .== original * 10
-    # 4. secant bulk modulus K of sea water at p = 0
-    eosJMDCKSw = [
-      5.284855e+02, # .== original * 10
-    - 3.101089e+00, # .== original * 10
-      6.283263e-02, # .== original * 10
-    - 5.084188e-04, # .== original * 10
-      3.886640e+00, # .== original * 10
-      9.085835e-02, # .== original * 10
-    - 4.619924e-03] # .== original * 10
-    # 5. secant bulk modulus K of sea water at p
-    eosJMDCKP = [
-      3.186519e+00,
-      2.212276e-02,
-    - 2.984642e-04,
-      1.956415e-06,
-      6.704388e-03,
-    - 1.847318e-04,
-      2.059331e-07,
-      1.480266e-04,
-      2.102898e-05, # .== original / 10
-    - 1.202016e-06, # .== original / 10
-      1.394680e-08, # .== original / 10
-    - 2.040237e-07, # .== original / 10
-      6.128773e-09, # .== original / 10
-      6.207323e-11] # .== original / 10
-    # The above coeffs need to be defined in the function for 
-    # compatability with @numba.njit
-
     K2 = (
-        p * ( eosJMDCKP[8] + t*(eosJMDCKP[9] + t*eosJMDCKP[10])  
-        + s *  (eosJMDCKP[11] + t*(eosJMDCKP[12] + t*eosJMDCKP[13])) ) 
+        p * ( eosJMDCKP8 + t*(eosJMDCKP9 + t*eosJMDCKP10)  
+        + s *  (eosJMDCKP11 + t*(eosJMDCKP12 + t*eosJMDCKP13)) ) 
         )
 
     K1plusK2 = (
         K2 +
-            eosJMDCKP[0] + t*(eosJMDCKP[1] + t*(eosJMDCKP[2] + t*eosJMDCKP[3]))            # \__ these 2 lines are K1
-            + s * ( eosJMDCKP[4] + t*(eosJMDCKP[5] + t*eosJMDCKP[6]) + eosJMDCKP[7]*s1o2 ) # /  
+            eosJMDCKP0 + t*(eosJMDCKP1 + t*(eosJMDCKP2 + t*eosJMDCKP3))            # \__ these 2 lines are K1
+            + s * ( eosJMDCKP4 + t*(eosJMDCKP5 + t*eosJMDCKP6) + eosJMDCKP7*s1o2 ) # /  
         )
     # K == bulkmod
-    K = (   eosJMDCKFw[0] + t*(eosJMDCKFw[1] + t*(eosJMDCKFw[2] + t*(eosJMDCKFw[3] + t*eosJMDCKFw[4])))  # secant bulk modulus of fresh water at the surface
-        + s * (   eosJMDCKSw[0] + t*(eosJMDCKSw[1] + t*(eosJMDCKSw[2] + t*eosJMDCKSw[3])) 
-            + s1o2 * (eosJMDCKSw[4] + t*(eosJMDCKSw[5] + t*eosJMDCKSw[6]) ) 
+    K = (   eosJMDCKFw0 + t*(eosJMDCKFw1 + t*(eosJMDCKFw2 + t*(eosJMDCKFw3 + t*eosJMDCKFw4)))  # secant bulk modulus of fresh water at the surface
+        + s * (   eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t*eosJMDCKSw3)) 
+            + s1o2 * (eosJMDCKSw4 + t*(eosJMDCKSw5 + t*eosJMDCKSw6) ) 
         )  # secant bulk modulus of sea water at the surface
         + p * K1plusK2 # secant bulk modulus of sea water at pressure z
         )
 
     rho = (
-        eosJMDCFw[0] + t*(eosJMDCFw[1] + t*(eosJMDCFw[2] + t*(eosJMDCFw[3] + t*(eosJMDCFw[4] + t*eosJMDCFw[5])))) # density of freshwater at the surface
-        + s * ( eosJMDCSw[0] + t*(eosJMDCSw[1] + t*(eosJMDCSw[2] + t*(eosJMDCSw[3] + t*eosJMDCSw[4])))
-            + s1o2 * ( eosJMDCSw[5] + t*(eosJMDCSw[6] + t*eosJMDCSw[7]) )
-            + s * eosJMDCSw[8]
+        eosJMDCFw0 + t*(eosJMDCFw1 + t*(eosJMDCFw2 + t*(eosJMDCFw3 + t*(eosJMDCFw4 + t*eosJMDCFw5)))) # density of freshwater at the surface
+        + s * ( eosJMDCSw0 + t*(eosJMDCSw1 + t*(eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
+            + s1o2 * ( eosJMDCSw5 + t*(eosJMDCSw6 + t*eosJMDCSw7) )
+            + s * eosJMDCSw8
         ) # density of sea water at the surface
         )
     
