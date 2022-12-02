@@ -12,10 +12,7 @@ neutral trajectories,
 the Veronis density label, and 
 measures of neutrality error.
 
-Topobaric surfaces `(Stanley, 2019a) <https://www.sciencedirect.com/science/article/pii/S1463500318302221>`_ in their modified form `(Stanley 2019b) <https://www.sciencedirect.com/science/article/pii/S1463500318302233>`_ are the most accurate approximately neutral surfaces that posses an exact geostrophic streamfunction (furnishing an Ertel potential vorticity with no baroclinic production term).  Software to compute topobaric surfaces is significantly more complicated and is currently only available in the original MATLAB `neutral-surfaces <https://github.com/geoffstanley/neutral-surfaces>`_ toolbox.
-
-Check out the :doc:`usage` section for further information, including
-how to :ref:`installation` the project.
+**Topobaric surfaces** `(Stanley, 2019a) <https://www.sciencedirect.com/science/article/pii/S1463500318302221>`_ and their modified form `(Stanley 2019b) <https://www.sciencedirect.com/science/article/pii/S1463500318302233>`_ are the most accurate approximately neutral surfaces that posses an exact geostrophic streamfunction (furnishing an Ertel potential vorticity with no baroclinic production term).  Software to compute topobaric surfaces is significantly more complicated and is currently only available in the original MATLAB `neutral-surfaces <https://github.com/geoffstanley/neutral-surfaces>`_ toolbox.
 
 .. note::
 
@@ -27,9 +24,8 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
-   Home <self>
+   installation
    usage
    API
    internals

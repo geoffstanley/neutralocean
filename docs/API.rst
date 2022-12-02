@@ -4,13 +4,19 @@ Public Function Reference
 .. autosummary::
    :toctree: generated
 
+.. _potential_surf:
+
 Potential density surfaces
 --------------------------
 .. autofunction:: neutralocean.surface.trad.potential_surf
 
+.. _anomaly_surf:
+
 In-situ density / specific volume anomaly surfaces
 --------------------------------------------------
 .. autofunction:: neutralocean.surface.trad.anomaly_surf
+
+.. _omega_surf:
 
 Omega surfaces
 --------------
@@ -85,17 +91,17 @@ rho_p
 TEOS-10 GSW Equation of State
 -----------------------------
 
-rho
-~~~
-.. autofunction:: neutralocean.eos.gsw.rho
-
-rho_s_t
+specvol
 ~~~~~~~
-.. autofunction:: neutralocean.eos.gsw.rho_s_t
+.. autofunction:: neutralocean.eos.gsw.specvol
 
-rho_p
-~~~~~
-.. autofunction:: neutralocean.eos.gsw.rho_p
+specvol_s_t
+~~~~~~~~~~~
+.. autofunction:: neutralocean.eos.gsw.specvol_s_t
+
+specvol_p
+~~~~~~~~~
+.. autofunction:: neutralocean.eos.gsw.specvol_p
 
 
 Vertical Interpolation: on the fly
