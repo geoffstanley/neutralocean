@@ -1,124 +1,138 @@
 Public Function Reference
-=========================
+*************************
 
+.. autosummary::
+   :toctree: generated
 
-Potential density surfaces
---------------------------
+Approximately Neutral Surfaces
+==============================
+
+.. _potdens_surf:
+
+Potential Density Surface
+-------------------------
 .. autofunction:: neutralocean.surface.trad.potential_surf
 
-In-situ density / specific volume anomaly surfaces
---------------------------------------------------
+.. _sva_surf:
+
+Specific Volume Anomaly Surface
+-------------------------------
 .. autofunction:: neutralocean.surface.trad.anomaly_surf
 
-Omega surfaces
---------------
+.. _omega_surf:
+
+Omega Surface
+-------------
 .. autofunction:: neutralocean.surface.omega.omega_surf
 
+Grids
+=====
+
+Rectilinear
+-----------
+.. autofunction:: neutralocean.grid.rectilinear.build_grid
+
+.. autofunction:: neutralocean.grid.rectilinear.edgedata_to_maps
+
+xgcm (tiled rectilinear)
+------------------------
+.. autofunction:: neutralocean.grid.xgcm.build_grid
+
+.. autofunction:: neutralocean.grid.xgcm.edgedata_to_maps
+
+Graph
+-----
+.. autofunction:: neutralocean.grid.graph.build_grid
+
+.. autofunction:: neutralocean.grid.graph.edges_to_graph
+
+.. autofunction:: neutralocean.grid.graph.graph_binary_fcn
+
 Neutrality Error
-----------------
+================
 .. autofunction:: neutralocean.ntp.ntp_epsilon_errors
 
 .. autofunction:: neutralocean.ntp.ntp_epsilon_errors_norms
 
-Neutral Tangent Plane - Bottle to Cast
---------------------------------------
+Neutral Trajectory
+==================
 .. autofunction:: neutralocean.traj.ntp_bottle_to_cast
 
-Neutral Trajectory
-------------------
 .. autofunction:: neutralocean.traj.neutral_trajectory
 
 Veronis Density
----------------
+===============
 .. autofunction:: neutralocean.label.veronis_density
 
-Choosing the Equation Of State
-------------------------------
+Mixed Layer
+===========
+.. autofunction:: neutralocean.mixed_layer.mixed_layer
 
-make_eos
-~~~~~~~~
+Equation Of State
+=================
+
+Tools 
+-----
 .. autofunction:: neutralocean.eos.tools.make_eos
 
-vectorize_eos
-~~~~~~~~~~~~~
+.. autofunction:: neutralocean.eos.tools.make_eos_s_t
+
+.. autofunction:: neutralocean.eos.tools.make_eos_p
+
 .. autofunction:: neutralocean.eos.tools.vectorize_eos
 
-make_bsq
-~~~~~~~~~~~~~
-.. autofunction:: neutralocean.eos.tools.make_bsq
-
-
-JMD95 Equation of State
------------------------
+JMD95
+-----
 .. automodule:: neutralocean.eos.jmd95
 
-rho
-~~~
 .. autofunction:: neutralocean.eos.jmd95.rho
 
-rho_s_t
-~~~~~~~
 .. autofunction:: neutralocean.eos.jmd95.rho_s_t
 
-rho_p
-~~~~~
 .. autofunction:: neutralocean.eos.jmd95.rho_p
 
-JMDFWG06 Equation of State
---------------------------
+JMDFWG06
+--------
 .. automodule:: neutralocean.eos.jmdfwg06
 
-rho
-~~~
 .. autofunction:: neutralocean.eos.jmdfwg06.rho
 
-rho_s_t
-~~~~~~~
 .. autofunction:: neutralocean.eos.jmdfwg06.rho_s_t
 
-rho_p
-~~~~~
 .. autofunction:: neutralocean.eos.jmdfwg06.rho_p
 
-TEOS-10 GSW Equation of State
------------------------------
+TEOS-10 GSW
+-----------
+.. automodule:: neutralocean.eos.gsw
 
-rho
-~~~
-.. autofunction:: neutralocean.eos.gsw.rho
+.. autofunction:: neutralocean.eos.gsw.specvol
 
-rho_s_t
-~~~~~~~
-.. autofunction:: neutralocean.eos.gsw.rho_s_t
+.. autofunction:: neutralocean.eos.gsw.specvol_s_t
 
-rho_p
-~~~~~
-.. autofunction:: neutralocean.eos.gsw.rho_p
+.. autofunction:: neutralocean.eos.gsw.specvol_p
 
+(Vertical) Interpolation
+========================
 
-Vertical Interpolation: on the fly
-----------------------------------
+On the Fly
+----------
+.. automodule:: neutralocean.interp1d.__init__
 
-make_interpolator
-~~~~~~~~~~~~~~~~~
 .. autofunction:: neutralocean.interp1d.make_interpolator
 
 
-Vertical Interpolation: Piecewise Polynomial (PP) coefficients
---------------------------------------------------------------
+Piecewise Polynomial (PP) coefficients
+--------------------------------------
+.. automodule:: neutralocean.ppinterp.__init__
 
-linear_coeffs
-~~~~~~~~~~~~~
 .. autofunction:: neutralocean.ppinterp.linear.linear_coeffs
 
-pchip_coeffs
-~~~~~~~~~~~~
 .. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs
 
-ppval
-~~~~~
 .. autofunction:: neutralocean.ppinterp.ppval
 
-ppval_two
-~~~~~~~~~
 .. autofunction:: neutralocean.ppinterp.ppval_two
+
+Synthetic Ocean
+===============
+.. autofunction:: neutralocean.synthocean.synthocean

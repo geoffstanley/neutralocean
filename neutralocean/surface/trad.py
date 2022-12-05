@@ -83,30 +83,30 @@ def potential_surf(S, T, P, **kwargs):
 
         Diagnostics.
 
-        ``"e_MAV"`` : float
+        `"e_MAV"` : float
 
             Mean Absolute Value of the ϵ neutrality error on the surface,
             area-weighted.  Units are those of `eos` return values divided by
             those of `dist*` inputs.
 
-        ``"e_RMS"`` : float
+        `"e_RMS"` : float
 
-            As ``"e_MAV"`` but for the Root Mean Square.
+            As `"e_MAV"` but for the Root Mean Square.
 
-        ``"n_wet"``: float
+        `"n_wet"`: float
 
             Number of wet casts (surface points).
 
-        ``"timer"`` : float
+        `"timer"` : float
 
             Time spent on the whole algorithm, excluding set-up and diagnostics.
 
-        ``"ref"`` : float
+        `"ref"` : float
 
             Reference pressure / depth for surface (matching input `ref` if given,
             otherwise this is calculated internally).
 
-        ``"isoval"`` : float
+        `"isoval"` : float
 
             Isovalue of potential density for surface (matching input `ref` if
             given, otherwise this is calculated internally).
@@ -203,7 +203,7 @@ def potential_surf(S, T, P, **kwargs):
     n_good : ndarray, Default None
 
         Pre-computed number of ocean data points in each water column.
-        If None, this is computed as ``n_good = lib.find_first_nan(S)``.
+        If None, this is computed as `n_good = lib.find_first_nan(S)`.
 
     diags : bool, Default True
 
@@ -256,7 +256,7 @@ def potential_surf(S, T, P, **kwargs):
     This code will internally re-arrange `S`, `T`, `P` to have the vertical
     dimension last, so that the data for an individual water column is
     contiguous in memory.  If you call this function many times, consider
-    using ``lib._process_casts`` to pre-process your `S`, `T`, `P` inputs to
+    using `lib._process_casts` to pre-process your `S`, `T`, `P` inputs to
     have the vertical dimension last.
     """
 

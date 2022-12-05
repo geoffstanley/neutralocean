@@ -136,8 +136,8 @@ def _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos):
     n_good : int
 
         Number of valid (non-NaN) data points on the cast.  That is,
-        ``S[0:n_good-1]``, ``T[0:n_good-1]``, and ``P[0:n_good-1]`` should all
-        be non-NaN.  Compute this as ``n_good = find_first_nan(S)``, where `S`
+        `S[0:n_good-1]`, `T[0:n_good-1]`, and `P[0:n_good-1]` should all
+        be non-NaN.  Compute this as `n_good = find_first_nan(S)`, where `S`
         and `T` are the salinity and temperature on the cast, from which `Sppc`
         and `Tppc` were constucted.
 

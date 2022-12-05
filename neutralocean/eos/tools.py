@@ -4,12 +4,13 @@ import numba as nb
 
 # List of modules in the same directory as this file, each of which must have
 # the following numba.njit'ed functions:  rho, rho_s_t, rho_p.
-modules = ("gsw", "jmd95", "jmdfwg06")
+modules = {"gsw": "specvol", "jmd95": "rho", "jmdfwg06": "rho"}
 
 
-def _make_eos(eos, fcn_name, num_p_derivs=0, grav=None, rho_c=None):
+def _make_eos(eos, derivs, num_p_derivs=0, grav=None, rho_c=None):
     if isinstance(eos, str):
         if eos in modules:
+            fcn_name = modules[eos] + derivs
             fn = __import__(
                 "." + eos, globals(), locals(), [fcn_name], 1
             ).__getattribute__(fcn_name)
@@ -40,10 +41,10 @@ def make_eos(eos, grav=None, rho_c=None):
     ----------
     eos : str or function
 
-        If a str, can be 'gsw' to generate the TEOS-10 specific volume,
+        If a str, can be 'gsw' to generate the TEOS-10 specific volume [1]_,
         'jmd95' to generate the Jackett and McDougall (1995) in-situ
-        density [1]_, or 'jmdfwg06' to generate the Jackett et al (2006)
-        in-situ density [2]_.
+        density [2]_, or 'jmdfwg06' to generate the Jackett et al (2006)
+        in-situ density [3]_.
 
         If a function, should be an equation of state as a function of
         practical / Absolute salinity, potential / Conservative temperature,
@@ -55,7 +56,7 @@ def make_eos(eos, grav=None, rho_c=None):
         [kg m-3]. If both are provided, the equation of state is modified as
         appropriate for the Boussinesq approximation, in which the third
         argument is depth, not pressure. Specifically, a depth `z` is
-        converted to ``1e-4 * grav * rho_c * z``, which is the hydrostatic
+        converted to `1e-4 * grav * rho_c * z`, which is the hydrostatic
         pressure [dbar] at depth `z` [m] caused by a water column of density
         `rho_c` under gravity `grav`.
 
@@ -65,16 +66,20 @@ def make_eos(eos, grav=None, rho_c=None):
 
         The desired equation of state.
 
-    .. [1] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+    .. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
+       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
+       SBN 978-0-646-55621-5.
 
-    .. [2] Jackett, D. R., McDougall, T. J., Feistel, R., Wright, D. G., &
+    .. [2] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+
+    .. [3] Jackett, D. R., McDougall, T. J., Feistel, R., Wright, D. G., &
        Griffies, S. M. (2006). Algorithms for Density, Potential Temperature,
        Conservative Temperature, and the Freezing Temperature of Seawater.
        Journal of Atmospheric and Oceanic Technology, 23(12), 1709–1728.
        https://doi.org/10.1175/JTECH1946.1
     """
 
-    return _make_eos(eos, "rho", 0, grav, rho_c)
+    return _make_eos(eos, "", 0, grav, rho_c)
 
 
 def make_eos_s_t(eos, grav=None, rho_c=None):
@@ -95,7 +100,7 @@ def make_eos_s_t(eos, grav=None, rho_c=None):
         state.
     """
 
-    return _make_eos(eos, "rho_s_t", 0, grav, rho_c)
+    return _make_eos(eos, "_s_t", 0, grav, rho_c)
 
 
 def make_eos_p(eos, grav=None, rho_c=None):
@@ -114,7 +119,7 @@ def make_eos_p(eos, grav=None, rho_c=None):
         argument (pressure) of the desired equation of state.
     """
 
-    return _make_eos(eos, "rho_p", 1, grav, rho_c)
+    return _make_eos(eos, "_p", 1, grav, rho_c)
 
 
 @ft.lru_cache(maxsize=10)

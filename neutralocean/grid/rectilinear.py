@@ -57,7 +57,7 @@ def build_grid(dims, periodic, dxC, dyC, dxG, dyG):
 
 def _build_edges(dims, periodic):
     """
-    Build list of pairs of adjacent grid points, numbered 1, ..., N, on a
+    Build list of pairs of adjacent grid points, numbered 0, ..., N-1, on a
     rectilinear grid
     """
 

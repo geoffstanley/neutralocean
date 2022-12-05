@@ -76,8 +76,8 @@ All functions here are derived from gsw_specvol, documented below.
 #==========================================================================
 
 .. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
-the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
-ISBN 978-0-646-55621-5. 
+       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
+       ISBN 978-0-646-55621-5. 
 """
 
 # Check value computed on 16/10/2022, and agrees with MATLAB function
@@ -215,7 +215,6 @@ def specvol(SA, CT, p):
     -------
     specvol : float
         Specific volume [m3 kg-1]
-
     """
     (x, y, z, _) = _process(SA, CT, p)
     return _specvol(x, y, z)
@@ -223,7 +222,26 @@ def specvol(SA, CT, p):
 
 @nb.njit
 def specvol_s_t(SA, CT, p):
+    """
+    Partial derivatives of GSW specific volume with respect to salinity & temperature
 
+    Parameters
+    ----------
+    SA : float
+        Absolute Salinity [g/kg]
+    CT : float
+        Conservative Temperature [deg C]
+    p : float
+        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+
+    Returns
+    -------
+    s : float
+        Partial deriv of specific volume w.r.t. SA [m3 kg-1 / (g/kg)]
+
+    t : float
+        Partial deriv of specific volume w.r.t. CT [m3 kg-1 / (deg C)]
+    """
     (x, y, z, _) = _process(SA, CT, p)
     s = _s(x, y, z)
     t = _t(x, y, z)
@@ -233,14 +251,47 @@ def specvol_s_t(SA, CT, p):
 
 @nb.njit
 def specvol_p(SA, CT, p):
+    """
+    Partial derivative of GSW specific volume with respect to pressure
 
+    Parameters
+    ----------
+    SA : float
+        Absolute Salinity [g/kg]
+    CT : float
+        Conservative Temperature [deg C]
+    p : float
+        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+
+    Returns
+    -------
+    p : float
+        Partial deriv of specific volume w.r.t. p [m3 kg-1 / (dbar)]
+    """
     (x, y, z, _) = _process(SA, CT, p)
     return _p(x, y, z)
 
 
 @nb.njit
 def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p):
+    """
+    Select partial derivatives of GSW specific volume up to second order
 
+    Parameters
+    ----------
+    SA : float
+        Absolute Salinity [g/kg]
+    CT : float
+        Conservative Temperature [deg C]
+    p : float
+        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+
+    Returns
+    -------
+    s, t, ss, st, tt, sp, tp : float
+        Partial derivs of specific volume w.r.t. SA, CT, SA*SA, SA*CT, CT*CT,
+        SA*p, CT*p.
+    """
     (x, y, z, x2) = _process(SA, CT, p)
     s = _s(x, y, z)
     t = _t(x, y, z)
@@ -255,7 +306,23 @@ def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p):
 
 @nb.njit
 def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p):
+    """
+    Select partial derivatives of GSW specific volume up to third order
 
+    Parameters
+    ----------
+    SA : float
+        Absolute Salinity [g/kg]
+    CT : float
+        Conservative Temperature [deg C]
+    p : float
+        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+
+    Returns
+    -------
+    s, t, ss, st, tt, sp, tp, sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp : float
+        Partial derivs of specific volume.
+    """
     (x, y, z, x2) = _process(SA, CT, p)
 
     s = _s(x, y, z)

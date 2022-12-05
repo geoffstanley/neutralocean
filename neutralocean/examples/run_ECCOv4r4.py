@@ -1,4 +1,4 @@
-# %% Imports
+# In[Imports]
 
 import numpy as np
 import xarray as xr
@@ -12,7 +12,7 @@ from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.grid.xgcm import build_grid, edgedata_to_maps
 from neutralocean.ntp import ntp_epsilon_errors
 
-# %% Load data
+# In[Load data]
 
 print(
     "To get started, download the ECCOv4r4 grid information at\n"
@@ -99,7 +99,7 @@ grid = build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dxG, dyG)
 
 # Make Boussinesq version of the Jackett and McDougall (1995) equation of state
 #  and its partial derivatives.
-# TODO: double check that is what ECCOv4r4 used
+# TODO: is this what ECCOv4r4 used?
 grav, rho_c = 9.81, 1027.5
 eos = make_eos("jmd95", grav, rho_c)
 eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
@@ -111,11 +111,12 @@ pin_cast = np.unravel_index(
 )
 z0 = 1500.0  # pinning depth
 
-# %% Build approximately neutral surfaces!
+# In[Build approximately neutral surfaces]
 
 # Build potential density surface, with given reference pressure (actually depth,
 # for Boussinesq) and given isovalue.  No diagnostics requested, so info about
-# the grid is not needed (no `edges` and `geoemtry` provided).
+# the grid is not needed (no `edges` and `geoemtry` provided), and also eos_s_t
+# is not needed.
 s, t, z, _ = potential_surf(
     S, T, Z, eos=eos, vert_dim="k", ref=0.0, isoval=1027.5, diags=False
 )
@@ -154,9 +155,12 @@ s, t, z, d = omega_surf(
     ITER_START_WETTING=1,
 )
 
+# In[Calculate neutrality error]
+
 # Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
 e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert the 1D array of ϵ values into two maps of ϵ neutrality errors, one
-# for the errors in each of the two lateral ('i' and 'j') dimensions.
+# for the errors in each of the two lateral ('i' and 'j') dimensions.  These
+# neutrality errors can then be mapped or further analyzed.
 ei, ej = edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)
