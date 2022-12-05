@@ -84,57 +84,57 @@ def omega_surf(S, T, P, grid, **kwargs):
         others give information about what the `i`'th iteration did (and hence
         their 0'th elements are irrelevant).
 
-        ``"e_MAV"`` : array of float
+        `"e_MAV"` : array of float
 
             Mean Absolute Value of the ϵ neutrality error on the surface,
             area-weighted.  Units are those of `eos` return values divided by
             those of `dist*` inputs.
 
-        ``"e_RMS"`` : array of float
+        `"e_RMS"` : array of float
 
-            As ``"e_MAV"`` but for the Root Mean Square.
+            As `"e_MAV"` but for the Root Mean Square.
 
-        ``"n_wet"``: array of float
+        `"n_wet"`: array of float
 
             Number of wet casts (surface points).
 
-        ``"timer"`` : array of float
+        `"timer"` : array of float
 
             Time spent on each iteration, excluding set-up (approximately) and diagnostics.
 
-        ``"ϕ_MAV"`` : array of float
+        `"ϕ_MAV"` : array of float
 
             Mean Absolute Value of the Locally Referenced Potential Density
             perturbation, per iteration
 
-        ``"Δp_MAV"`` : array of float
+        `"Δp_MAV"` : array of float
 
             Mean Absolute Value of the pressure or depth change from one
             iteration to the next
 
-        ``"Δp_RMS"`` : array of float
+        `"Δp_RMS"` : array of float
 
             Root Mean Square of the pressure or depth change from one
             iteration to the next
 
-        ``"Δp_Linf"`` : array of float
+        `"Δp_Linf"` : array of float
 
             Maximum absolute value (infinity norm) of the pressure or depth
             change from one iteration to the next
 
-        ``"n_newly_wet"`` : array of int
+        `"n_newly_wet"` : array of int
 
             Number of casts that are newly wet, per iteration
 
-        ``"timer_bfs"`` : array of float
+        `"timer_bfs"` : array of float
 
             Time spent in Breadth-First Search including wetting, per iteration.
 
-        ``"timer_mat"`` : array of float
+        `"timer_mat"` : array of float
 
             Time spent building and solving the matrix problem, per iteration.
 
-        ``"timer_update"`` : array of float
+        `"timer_update"` : array of float
 
             Time spent vertically updating the surface.
 

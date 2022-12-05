@@ -22,9 +22,9 @@ T = np.linspace(14, -2, nk).reshape((1, -1))  # warmer going down
 T = T + np.linspace(0, 6, nc).reshape((-1, 1))  # some lateral structure
 
 # Arrange the 4 casts (labelled 0, 1, 2, 3) with connections as follows:
-#   0
-#  / \
-# 1---2---3
+# 0
+# | \
+# 1--2--3
 # That is, cast 0 is connected to casts 1 and 2; cast 1 is connected to casts 0
 # and 2; cast 2 is conncted to all casts; cast 3 is connected only to cast 2.
 a = np.array([0, 0, 1, 2])  # a[i] and b[i] are a pair of adjacent casts
@@ -64,10 +64,10 @@ from neutralocean.grid.graph import build_grid
 grid = build_grid({"dist": graph_dist, "distperp": graph_distperp})
 
 # Essentially, this `build_grid` function gets the row and column indices as
-# well as the data for all non-zero entries.  If matrix the matrix is symmetric,
-# only the upper triangle is used.  (In fact, if the sparsity structure of the
-# matrix is symmetric, then only the upper triangle is used.)  So, it's 
-# essentially doing the following (assuming symmetric matrices): 
+# well as the data for all non-zero entries.  If the matrix is symmetric 
+# (actually, only the sparsity structure is checked for symmetry), then only 
+# the upper triangle is used.  So, `build_grid` is essentially doing the 
+# following (assuming symmetric matrices): 
 from scipy.sparse import find, triu
 a, b, dist = find(triu(graph_dist))
 _, _, distperp = find(triu(graph_distperp))

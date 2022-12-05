@@ -105,7 +105,7 @@ def bfs_conncomp1_wet(
     n_good : ndarray
 
         Pre-computed number of ocean data points in each water column.
-        This should be computed as ``n_good = lib.find_first_nan(S)``.
+        This should be computed as `n_good = lib.find_first_nan(S)`.
 
     tol_p : float
 

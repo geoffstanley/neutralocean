@@ -21,10 +21,10 @@ def find_first_nan(a):
     k : ndarray of int
         The index to the first NaN along each 1D array making up `a`, as in the
         following example with `a` being 3D.
-        If all ``a[i,j,:]`` are NaN, then ``k[i,j] = 0``.
-        If all ``a[i,j,:]`` are not NaN, then ``k[i,j] = a.shape[-1]``.
-        Otherwise, ``K = k[i,j]`` is the smallest int such that ``a[i,j,K-1]``
-        is not NaN, but ``a[i,j,K]`` is NaN.
+        If all `a[i,j,:]` are NaN, then `k[i,j] = 0`.
+        If all `a[i,j,:]` are not NaN, then `k[i,j] = a.shape[-1]`.
+        Otherwise, `K = k[i,j]` is the smallest int such that `a[i,j,K-1]`
+        is not NaN, but `a[i,j,K]` is NaN.
     """
     nk = a.shape[-1]
     k = np.full(a.shape[:-1], nk, dtype=np.int64)

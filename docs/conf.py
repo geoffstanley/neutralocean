@@ -40,8 +40,11 @@ extensions = [
     "sphinx.ext.viewcode",
     "numpydoc",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.autosectionlabel",
 ]
-#    "sphinx.ext.autosectionlabel",
+
+# Make sure the target is unique
+autosectionlabel_prefix_document = True
 
 intersphinx_mapping = {
     "rtd": ("https://docs.readthedocs.io/en/stable/", None),
@@ -61,6 +64,10 @@ epub_show_urls = "footnote"
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+# The reST default role (used for this markup: `text`) to use for all
+# documents.
+#
+default_role = 'py:obj'
 
 # -- Options for HTML output -------------------------------------------------
 

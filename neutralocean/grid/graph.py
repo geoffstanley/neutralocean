@@ -23,7 +23,7 @@ def graph_binary_fcn(edges, nodevals, binary_fcn):
         values at the nodes in a graph
 
     binary_fcn : function
-        A `numba.njit`ed function accepting two numbers and returning one number.
+        A `numba.njit` function accepting two numbers and returning one number.
 
     Returns
     -------

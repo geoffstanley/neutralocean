@@ -56,7 +56,7 @@ def make_eos(eos, grav=None, rho_c=None):
         [kg m-3]. If both are provided, the equation of state is modified as
         appropriate for the Boussinesq approximation, in which the third
         argument is depth, not pressure. Specifically, a depth `z` is
-        converted to ``1e-4 * grav * rho_c * z``, which is the hydrostatic
+        converted to `1e-4 * grav * rho_c * z`, which is the hydrostatic
         pressure [dbar] at depth `z` [m] caused by a water column of density
         `rho_c` under gravity `grav`.
 

@@ -1,8 +1,17 @@
 Internal functions
-==================
+******************
 
-interp1d
-~~~~~~~~
+Equation of State
+=================
+.. autofunction:: neutralocean.eos.tools.make_bsq
+
+(Vertical) Interpolation
+========================
+
+On the Fly
+----------
+.. autofunction:: neutralocean.interp1d.tools.make_kernel
+
 .. autofunction:: neutralocean.interp1d.interp1d._interp_1
 
 .. autofunction:: neutralocean.interp1d.interp1d._interp_1_fg
@@ -31,8 +40,8 @@ interp1d
 
 .. autofunction:: neutralocean.interp1d.pchip._pchip3
 
-ppinterp
-~~~~~~~~
+Piecewise Polynomial (PP) coefficients
+--------------------------------------
 .. autofunction:: neutralocean.ppinterp.ppval1
 
 .. autofunction:: neutralocean.ppinterp.ppval1_two
@@ -44,7 +53,8 @@ ppinterp
 .. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs_1
 
 Root finding in 1D
-~~~~~~~~~~~~~~~~~~
+==================
+.. automodule:: neutralocean.fzero
 
 .. autofunction:: neutralocean.fzero.brent_guess
 
@@ -53,7 +63,7 @@ Root finding in 1D
 .. autofunction:: neutralocean.fzero.guess_to_bounds
 
 Library functions
-~~~~~~~~~~~~~~~~~
+=================
 
 .. autofunction:: neutralocean.lib.find_first_nan
 

@@ -1,7 +1,7 @@
-Welcome to neutralocean's documentation!
-========================================
+neutralocean documentation
+**************************
 
-**neutralocean** is a Python library to calculate oceanic neutral surfaces and related things.
+``neutralocean`` is a Python library to calculate oceanic neutral surfaces and related things.
 
 The major task of this software is to calculate **omega surfaces**, following the algorithm of `Stanley et al. (2021) <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436>`_.  Omega surfaces are highly accurate approximately neutral surfaces that work by iteratively reducing the neutrality error. 
 
@@ -16,17 +16,18 @@ measures of neutrality error.
 
 .. note::
 
-   The documentation is under active development.
+   This documentation is under development.  If you want further documentation on a particular feature, please `email me <mailto:gstanley@uvic.ca>`_.
 
 
 Contents
---------
+========
 
 .. toctree::
    :maxdepth: 2
 
    installation
-   usage
+   grids
+   examples
    API
    internals
    
@@ -35,7 +36,8 @@ Indices and tables
 ==================
 
 * :ref:`genindex`
-* :ref:`modindex`
+
+.. * :ref:`modindex`
 
 
 References
