@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def build_grid(dims, periodic, dxC, dyC, dxG, dyG):
+def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dxG=1.0, dyG=1.0):
     """
     Build pairs of adjacent grid points and associated geometry for a rectilinear grid
 
@@ -14,16 +14,16 @@ def build_grid(dims, periodic, dxC, dyC, dxG, dyG):
     periodic : tuple of bool
         Specifies periodicity.  The i'th dimension is periodic when `periodic[i]` is True.
 
-    dxC : ndarray
+    dxC : float or ndarray, Default 1.0
         Distance between adjacent grid points in the 1st dimension.
 
-    dyC : ndarray
+    dyC : float or ndarray, Default 1.0
         Distance between adjacent grid points in the 2nd dimension
 
-    dxG : ndarray
+    dxG : float or ndarray, Default 1.0
         Distance of the face between adjacent grid points in the 2nd dimension
 
-    dyG : ndarray
+    dyG : float or ndarray, Default 1.0
         Distance of the face between adjacent grid points in the 1st dimension
 
     Returns
@@ -96,7 +96,7 @@ def _build_edges(dims, periodic):
     # Handle second dimension
     if periodic[1]:
         a[Ei:] = idx.reshape(-1)
-        a[Ei:] = np.roll(idx, 1, axis=1).reshape(-1)
+        b[Ei:] = np.roll(idx, 1, axis=1).reshape(-1)
     else:
         a[Ei:] = idx[:, j1:].reshape(-1)
         b[Ei:] = idx[:, :j2].reshape(-1)

@@ -62,16 +62,6 @@ graph_distperp = np.sign(graph_dist) * 1e5
 # neutralocean functions, simply call:
 from neutralocean.grid.graph import build_grid
 grid = build_grid({"dist": graph_dist, "distperp": graph_distperp})
-
-# Essentially, this `build_grid` function gets the row and column indices as
-# well as the data for all non-zero entries.  If the matrix is symmetric 
-# (actually, only the sparsity structure is checked for symmetry), then only 
-# the upper triangle is used.  So, `build_grid` is essentially doing the 
-# following (assuming symmetric matrices): 
-from scipy.sparse import find, triu
-a, b, dist = find(triu(graph_dist))
-_, _, distperp = find(triu(graph_distperp))
-grid = {"edges": (a, b), "dist": dist, "distperp": distperp}
 """
 
 

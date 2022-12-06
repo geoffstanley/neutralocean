@@ -2,6 +2,7 @@ import numpy as np
 import numba as nb
 
 from scipy.sparse import coo_matrix, csr_matrix, find, triu, issparse
+from scipy.linalg import issymmetric
 
 
 @nb.njit
@@ -82,18 +83,28 @@ def edges_to_graph(edges, N=None, weights=None):
     return csr_matrix(G + G.T)
 
 
-def build_grid(Gs):
+def build_grid(G):
     """
     Convert a dict of (undirected) graphs into a grid dict used by neutralocean.
 
     Parameters
     ----------
-    Gs : dict
-        Dictionary of (sparse) matrices, each with the same sparsity structure.
-        Letting `G` be one of elements of `Gs`, the associated undirected graph
-        has an edge between nodes `m` and `n` iff `G[m,n]` is nonzero or
-        `G[m,n]` is nonzero.  If `G` has symmetric sparsity structure, only its
-        upper triangle is used.  Should have 'dist' and 'distperp' entries.
+    G : matrix or dict
+        If a (sparse) matrix, this specifies the edges in the graph:
+            an edge exists between nodes `m` and `n`
+            iff `G[m,n]` is nonzero or `G[n,m]` is nonzero.
+            If `G` is symmetric, only its upper triangle is used.
+            If `G` is not symmetric, it must have only one of `G[m,n]` or
+            `G[n,m]` be non-zero; this condition is not checked for.
+            The geometric distances are both taken to be 1.0, regardless of the
+            data in `G`.
+        If a dict, must have `'dist'` and `'distperp'` entries, which are both
+            (sparse) matrices with the same sparsity structure.
+            The edges in the graph are determined from `G['dist']` as above.
+            The distance between adjacent nodes `m` and `n` is given by
+            `G['dist'][m,n]` or `G['dist'][n,m]`.
+            The distance of the interface between adjacent nodes `m` and `n` is
+            given by `G['distperp'][m,n]` or `G['distperp'][n,m]`.
 
     Returns
     -------
@@ -103,33 +114,44 @@ def build_grid(Gs):
             Each element is an array of int of length E, where E is the number of
             edges in the grid's graph, i.e. the number of pairs of adjacent water
             columns (including land) in the grid.
-            If `edges = (a, b)`, the nodes (water columns) whose linear indices are
-            `a[i]` and `b[i]` are adjacent.
+            If `grid['edges'] = (a, b)`, the nodes (water columns) whose linear
+            indices are `a[i]` and `b[i]` are adjacent.
 
-        grid[key] : 1d array
-            For each key in `Gs`, the data from Gs[key], in the same order as
-            grid['edges'].  That is, `grid[key][i]` is the value of `Gs[key]`
-            at entry `(grid['edges'][0][i], grid['edges'][1][i])`.
+        grid['dist'] : 1d array
+            `grid['dist'][i]` is the distance between nodes `a[i]` and `b[i]`,
+            where `grid['edges'] = (a, b)`.
 
+        grid['distperp'] : 1d array
+            `grid['distperp'][i]` is the distance of the interface between
+            nodes `a[i]` and `b[i]`, where `grid['edges'] = (a, b)`.
     """
 
     grid = dict()
-    first = True
-    for key in Gs:
-        G = Gs[key]
-        if sym_structure(G):  # check for symmetric sparsity structure
-            G = triu(G)
-        a_, b_, data = find(G)
-        if first:
-            a, b = a_, b_
-            grid["edges"] = (a, b)
-            first = False
-        else:
-            if not np.array_equal(a, a_) or not np.array_equal(b, b_):
-                raise ValueError(
-                    "Given matrices have different sparsity structure."
-                )
-        grid[key] = data
+    if isinstance(G, dict):
+        if not ("dist" in G and "distperp" in G):
+            raise ValueError(
+                "If a dict, G must have 'dist' and 'distperp' entries"
+            )
+
+        D = triu_if_sym(G["dist"])
+        P = triu_if_sym(G["distperp"])
+
+        a, b, dist = find(D)
+        A, B, perp = find(P)
+        if not np.array_equal(a, A) or not np.array_equal(b, B):
+            raise ValueError(
+                "Given matrices have different sparsity structure."
+            )
+        grid["edges"] = (a, b)
+        grid["dist"] = dist
+        grid["distperp"] = perp
+
+    else:  # G is a matrix
+        G = triu_if_sym_structure(G)
+        a, b, _ = find(G)
+
+        grid["edges"] = (a, b)
+        grid["dist"] = grid["distperp"] = np.ones(len(a))
 
     return grid
 
@@ -148,3 +170,19 @@ def sym_structure(A):
         return ((A != 0) != (A.T != 0)).nnz == 0
     else:
         return np.all((A == 0) == (A.T == 0))
+
+
+def triu_if_sym(A):
+    """Return upper triangle matrix if symmetric"""
+    if issymmetric(A):
+        return triu(A)
+    else:
+        return A
+
+
+def triu_if_sym_structure(A):
+    """Return upper triangle matrix if symmetric sparsity structure"""
+    if sym_structure(A):
+        return triu(A)
+    else:
+        return A

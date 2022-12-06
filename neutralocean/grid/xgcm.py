@@ -3,7 +3,9 @@ import xarray as xr
 import xgcm
 
 
-def build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dxG, dyG):
+def build_grid(
+    n, face_connections, dims, xsh, ysh, dxC=1.0, dyC=1.0, dxG=1.0, dyG=1.0
+):
     """
     Make a list of edges between adjacent nodes in a graph consisting of
     rectilinear tiles, with adjacency between tiles specified as for xgcm;
@@ -57,16 +59,16 @@ def build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dxG, dyG):
         If "right", then `dyC` is the distance between the local grid point (i, j)
         and the next grid point in the 'j' dimension, at (i, j+1).
 
-    dxC : ndarray
+    dxC : float or ndarray, Default 1.0
         Distance between adjacent grid points in the 'i' dimension.
 
-    dyC : ndarray
+    dyC : float or ndarray, Default 1.0
         Distance between adjacent grid points in the 'j' dimension
 
-    dxG : ndarray
+    dxG : float or ndarray, Default 1.0
         Distance of the face between adjacent grid points in the 'j' dimension
 
-    dyG : ndarray
+    dyG : float or ndarray, Default 1.0
         Distance of the face between adjacent grid points in the 'i' dimension
 
 
