@@ -11,13 +11,13 @@ Approximately Neutral Surfaces
 
 Potential Density Surface
 -------------------------
-.. autofunction:: neutralocean.surface.trad.potential_surf
+.. autofunction:: neutralocean.surface.isopycnal.potential_surf
 
 .. _sva_surf:
 
 Specific Volume Anomaly Surface
 -------------------------------
-.. autofunction:: neutralocean.surface.trad.anomaly_surf
+.. autofunction:: neutralocean.surface.isopycnal.anomaly_surf
 
 .. _omega_surf:
 
