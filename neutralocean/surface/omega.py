@@ -691,6 +691,9 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     # Solve the matrix problem, L ϕ = D
     ϕ[m] = spsolve(L, D)
 
+    # Fix machine precision errors by applying pinning condition exactly
+    ϕ[mref] = 0.0
+
     ϕ = ϕ.reshape(p.shape)
     return ϕ
 

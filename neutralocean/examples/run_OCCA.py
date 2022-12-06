@@ -218,6 +218,30 @@ from neutralocean.ppinterp import select_ppc
 from neutralocean.eos import make_eos_p, vectorize_eos
 from neutralocean.traj import ntp_bottle_to_cast, _ntp_bottle_to_cast
 
+# In[Show vertical interpolation]
+
+# Make interpolation function using same interpolation kernel ("pchip") as last
+# ANS surface constructed above.  Evaluate the interpolate, not any of its
+# derivatives (deriv=0).  Make a universal interpolator (kind="u") to handle
+# the entire dataset in one function call.  Interpolate salinity and temperature
+# in one pass (two=True).
+interp_two = make_interpolator("pchip", deriv=0, kind="u", two=True)
+
+# Apply interpolation function to interpolate salinity and temperature onto the
+# depth of the surface.  This requires working with numpy arrays, not xarrays.
+s_, t_ = interp_two(z.values, Z, S.values, T.values)
+
+# Check that the results of the above interpolation match (to machine precision)
+# the results returned from omega_surf above.
+s_check = np.allclose(s.values, s_, atol=1e-15, equal_nan=True)
+t_check = np.allclose(t.values, t_, atol=1e-15, equal_nan=True)
+if not (s_check and t_check):
+    print(
+        "Something's wrong; should be able to reconstruct salinity and "
+        "temperature on surface by interpolating to surface's depth"
+    )
+
+
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]

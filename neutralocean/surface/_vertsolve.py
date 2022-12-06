@@ -81,6 +81,8 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, ppc_fn):
 
     for n in np.ndindex(s.shape):
         ϕn = ϕ[n]
+        if ϕn == 0.0:
+            continue  # leave s,t,p unchanged (avoid creating errors of size tol_p)
         k = n_good[n]
         if k > 1 and np.isfinite(ϕn):
 
@@ -94,13 +96,13 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, ppc_fn):
             Sppcn = ppc_fn(Pn, Sn)
             Tppcn = ppc_fn(Pn, Tn)
 
-            # Evaluate difference between (a) eos at location on the cast where the
-            # pressure or depth is p, and (b) eos at location on the cast where the
-            # pressure or depth is pin_p (where the surface currently is) plus the density
-            # perturbation d.  Part (b) is precomputed as r0.  Here, eos always
-            # evaluated at the pressure or depth of the original position, pin_p; this is
-            # to calculate locally referenced potential density with reference pressure
-            # pin_p.
+            # Evaluate difference between
+            # (a) eos at location on the cast where the pressure or depth is p, and
+            # (b) eos at location on the cast where the pressure or depth is pn
+            # (where the surface currently is) plus the density perturbation d.
+            # Part (b) is precomputed.  Here, eos always evaluated at the
+            # pressure or depth of the original position, pn, i.e. we calculate
+            # locally referenced potential density.
             args = (Sppcn, Tppcn, Pn, pn, eos(s[n], t[n], pn) + ϕn, eos)
 
             # Search for a sign-change, expanding outward from an initial guess
