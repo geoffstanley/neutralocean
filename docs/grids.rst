@@ -5,7 +5,7 @@ There are many different types of grids used by ocean models, such as latitude-l
 
 ``neutralocean`` can handle any dataset of vertical casts: you just have to specify which pairs of casts are adjacent.  We think of the horizontal grid as a `graph <https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)>`_: a collection of nodes and edges.  Each node is a vertical cast (which could be ocean or land).  Two nodes are joined by an edge when the two vertical casts are adjacent.  
 
-Example.  Suppose we took 4 casts from the ocean, with three in a triangle and a fourth off to the side (as in the ``4casts.py`` :ref:`installation:Test example`):
+Example.  Suppose we took 4 casts from the ocean, with three in a triangle and a fourth off to the side (as in the ``run_4casts.py`` :ref:`installation:Test example`):
 
 .. figure:: img/graph4casts.png
    :alt: graph of 4 casts
