@@ -1,7 +1,8 @@
 """
-Calculate traditional approximately neutral surfaces, namely potential density
-surfaces and in-situ density (or specific volume) anomaly surfaces, from
-structured ocean data. 
+Calculate approximately neutral surfaces that are isosurfaces of an function
+with a closed form mathematical expression, namely 
+potential density (or specific volume) surfaces and 
+in-situ density (or specific volume) anomaly surfaces.
 """
 
 import numpy as np
@@ -21,13 +22,13 @@ from neutralocean.lib import (
 
 
 def potential_surf(S, T, P, **kwargs):
-    """Calculate a potential density surface from structured ocean data.
+    """Calculate a potential density (or specific volume) surface.
 
     Given practical / Absolute salinity `S`, potential / Conservative
     temperature `T`, and pressure (when non-Boussinesq) or depth
-    (when Boussinesq) `P` arranged on a rectilinear grid, and given a
-    reference pressure `ref`, calculate an isosurface of `eos(S, T, ref)`
-    where `eos` is the equation of state.
+    (when Boussinesq) `P`, and given a reference pressure / depth `ref`,
+    calculate an isosurface of `eos(S, T, ref)` where `eos` is the equation
+    of state.
 
     Parameters
     ----------
@@ -181,10 +182,10 @@ def potential_surf(S, T, P, **kwargs):
         taking the same three inputs as above and returning two outputs, namely
         the partial derivatives of the equation of state with respect to `S`
         and `T`.  The second element can be made as, e.g.,
-        `eos = neutralocean.eos.make_eos_s_t('gsw', grav, rho_c)`
+        `eos_s_t = neutralocean.eos.make_eos_s_t('gsw', grav, rho_c)`
 
         The function (or the first element of the tuple of functions) should be
-        @numba.njit decorated and need not be vectorized -- it will be called
+        `@numba.njit` decorated and need not be vectorized -- it will be called
         many times with scalar inputs.
 
     grav : float, Default None
@@ -260,16 +261,16 @@ def potential_surf(S, T, P, **kwargs):
     have the vertical dimension last.
     """
 
-    return _traditional_surf("potential", S, T, P, **kwargs)
+    return _isopycnal("potential", S, T, P, **kwargs)
 
 
 def anomaly_surf(S, T, P, **kwargs):
-    """Calculate a specific volume (or in-situ density) anomaly surface from structured ocean data.
+    """Calculate a specific volume (or in-situ density) anomaly surface.
 
     Given practical / Absolute salinity `S`, potential / Conservative
-    temperature `T`, and pressure / depth `P` arranged on a rectilinear grid,
-    and given a reference values `S0` and `T0`, calculate an isosurface of
-    `eos(S, T, P) - eos(S0, T0, P)` where `eos` is the equation of state.
+    temperature `T`, and pressure / depth `P`, and given reference values
+    `S0` and `T0`, calculate  an isosurface of `eos(S, T, P) - eos(S0, T0, P)`
+    where `eos` is the equation of state.
 
     In a non-Boussinesq ocean, `P` is pressure.  Also, if one is computing
     geostrophic streamfunctions, it is most convenient if `eos` provides the
@@ -299,7 +300,7 @@ def anomaly_surf(S, T, P, **kwargs):
     -------
     s, t, p, d :
         See `potential_surf`.
-        Note d["ref"] returns a 2 element tuple, namely `ref` as here.
+        Note `d["ref"]` returns a 2 element tuple, namely `ref` as here.
 
     Other Parameters
     ----------------
@@ -335,13 +336,14 @@ def anomaly_surf(S, T, P, **kwargs):
     See `potential_surf`.
     """
 
-    return _traditional_surf("anomaly", S, T, P, **kwargs)
+    return _isopycnal("anomaly", S, T, P, **kwargs)
 
 
-def _traditional_surf(ans_type, S, T, P, **kwargs):
-    """Core function to calculate "potential" or "anomaly" surfaces.
-    Inputs are as in `potential` and `anomaly`, but first input is a string
-    specifying "potential" or "anomaly" """
+def _isopycnal(ans_type, S, T, P, **kwargs):
+    """Calculate an isosurface of potential density or specific volume anomaly.
+
+    Inputs are as in `potential_surf` and `anomaly_surf`, but first input is a
+    string specifying "potential" or "anomaly" """
 
     ref = kwargs.get("ref")
     isoval = kwargs.get("isoval")
@@ -358,7 +360,6 @@ def _traditional_surf(ans_type, S, T, P, **kwargs):
     n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
-    # interp_1_twice = make_interpolator(interp, 0, "1", True)
     ppc_fn = select_ppc(interp, "1")
 
     # Process arguments
@@ -419,9 +420,9 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     and "anomaly" surfaces
     """
     # First check None values to validate one of the following options:
-    # >>> _traditional_surf(ans_type, S, T, P, ref, isoval)
-    # >>> _traditional_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
-    # >>> _traditional_surf(ans_type, S, T, P, pin_cast, pin_p)
+    # >>> _isopycnal(ans_type, S, T, P, ref, isoval)
+    # >>> _isopycnal(ans_type, S, T, P, ref, pin_cast, pin_p)
+    # >>> _isopycnal(ans_type, S, T, P, pin_cast, pin_p)
     if ref is None:
         if pin_cast is None or pin_p is None:
             raise TypeError(
@@ -466,9 +467,9 @@ def _choose_ref_isoval(
     ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
 ):
     # Handle the three valid calls in the following order of precedence:
-    # >>> _traditional_surf(ans_type, S, T, P, ref, isoval)
-    # >>> _traditional_surf(ans_type, S, T, P, ref, pin_cast, pin_p)
-    # >>> _traditional_surf(ans_type, S, T, P, pin_cast, pin_p)
+    # >>> _isopycnal(ans_type, S, T, P, ref, isoval)
+    # >>> _isopycnal(ans_type, S, T, P, ref, pin_cast, pin_p)
+    # >>> _isopycnal(ans_type, S, T, P, pin_cast, pin_p)
     if isoval is None:  # => pin_cast and pin_p are both not None
         n0 = pin_cast  # evaluate S and T on the surface at the chosen location
         # s0, t0 = interp_fn(pin_p, P[n0], S[n0], T[n0])

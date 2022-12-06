@@ -5,7 +5,7 @@ from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import lsqr
 from scipy.sparse.linalg import spsolve
 
-from neutralocean.surface.trad import _traditional_surf
+from neutralocean.surface.isopycnal import _isopycnal
 from neutralocean.surface._vertsolve import _make_vertsolve
 from neutralocean.interp1d import make_interpolator
 from neutralocean.ppinterp import select_ppc
@@ -79,10 +79,11 @@ def omega_surf(S, T, P, grid, **kwargs):
 
     d : dict
 
-        Diagnostics.  The first four give information going into the `i`'th
-        iteration (e.g. the 0'th element is about the initial surface).  The
-        others give information about what the `i`'th iteration did (and hence
-        their 0'th elements are irrelevant).
+        Diagnostics.
+        The first four listed below give information going into the `i`'th
+        iteration (e.g. the 0'th element is about the initial surface).
+        The rest give information about what the `i`'th iteration did (and
+        hence their 0'th elements are irrelevant).
 
         `"e_MAV"` : array of float
 
@@ -226,8 +227,8 @@ def omega_surf(S, T, P, grid, **kwargs):
 
     For more info on these methods, see the Examples section of `potential_surf`.
     Note that `pin_cast` is always a required input.  Note that `ref` is
-    needed to distinguish which of the two types of traditional surfaces will
-    be used as the initial surface.
+    needed to distinguish which of the two types of isopycnals will be used as
+    the initial surface.
 
     Notes
     -----
@@ -335,7 +336,7 @@ def omega_surf(S, T, P, grid, **kwargs):
         kwargs["diags"] = False  # Will make our own diags next
         kwargs["eos"] = eos
         kwargs["pin_cast"] = pin_cast  # update with the 1D value
-        s, t, p, _ = _traditional_surf(ans_type, S, T, P, **kwargs)
+        s, t, p, _ = _isopycnal(ans_type, S, T, P, **kwargs)
 
     else:
         # Handling and error checking on p_init
@@ -439,7 +440,6 @@ def omega_surf(S, T, P, grid, **kwargs):
                 p_ml,
             )
         else:
-            # TODO: change isfinite(p) to isfinite(s)?   No need, since `p[np.isnan(s)] = np.nan` is run before entering this loop.
             bfsqu = bfs_conncomp1(
                 graph.indptr, graph.indices, pin_cast, np.isfinite(p)
             )

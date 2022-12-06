@@ -56,8 +56,6 @@ def _vertsolve(S, T, P, n_good, ref, d0, tol_p, eos, ppc_fn, zero_func):
             Sppcn = ppc_fn(Pn, Sn)
             Tppcn = ppc_fn(Pn, Tn)
 
-            # args = (Sn, Tn, Pn, ref, d0, eos, interp_fn)
-            # args = (Sn, Sppcn, Tn, Tppcn, Pn, ref, d0, eos) # Actually slower than combining Sn into Sppcn
             args = (Sppcn, Tppcn, Pn, ref, d0, eos)
 
             # Use mid-pressure as initial guess
@@ -72,8 +70,6 @@ def _vertsolve(S, T, P, n_good, ref, d0, tol_p, eos, ppc_fn, zero_func):
                 p[n] = brent(zero_func, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                # s[n], t[n] = interp_fn(p[n], Pn, Sn, Tn)
-                # s[n], t[n] = interp2_1d(p[n], Pn, Sn, Sppcn, Tn, Tppcn)
                 s[n], t[n] = ppval1_two(p[n], Pn, Sppcn, Tppcn, 0)
 
     return s, t, p
@@ -128,20 +124,6 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, ppc_fn):
             s[n], t[n], p[n] = np.nan, np.nan, np.nan
 
     return None
-
-
-# @nb.njit
-# def _zero_potential(p, S, T, P, ref_p, isoval, eos, interp_fn):
-#     # Evaluate the potential density in a given cast, minus a given isovalue
-#     s, t = interp_fn(p, P, S, T)
-#     return eos(s, t, ref_p) - isoval
-
-
-# @nb.njit
-# def _zero_potential(p, S, Sppc, T, Tppc, P, ref_p, isoval, eos):
-#     # Evaluate the potential density in a given cast, minus a given isovalue
-#     s, t = interp2_1d(p, P, S, Sppc, T, Tppc)
-#     return eos(s, t, ref_p) - isoval
 
 
 @nb.njit

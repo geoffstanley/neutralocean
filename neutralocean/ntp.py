@@ -70,7 +70,6 @@ def ntp_epsilon_errors_norms(
             columns (including land) in the grid.
             If `edges = (a, b)`, the nodes (water columns) whose linear indices are
             `a[i]` and `b[i]` are adjacent.
-            If one of `a[i]` or `b[i]` is less than 0, that edge does not exist. # TODO:  Is this necessary?
 
         dist : 1d array, Default 1.0
             Horizontal distance between adjacent water columns (nodes).

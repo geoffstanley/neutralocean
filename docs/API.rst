@@ -111,6 +111,11 @@ TEOS-10 GSW
 
 .. autofunction:: neutralocean.eos.gsw.specvol_p
 
+.. autofunction:: neutralocean.eos.gsw.specvol_s_t_ss_st_tt_sp_tp
+
+.. autofunction:: neutralocean.eos.gsw.specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp
+
+
 (Vertical) Interpolation
 ========================
 
