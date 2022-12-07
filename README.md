@@ -1,4 +1,17 @@
 # neutralocean
+
+<a href="https://neutralocean.readthedocs.org">
+    <img alt="latest docs" src="https://img.shields.io/badge/documentation-latest-blue">
+</a>
+
+<a href="https://badge.fury.io/py/neutralocean">
+    <img alt="latest docs" src="https://badge.fury.io/py/neutralocean.svg">
+</a>
+
+<a href="https://anaconda.org/conda-forge/neutralocean">
+    <img alt="latest docs" src="https://img.shields.io/conda/vn/conda-forge/neutralocean.svg">
+</a>
+
 Calculate neutral surfaces in the ocean, using Python.
 
 The major task of this software is to calculate **omega-surfaces**, following the algorithm of [Stanley et al. (2021)](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436).  Omega surfaces are highly accurate approximately neutral surfaces that work by iteratively reducing the neutrality error. 
