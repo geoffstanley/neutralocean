@@ -17,12 +17,14 @@
 
 # -- Project information -----------------------------------------------------
 
+from neutralocean import __version__
+
 project = 'Neutral Ocean'
 copyright = '2022, Geoffrey Stanley'
 author = 'Geoffrey Stanley'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = __version__
 
 
 # -- General configuration ---------------------------------------------------
