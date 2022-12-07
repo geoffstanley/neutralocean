@@ -14,6 +14,8 @@ measures of neutrality error.
 
 **Topobaric surfaces** `(Stanley, 2019a) <https://www.sciencedirect.com/science/article/pii/S1463500318302221>`_ and their modified form `(Stanley 2019b) <https://www.sciencedirect.com/science/article/pii/S1463500318302233>`_ are the most accurate approximately neutral surfaces that posses an exact geostrophic streamfunction (furnishing an Ertel potential vorticity with no baroclinic production term).  Software to compute topobaric surfaces is significantly more complicated and is currently only available in the original MATLAB `neutral-surfaces <https://github.com/geoffstanley/neutral-surfaces>`_ toolbox.
 
+**How to cite?** If you use this software, the most appropriate paper to cite is `Stanley et al. (2021) <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436>`_.
+
 .. note::
 
    This documentation is under development.  If you want further documentation on a particular feature, please `email me <mailto:gstanley@uvic.ca>`_.
