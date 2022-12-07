@@ -120,6 +120,7 @@ z0 = 1500.0  # pinning depth
 s, t, z, _ = potential_surf(
     S, T, Z, eos=eos, vert_dim="k", ref=0.0, isoval=1027.5, diags=False
 )
+z_sigma = z
 
 # Build in-situ density anomaly surface with given reference salinity and
 # potential temperature values and an isovalue of 0, which means the surface
@@ -137,23 +138,23 @@ s, t, z, d = anomaly_surf(
     isoval=0.0,
 )
 
-# Build an omega surface that intersects the reference cast `pin_cast` at the
-# reference depth `pin_p`, initialized from a potential density surface that
-# also intersects this `pin_cast` at `pin_p` and uses a local reference
-# depth, namely `pin_p`.
+# Build an omega surface that is initialized from the above potential density
+# surface and is pinned at the cast `pin_cast` (i.e. the omega surface will have
+# the same depth as the initializing potential density surface at this cast).
 s, t, z, d = omega_surf(
     S,
     T,
     Z,
     grid=grid,
     vert_dim="k",
+    p_init=z_sigma,
     pin_cast=pin_cast,
-    pin_p=z0,
     eos=(eos, eos_s_t),
     interp="pchip",
     ITER_MAX=10,
     ITER_START_WETTING=1,
 )
+z_omega = z
 
 # In[Calculate neutrality error]
 
@@ -164,3 +165,31 @@ e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 # for the errors in each of the two lateral ('i' and 'j') dimensions.  These
 # neutrality errors can then be mapped or further analyzed.
 ei, ej = edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)
+
+# In[Map depth difference between omega and potential]
+
+# I've installed ecco_v4_py by cloning their git repository to ~/work/python/ECCOv4-py
+# Follow https://ecco-v4-python-tutorial.readthedocs.io/Installing_Python_and_Python_Packages.html#option-1-clone-into-the-repository-using-git-recommended
+# and edit path below as needed.
+import sys
+import matplotlib.pyplot as plt
+
+sys.path.append("/home/stanley/work/python/ECCOv4-py/")
+import ecco_v4_py as ecco
+
+ecco.plot_tiles(
+    z_omega - z_sigma,
+    cmin=-200,
+    cmax=200,
+    fig_size=9,
+    layout="latlon",
+    rotate_to_latlon=True,
+    Arctic_cap_tile_location=10,
+    show_tile_labels=False,
+    show_colorbar=True,
+    show_cbar_label=True,
+    cbar_label="Depth difference [m]",
+)
+plt.suptitle("z_omega - z_sigma")
+
+plt.savefig("/home/stanley/Fig.png", bbox_inches="tight")
