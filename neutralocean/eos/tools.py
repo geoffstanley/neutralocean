@@ -1,6 +1,7 @@
 """Tools for handling the Equation of State"""
 import functools as ft
 import numba as nb
+import importlib
 
 # List of modules in the same directory as this file, each of which must have
 # the following numba.njit'ed functions:  rho, rho_s_t, rho_p.
@@ -11,8 +12,8 @@ def _make_eos(eos, derivs, num_p_derivs=0, grav=None, rho_c=None):
     if isinstance(eos, str):
         if eos in modules:
             fcn_name = modules[eos] + derivs
-            fn = __import__(
-                "." + eos, globals(), locals(), [fcn_name], 1
+            fn = importlib.import_module(
+                "neutralocean.eos." + eos
             ).__getattribute__(fcn_name)
         else:
             raise ValueError(
