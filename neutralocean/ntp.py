@@ -87,10 +87,10 @@ def ntp_epsilon_errors_norms(
         inputs.
 
     grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
 
     rho_c : float, Default None
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
 
     Returns
     -------

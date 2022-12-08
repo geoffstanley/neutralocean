@@ -189,15 +189,15 @@ def potential_surf(S, T, P, **kwargs):
         many times with scalar inputs.
 
     grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
 
     rho_c : float, Default None
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
 
     interp : str, Default 'linear'
 
-        Method for vertical interpolation.  Use 'linear' for linear
-        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Method for vertical interpolation.  Use `'linear'` for linear
+        interpolation, and `'pchip'` for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
@@ -213,8 +213,8 @@ def potential_surf(S, T, P, **kwargs):
 
     output : bool, Default True
 
-        If True, prints diagnostic output during computation.
-        `diags` must be True for this to have any effect.
+        If `True`, prints diagnostic output during computation.
+        `diags` must be `True` for this to have any effect.
         To redirect this output to a file, do the following
         >>> import sys
         >>> tmp = sys.stdout

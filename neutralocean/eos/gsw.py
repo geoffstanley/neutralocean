@@ -19,61 +19,64 @@ To make Boussinesq versions of these functions, see
 To make vectorized versions of these functions, see
 `neutralocean.eos.tools.vectorize_eos`.
 
-All functions here are derived from gsw_specvol, documented below.
+All functions here are derived from `gsw_specvol`, documented below.
 
-# gsw_specvol                            specific volume (75-term equation)
-#==========================================================================
-# 
-# USAGE:  
-#  specvol = gsw_specvol(SA,CT,p)
-# 
-# DESCRIPTION:
-#  Calculates specific volume from Absolute Salinity, Conservative 
-#  Temperature and pressure, using the computationally-efficient 75-term 
-#  polynomial expression for specific volume (Roquet et al., 2015).
-#
-#  Note that the 75-term equation has been fitted in a restricted range of 
-#  parameter space, and is most accurate inside the "oceanographic funnel" 
-#  described in McDougall et al. (2003).  The GSW library function 
-#  "gsw_infunnel(SA,CT,p)" is available to be used if one wants to test if 
-#  some of one's data lies outside this "funnel".  
-#
-# INPUT:
-#  SA  =  Absolute Salinity                                        [ g/kg ]
-#  CT  =  Conservative Temperature (ITS-90)                       [ deg C ]
-#  p   =  sea pressure                                             [ dbar ]
-#         ( i.e. absolute pressure - 10.1325 dbar )
-#
-#  SA & CT need to have the same dimensions.
-#  p may have dimensions 1x1 or Mx1 or 1xN or MxN, where SA & CT are MxN.
-#
-# OUTPUT:
-#  specvol  =  specific volume                                   [ m^3/kg ]
-#
-# AUTHOR: 
-#  Fabien Roquet, Gurvan Madec, Trevor McDougall & Paul Barker
-#                                                      [ help@teos-10.org ]
-#
-# VERSION NUMBER: 3.06 (30th August, 2018)
-# 
-# REFERENCES:
-#  IOC, SCOR and IAPSO, 2010: The international thermodynamic equation of 
-#   seawater - 2010: Calculation and use of thermodynamic properties.  
-#   Intergovernmental Oceanographic Commission, Manuals and Guides No. 56,
-#   UNESCO (English), 196 pp.  Available from http://www.TEOS-10.org.  
-# 
-#  McDougall, T.J., D.R. Jackett, D.G. Wright and R. Feistel, 2003: 
-#   Accurate and computationally efficient algorithms for potential 
-#   temperature and density of seawater.  J. Atmos. Ocean. Tech., 20, 
-#   730-741.
-#
-#  Roquet, F., G. Madec, T.J. McDougall, P.M. Barker, 2015: Accurate
-#   polynomial expressions for the density and specifc volume of seawater
-#   using the TEOS-10 standard. Ocean Modelling., 90, pp. 29-43.
-#
-#  This software is available from http://www.TEOS-10.org
-# 
-#==========================================================================
+.. highlight:: python
+.. code-block:: python
+
+    # gsw_specvol                            specific volume (75-term equation)
+    #==========================================================================
+    # 
+    # USAGE:  
+    #  specvol = gsw_specvol(SA,CT,p)
+    # 
+    # DESCRIPTION:
+    #  Calculates specific volume from Absolute Salinity, Conservative 
+    #  Temperature and pressure, using the computationally-efficient 75-term 
+    #  polynomial expression for specific volume (Roquet et al., 2015).
+    #
+    #  Note that the 75-term equation has been fitted in a restricted range of 
+    #  parameter space, and is most accurate inside the "oceanographic funnel" 
+    #  described in McDougall et al. (2003).  The GSW library function 
+    #  "gsw_infunnel(SA,CT,p)" is available to be used if one wants to test if 
+    #  some of one's data lies outside this "funnel".  
+    #
+    # INPUT:
+    #  SA  =  Absolute Salinity                                        [ g/kg ]
+    #  CT  =  Conservative Temperature (ITS-90)                       [ deg C ]
+    #  p   =  sea pressure                                             [ dbar ]
+    #         ( i.e. absolute pressure - 10.1325 dbar )
+    #
+    #  SA & CT need to have the same dimensions.
+    #  p may have dimensions 1x1 or Mx1 or 1xN or MxN, where SA & CT are MxN.
+    #
+    # OUTPUT:
+    #  specvol  =  specific volume                                   [ m^3/kg ]
+    #
+    # AUTHOR: 
+    #  Fabien Roquet, Gurvan Madec, Trevor McDougall & Paul Barker
+    #                                                      [ help@teos-10.org ]
+    #
+    # VERSION NUMBER: 3.06 (30th August, 2018)
+    # 
+    # REFERENCES:
+    #  IOC, SCOR and IAPSO, 2010: The international thermodynamic equation of 
+    #   seawater - 2010: Calculation and use of thermodynamic properties.  
+    #   Intergovernmental Oceanographic Commission, Manuals and Guides No. 56,
+    #   UNESCO (English), 196 pp.  Available from http://www.TEOS-10.org.  
+    # 
+    #  McDougall, T.J., D.R. Jackett, D.G. Wright and R. Feistel, 2003: 
+    #   Accurate and computationally efficient algorithms for potential 
+    #   temperature and density of seawater.  J. Atmos. Ocean. Tech., 20, 
+    #   730-741.
+    #
+    #  Roquet, F., G. Madec, T.J. McDougall, P.M. Barker, 2015: Accurate
+    #   polynomial expressions for the density and specifc volume of seawater
+    #   using the TEOS-10 standard. Ocean Modelling., 90, pp. 29-43.
+    #
+    #  This software is available from http://www.TEOS-10.org
+    # 
+    #==========================================================================
 
 .. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
        the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
@@ -289,8 +292,8 @@ def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p):
     Returns
     -------
     s, t, ss, st, tt, sp, tp : float
-        Partial derivs of specific volume w.r.t. SA, CT, SA*SA, SA*CT, CT*CT,
-        SA*p, CT*p.
+        Partial derivatives of specific volume w.r.t. `SA`, `CT`, `SA*SA`, `SA*CT`, `CT*CT`,
+        `SA*p`, `CT*p`.
     """
     (x, y, z, x2) = _process(SA, CT, p)
     s = _s(x, y, z)
@@ -321,7 +324,7 @@ def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p):
     Returns
     -------
     s, t, ss, st, tt, sp, tp, sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp : float
-        Partial derivs of specific volume.
+        Partial derivatives of specific volume.
     """
     (x, y, z, x2) = _process(SA, CT, p)
 
