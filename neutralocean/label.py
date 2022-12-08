@@ -70,8 +70,8 @@ def veronis_density(
 
     interp : str, Default 'linear'
 
-        Method for vertical interpolation.  Use 'linear' for linear
-        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Method for vertical interpolation.  Use `'linear'` for linear
+        interpolation, and `'pchip'` for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
         `interp1d`.
 

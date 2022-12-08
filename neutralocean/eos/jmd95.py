@@ -103,7 +103,7 @@ def rho(s, t, p):
 
     Notes
     -----
-    This function is derived from densjmd95.m, documented below. Input
+    This function is derived from `densjmd95.m`, documented below. Input
     checks and expansion of variables have been removed. That code used
     arrays to store coefficients, and also began by multiplying the
     input pressure by 10 (dbar -> bar). The coefficients, modified to
@@ -113,36 +113,38 @@ def rho(s, t, p):
     multiplications.
 
     As such, the output of this function differs from the output of the
-    original densjmd95.m function, though the difference is at the
+    original `densjmd95.m` function, though the difference is at the
     level of machine precision.
 
+    .. highlight:: matlab
+    .. code-block:: matlab
 
-    % DENSJMD95    Density of sea water
-    %=========================================================================
-    %
-    % USAGE:  dens = densjmd95(S,Theta,P)
-    %
-    % DESCRIPTION:
-    %    Density of Sea Water using Jackett and McDougall 1995 (JAOT 12)
-    %    polynomial (modified UNESCO polynomial).
-    %
-    % INPUT:  (all must have same dimensions)
-    %   S     = salinity    [psu      (PSS-78)]
-    %   Theta = potential temperature [degree C (IPTS-68)]
-    %   P     = pressure    [dbar]
-    %       (P may have dims 1x1, mx1, 1xn or mxn for S(mxn) )
-    %
-    % OUTPUT:
-    %   dens = density  [kg/m^3]
-    %
-    % AUTHOR:  Martin Losch 2002-08-09  (mlosch@mit.edu)
+        % DENSJMD95    Density of sea water
+        %=========================================================================
+        %
+        % USAGE:  dens = densjmd95(S,Theta,P)
+        %
+        % DESCRIPTION:
+        %    Density of Sea Water using Jackett and McDougall 1995 (JAOT 12)
+        %    polynomial (modified UNESCO polynomial).
+        %
+        % INPUT:  (all must have same dimensions)
+        %   S     = salinity    [psu      (PSS-78)]
+        %   Theta = potential temperature [degree C (IPTS-68)]
+        %   P     = pressure    [dbar]
+        %       (P may have dims 1x1, mx1, 1xn or mxn for S(mxn) )
+        %
+        % OUTPUT:
+        %   dens = density  [kg/m^3]
+        %
+        % AUTHOR:  Martin Losch 2002-08-09  (mlosch@mit.edu)
 
 
-    % Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+        % Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
 
-    % created by mlosch on 2002-08-09
-    % $Header: /u/gcmpack/MITgcm/utils/matlab/densjmd95.m,v 1.2 2007/02/17 23:49:43 jmc Exp $
-    % $Name:  $
+        % created by mlosch on 2002-08-09
+        % $Header: /u/gcmpack/MITgcm/utils/matlab/densjmd95.m,v 1.2 2007/02/17 23:49:43 jmc Exp $
+        % $Name:  $
 
     .. [1] Jackett and McDougall, 1995, JAOT 12[4], pp. 381-388
     """

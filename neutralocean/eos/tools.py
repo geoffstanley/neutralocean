@@ -41,9 +41,9 @@ def make_eos(eos, grav=None, rho_c=None):
     ----------
     eos : str or function
 
-        If a str, can be 'gsw' to generate the TEOS-10 specific volume [1]_,
-        'jmd95' to generate the Jackett and McDougall (1995) in-situ
-        density [2]_, or 'jmdfwg06' to generate the Jackett et al (2006)
+        If a str, can be `'gsw'` to generate the TEOS-10 specific volume [1]_,
+        `'jmd95'` to generate the Jackett and McDougall (1995) in-situ
+        density [2]_, or `'jmdfwg06'` to generate the Jackett et al (2006)
         in-situ density [3]_.
 
         If a function, should be an equation of state as a function of
@@ -179,7 +179,7 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
 
 @ft.lru_cache(maxsize=10)
 def vectorize_eos(eos):
-    """Convert an eos function that takes scalar inputs into one taking arrays
+    """Convert an `eos` function that takes scalar inputs into one taking arrays.
 
     Parameters
     ----------
@@ -192,7 +192,7 @@ def vectorize_eos(eos):
     Returns
     -------
     eos_vec : function
-        A @numba.vectorize'd version of `eos`, which can take array inputs and
+        A `@numba.vectorize`'d version of `eos`, which can take array inputs and
         returns one array output.  The array inputs' shape need not match
         exactly, but must be broadcastable to each other.
     """

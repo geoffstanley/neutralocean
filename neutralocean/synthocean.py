@@ -15,24 +15,24 @@ def synthocean(
         respectively.
 
     pbot : float, Default 4000.0
-        Value of P at the bottommost data point, i.e. P[-1]
+        Value of `P` at the bottommost data point, i.e. `P[-1]`
 
     SSSSa : float, Default 0.3
         Southern Sea Surface Salinity anomaly: the sea surface salinity is
         increased by `SSSS` in the southernmost grid cells, and by 0 in the
-        northernmost grid cells, and linearly in between.   The degree to
-        which the sourthern casts are statically unstable can be controlled
-        by this parameter. Increase to make more usntable.
+        northernmost grid cells, and linearly in between. The degree to
+        which the southern casts are statically unstable can be controlled
+        by this parameter. Increase to make more unstable.
 
     zonally_uniform : bool, Default False
-        If True, the synthetic ocean is uniform in longitude, and the neutral
-        helicity is zero.  If False, some zonal structure is created which
+        If `True`, the synthetic ocean is uniform in longitude, and the neutral
+        helicity is zero.  If `False`, some zonal structure is created which
         results in non-zero neutral helicity.
 
     wrap : tuple of bool, Default (False, False)
         Specify periodicity of the lateral dimensions.
-        When wrap[0] is False, S[0,:,:] = T[0,:,:] = nan.
-        When wrap[1] is False, S[:,0,:] = T[:,0,:] = nan.
+        When `wrap[0]` is `False`, `S[0, :, :] = T[0, :, :] = nan`.
+        When `wrap[1]` is `False`, `S[:, 0, :] = T[:, 0, :] = nan`.
 
 
     Returns

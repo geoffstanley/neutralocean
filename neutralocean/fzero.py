@@ -44,29 +44,29 @@ def brent(f, a, b, t, args=()):
     """
     Find a zero of a univariate function within a given range
 
-    This is a bracketed root-finding method, so f(a) and f(b) must differ in
-    sign.  If they do, a root is guaranteed to be found.
+    This is a bracketed root-finding method, so `f(a)` and `f(b)` must differ in
+    sign. If they do, a root is guaranteed to be found.
 
     Parameters
     ----------
     f : function
         Continuous function of a single variable.
     a, b : float
-        Range within which to search, satisfying a < b and ideally f(a) * f(b) <= 0
+        Range within which to search, satisfying `a < b` and ideally `f(a) * f(b) <= 0`
     t : float
         Tolerance for convergence.
     args : tuple
-        Additional arguments, beyond the optimization argument, to be passed to f.
-        Pass () when f is univariate.
+        Additional arguments, beyond the optimization argument, to be passed to `f`.
+        Pass `()` when `f` is univariate.
 
     Returns
     -------
     float
-        Value of x where f(x) ~ 0.
+        Value of x where `f(x) ~ 0`.
 
     Notes
     -----
-    f should be a @numba.njit'ed function (when this function is njit'ed).
+    f should be a `@numba.njit`'ed function (when this function is `njit`'ed).
     """
 
     # Protection against bad input search range
@@ -165,15 +165,15 @@ def guess_to_bounds(f, x, A, B, args=()):
     x : float
         Central point for starting the search
     A, B : float
-        Lower and upper bounds, containing x, within which to search for a zero.
+        Lower and upper bounds, containing `x`, within which to search for a zero.
     args : tuple
         Additional arguments beyond the optimization argument.
-        Pass () when f is univariate.
+        Pass `()` when `f` is univariate.
 
     Returns
     -------
     a, b : float
-        Lower and upper bounds within which f(x) changes sign.
+        Lower and upper bounds within which `f(x)` changes sign.
     """
 
     nan = np.nan

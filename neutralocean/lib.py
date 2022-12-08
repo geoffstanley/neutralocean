@@ -111,8 +111,8 @@ def val_bot(T, n_good):
         Input tracer data like salinity, temperature, pressure, or depth.
 
     n_good : ndarray, Default None
-        Number of good (non-NaN) elements in each 1D array making up T along its
-        last dimension, e.g. each water column if T is arranged with depth as
+        Number of good (non-NaN) elements in each 1D array making up `T` along its
+        last dimension, e.g. each water column if `T` is arranged with depth as
         its last dimension.  This can be calculated as `n_good = find_first_nan(x)`
         where `x` is the salinity or temperature --- namely a variable that has
         data for each water column.
@@ -124,16 +124,19 @@ def val_bot(T, n_good):
 
     Examples
     --------
-    # Evaluate temperature, having data in each water column, at the bottom grid cell
-    >>> T = np.empty((3,2,10))  # (longitude, latitude, depth), let us say
+
+    Evaluate temperature, having data in each water column, at the bottom grid cell
+    
+    >>> T = np.empty((3, 2, 10))  # (longitude, latitude, depth), let us say
     >>> T[..., :] = np.arange(10, 0, -1)  # decreasing along depth dim from 10 to 1
-    >>> T[0,0,:] = np.nan  # make cast (0,0) be land
-    >>> T[0,1,3:] = np.nan  # make cast (0,1) be only 3 ocean cells deep
+    >>> T[0, 0, :] = np.nan  # make cast (0,0) be land
+    >>> T[0, 1, 3:] = np.nan  # make cast (0,1) be only 3 ocean cells deep
     >>> n_good = find_first_nan(T)
     >>> val_bot(T, n_good)
     array([[nan,  8.], [ 1.,  1.], [ 1.,  1.]])
 
-    # Evaluate the depth at the bottom grid cell
+    Evaluate the depth at the bottom grid cell
+
     >>> Z = np.linspace(0, 4500, 10)  # grid cell centre's are at depths 0, 500, 1000, ..., 4500.
     >>> val_bot(Z, n_good)  # using n_good calculated from T as above
     array([[  nan, 1000.], [4500., 4500.], [4500., 4500.]])
