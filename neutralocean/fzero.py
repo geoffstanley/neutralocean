@@ -21,17 +21,17 @@ def brent_guess(f, x, A, B, t, args=()):
     x : float
         initial guess for a root
     A, B : float
-        Range within which to search, satisfying A < B
+        Range within which to search, satisfying `A < B`
     t : float
         Tolerance for convergence.
     args : tuple
-        Additional arguments, beyond the optimization argument, to be passed to f.
-        Pass () when f is univariate.
+        Additional arguments, beyond the optimization argument, to be passed to `f`.
+        Pass `()` when `f` is univariate.
 
     Returns
     -------
     float
-        Value of x where f(x) ~ 0.
+        Value of `x` where `f(x) ~ 0`.
 
     """
 
@@ -62,11 +62,11 @@ def brent(f, a, b, t, args=()):
     Returns
     -------
     float
-        Value of x where `f(x) ~ 0`.
+        Value of `x` where `f(x) ~ 0`.
 
     Notes
     -----
-    f should be a `@numba.njit`'ed function (when this function is `njit`'ed).
+    `f` should be a `@numba.njit`'ed function (when this function is `njit`'ed).
     """
 
     # Protection against bad input search range
