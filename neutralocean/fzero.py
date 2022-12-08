@@ -44,8 +44,8 @@ def brent(f, a, b, t, args=()):
     """
     Find a zero of a univariate function within a given range
 
-    This is a bracketed root-finding method, so f(a) and f(b) must differ in
-    sign.  If they do, a root is guaranteed to be found.
+    This is a bracketed root-finding method, so `f(a)` and `f(b)` must differ in
+    sign. If they do, a root is guaranteed to be found.
 
     Parameters
     ----------

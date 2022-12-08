@@ -49,8 +49,8 @@ def _interp_1(f, x, X, Y):
         the subinterval of `X` within which `x` falls is given to this
         function by `i`.  This function will only be called when the
         following is guaranteed:
-        (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
-        (b) `2 <= i <= len(X) - 1` and `X[i-1] < x <= X[i]`.
+            (a) `i == 1`  and  `X[0] <= x <= X[1]`, or
+            (b) `2 <= i <= len(X) - 1` and `X[i-1] < x <= X[i]`.
 
     x : float
         Evaluation site

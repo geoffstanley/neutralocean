@@ -167,11 +167,11 @@ def potential_surf(S, T, P, **kwargs):
 
         If a str, can be any of the strings accepted by
         `neutralocean.eos.tools.make_eos`,
-        e.g. 'jmd95', 'jmdfwg06', 'gsw'.
+        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
 
         If a function, must take three inputs corresponding to `S`, `T`, and
         `P`, and output the density (or specific volume).  This form is not
-        allowed when `diags` is True.  This can be made as, e.g.,
+        allowed when `diags` is `True`.  This can be made as, e.g.,
         `eos = neutralocean.eos.make_eos('gsw')`
         for a non-Boussinesq ocean, or as
         `eos = neutralocean.eos.make_eos('gsw', grav, rho_c)`
