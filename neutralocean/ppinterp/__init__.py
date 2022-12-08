@@ -2,6 +2,7 @@
 Functions for interpolation in two steps: 
     1. pre-computing coefficients for a Piecewise Polynomial interpolant,
     2. evaluating the interpolant.
+
 This is used to internally by `_vertsolve`, where an interpolant is 
 pre-computed for a single vertical cast and then is evaluated many times to 
 solve a non-linear equation. 

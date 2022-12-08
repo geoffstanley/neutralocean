@@ -49,24 +49,24 @@ def mixed_layer(
 
         If a str, can be any of the strings accepted by
         `neutralocean.eos.tools.make_eos`,
-        e.g. 'jmd95', 'jmdfwg06', 'gsw'.
+        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
 
         If a function, must take three inputs corresponding to `S`, `T`, and
         `P`, and output the density (or specific volume).  This form is not
-        allowed when `diags` is True.  This can be made as, e.g.,
+        allowed when `diags` is `True`.  This can be made as, e.g.,
         `eos = neutralocean.eos.make_eos('gsw')`
         for a non-Boussinesq ocean, or as
         `eos = neutralocean.eos.make_eos('gsw', grav, rho_c)`
         for a Boussinesq ocean with `grav` and `rho_c` (see inputs below).
 
-        The function should be @numba.njit decorated and need not be vectorized
+        The function should be `@numba.njit` decorated and need not be vectorized
         -- it will be called many times with scalar inputs.
 
     grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
 
     rho_c : float, Default None
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
 
     pot_dens_diff : float, Default 0.03
 
@@ -85,8 +85,8 @@ def mixed_layer(
 
     interp : str, Default 'linear'
 
-        Method for vertical interpolation.  Use 'linear' for linear
-        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Method for vertical interpolation.  Use `'linear'` for linear
+        interpolation, and `'pchip'` for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
         `interp1d`.
 

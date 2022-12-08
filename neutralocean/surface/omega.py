@@ -204,8 +204,8 @@ def omega_surf(S, T, P, grid, **kwargs):
     OMEGA_FORMULATION : str, Default 'poisson'
 
         Specify how the matrix problem is set up and solved.  Options are
-            - 'poisson', to solve the Poisson problem as in [1]_ with Cholesky, or
-            - 'gradient', to solve the overdetermined gradient equations as in [2]_
+            - `'poisson'`, to solve the Poisson problem as in [1]_ with Cholesky, or
+            - `'gradient'`, to solve the overdetermined gradient equations as in [2]_
               using LSQR.
 
     Examples

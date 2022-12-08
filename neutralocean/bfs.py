@@ -117,7 +117,7 @@ def bfs_conncomp1_wet(
         The equation of state, giving the density or specific volume as a
         function of `S`, `T`, and `P` inputs.
 
-        This should be @numba.njit decorated and need not be
+        This should be `@numba.njit` decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
     ppc_fn : function

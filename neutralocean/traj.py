@@ -73,8 +73,8 @@ def ntp_bottle_to_cast(
 
     interp : str, Default 'linear'
 
-        Method for vertical interpolation.  Use 'linear' for linear
-        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Method for vertical interpolation.  Use `'linear'` for linear
+        interpolation, and `'pchip'` for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
         `interp1d`.
 
@@ -85,19 +85,19 @@ def ntp_bottle_to_cast(
         and `rho_c`, so this function with third input pressure will be
         converted to a function with third input depth.
 
-        If a function, this should be @numba.njit decorated and need not be
+        If a function, this should be `@numba.njit` decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
-        If a str, can be either 'gsw' to use TEOS-10
-        or 'jmd' to use Jackett and McDougall (1995) [1]_.
+        If a str, can be either `'gsw'` to use TEOS-10
+        or `'jmd'` to use Jackett and McDougall (1995) [1]_.
 
     grav : float, Default None
 
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
 
     rho_c : float, Default None
 
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
 
     Notes
     -----
@@ -145,7 +145,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos):
         Equation of state for the density or specific volume as a function of
         `S`, `T`, and pressure or depth inputs.
 
-        This function should be @numba.njit decorated and need not be
+        This function should be `@numba.njit` decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
     tol_p : float, Default 1e-4
@@ -207,7 +207,7 @@ def neutral_trajectory(
         1D data specifying the practical / Absolute salinity, and potential /
         Conservative temperature, and pressure / depth down a 1D sequence of casts.
         The first dimension specifies the cast number, while the second provides
-        data on that cast; e.g. S[i,:] is the salinity down cast `i`.
+        data on that cast; e.g. `S[i, :]` is the salinity down cast `i`.
 
     p0 : float
 
@@ -229,8 +229,8 @@ def neutral_trajectory(
 
     interp : str, Default 'linear'
 
-        Method for vertical interpolation.  Use 'linear' for linear
-        interpolation, and 'pchip' for Piecewise Cubic Hermite Interpolating
+        Method for vertical interpolation.  Use `'linear'` for linear
+        interpolation, and `'pchip'` for Piecewise Cubic Hermite Interpolating
         Polynomials.
 
     eos : str or function, Default 'gsw'
@@ -238,19 +238,19 @@ def neutral_trajectory(
         Equation of state for the density or specific volume as a function of
         `S`, `T`, and pressure (not depth) inputs.
 
-        If a function, this should be @numba.njit decorated and need not be
+        If a function, this should be `@numba.njit` decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
-        If a str, can be either 'gsw' to use TEOS-10
-        or 'jmd' to use Jackett and McDougall (1995) [1]_.
+        If a str, can be either `'gsw'` to use TEOS-10
+        or `'jmd'` to use Jackett and McDougall (1995) [1]_.
 
     grav : float, Default None
 
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass None.
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
 
     rho_c : float, Default None
 
-        Boussinesq reference desnity [kg m-3].  When non-Boussinesq, pass None.
+        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
 
     Notes
     -----
