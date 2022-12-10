@@ -123,8 +123,8 @@ def build_grid(
     # neighbour in the i dimension.
     a = np.tile(np.arange(N), 2)
     b = np.empty(N * 2, dtype=int)  # prealloc space
-    b[:N] = jm1.values.reshape(-1)
-    b[N:] = im1.values.reshape(-1)
+    b[:N] = im1.values.reshape(-1)
+    b[N:] = jm1.values.reshape(-1)
 
     # Build list of distances between adjacent nodes, in the same order as the
     # pairs of nodes built by edges.
@@ -179,10 +179,7 @@ def edgedata_to_maps(edgedata, n, face_connections, dims, xsh, ysh):
 
     Fi, Fj = (np.full(N, np.nan) for x in (0, 1))
 
-    goodi = im1.values.reshape(-1) >= 0
-    Ni = np.sum(goodi)
-
-    # Build linear indices for grid cells (i,j) where (i-1,j) is valud
+    # Build linear indices for grid cells (i,j) where (i-1,j) is valid
     idx_goodim1 = np.flatnonzero(im1 >= 0)
     Ni = len(idx_goodim1)
 
