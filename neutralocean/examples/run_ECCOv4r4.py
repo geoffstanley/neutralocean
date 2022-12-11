@@ -2,6 +2,7 @@
 
 import numpy as np
 import xarray as xr
+from os.path import expanduser
 
 # Functions to make the Equation of State
 from neutralocean.eos import make_eos, make_eos_s_t
@@ -19,12 +20,12 @@ print(
     "  https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/ECCO_L4_GEOMETRY_LLC0090GRID_V4R4/GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
     "\nand one day of Salinity and Temperature 3D data at\n"
     "  https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4/OCEAN_TEMPERATURE_SALINITY_day_mean_2002-12-23_ECCO_V4r4_native_llc0090.nc"
-    "\nYou will have to create an Earthdata Login first."
+    "\nYou will have to create an Earthdata Login first.  "
     "Then edit the below variable, `folder_ecc4`, to point to the directory"
     " where you saved these two files."
 )
 
-folder_ecco4 = "~/work/data/ECCOv4r4/"  # << EDIT AS NEEDED >>
+folder_ecco4 = expanduser("~/work/data/ECCOv4r4/")  # << EDIT AS NEEDED >>
 file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
 date = "2002-12-23"
 file_ST = (
@@ -193,3 +194,78 @@ ecco.plot_tiles(
 plt.suptitle("z_omega - z_sigma")
 
 plt.savefig("/home/stanley/Fig.png", bbox_inches="tight")
+
+# In[Double check neutralocean's grid differencing]
+from xmitgcm import open_mdsdataset
+import xgcm
+
+# To check that the grid works, we'll calculate the backwards differences of the
+# sea-surface temperature in both horizontal directions. Begin by extracting SST.
+k = 0  # index in vertical dimension
+Tnp = T.values  # extract raw numpy data
+SST = Tnp[..., k]  # slice the shallowest data from each water column
+
+# Calculate difference between all pairs of adjacent casts
+a, b = grid["edges"]
+ΔT = SST.reshape(-1)[a] - SST.reshape(-1)[b]
+
+# Decompose ΔT (a 1D array) into two 2D arrays, one for differences in each horizontal dimension
+SSTx, SSTy = edgedata_to_maps(ΔT, n, face_connections, dims, xsh, ysh)
+
+
+# Next, we'll repeat the above differencing using ECCO's methods.
+# See https://ecco-v4-python-tutorial.readthedocs.io/VectorCalculus_ECCO_barotropicVorticity.html
+print(
+    "Download the grid's binary data files from "
+    "< https://ndownloader.figshare.com/files/6494721 > "
+    f" then exctract it so that {folder_ecco4} contains a folder 'global_oce_llc90'"
+)
+ds_llc = open_mdsdataset(
+    folder_ecco4 + "global_oce_llc90/",
+    iters=0,
+    geometry="llc",
+)
+
+# rename 'face' to 'tile' to match T from the netCDF file
+ds_llc = ds_llc.rename({"face": "tile"})
+
+# Make the xgcm grid object to handle the differencing.
+grid_llc = xgcm.Grid(
+    ds_llc,
+    periodic=False,
+    face_connections=face_connections,
+    coords={
+        "X": {"center": "i", "left": "i_g"},
+        "Y": {"center": "j", "left": "j_g"},
+    },
+)
+
+# Backward differences in both horizontal directions
+SSTx_ = grid_llc.diff(T[..., 0], "X").values
+SSTy_ = grid_llc.diff(T[..., 0], "Y").values
+
+
+# Begin checks.
+
+# First, check the two differencing methods are equal, everywhere
+assert np.array_equal(SSTx, SSTx_, equal_nan=True)
+assert np.array_equal(SSTy, SSTy_, equal_nan=True)
+
+# Now, check that differencing makes sense at an interior point
+(t, j, i) = (9, 40, 40)
+assert SSTx[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j, i - 1, k])
+assert SSTy[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j - 1, i, k])
+
+# Check that differencing makes sense across a boundary.  Find the second point
+# that is involved in the difference across the boundary.  Verify by hand that
+# this second point is where it ought to be.
+# In this case, we're taking a meridional difference from the southern boundary
+# of tile 4, and the second point is along the northern boundary of tile 3,
+# which makes sense.
+t, j, i = 4, 0, 40
+idx = np.nonzero(SSTy[t, j, i] == (Tnp[t, j, i, k] - Tnp[..., k]))
+t_, j_, i_ = idx[0][0], idx[1][0], idx[2][0]
+assert SSTy[t, j, i] == Tnp[t, j, i, k] - Tnp[t_, j_, i_, k]
+print(f"SSTy[{t},{j},{i}] == T[{t},{j},{i},{k}] - T[{t_},{j_},{i_},{k}]")
+# # Output:
+# SSTy[4,0,40] == T[4,0,40,0] - T[3,89,40,0]
