@@ -18,7 +18,6 @@ from neutralocean.lib import (
     _xr_out,
     _process_pin_cast,
     _process_casts,
-    _process_n_good,
     _process_eos,
     aggsum,
 )
@@ -141,7 +140,7 @@ def omega_surf(S, T, P, grid, **kwargs):
 
     Other Parameters
     ----------------
-    grid, vert_dim, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, grav, rho_c, interp, diags, output, TOL_P_SOLVER :
 
         See `potential_surf`
 
@@ -261,7 +260,6 @@ def omega_surf(S, T, P, grid, **kwargs):
     TOL_LRPD_MAV = kwargs.get("TOL_LRPD_MAV", 1e-7)
     TOL_P_CHANGE_RMS = kwargs.get("TOL_P_CHANGE_RMS", 0.0)
     OMEGA_FORMULATION = kwargs.get("OMEGA_FORMULATION", "poisson")
-    n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
     ppc_fn = select_ppc(interp, "1")
@@ -270,14 +268,12 @@ def omega_surf(S, T, P, grid, **kwargs):
     sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
-    n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
 
     # Save shape of horizontal dimensions, then flatten horiz dims to 1D.
-    surf_shape = n_good.shape
-    N = n_good.size  # number of nodes (water columns)
+    surf_shape = S.shape[0:-1]
+    N = np.prod(surf_shape)  # number of nodes (water columns)
     S, T, P = (np.reshape(X, (N, -1)) for X in (S, T, P))
-    n_good = np.reshape(n_good, -1)
 
     # Update pinning cast to a linear index.
     pin_cast = np.ravel_multi_index(pin_cast, surf_shape)
@@ -331,7 +327,6 @@ def omega_surf(S, T, P, grid, **kwargs):
             ans_type = "potential"
 
         # Update arguments with pre-processed values
-        kwargs["n_good"] = n_good
         kwargs["vert_dim"] = -1  # Since S, T, P already reordered
         kwargs["diags"] = False  # Will make our own diags next
         kwargs["eos"] = eos
@@ -358,6 +353,7 @@ def omega_surf(S, T, P, grid, **kwargs):
         p = p_init.copy()
 
         # Interpolate S and T onto the surface
+        # TODO: Update this to handle ice shelf cavity friendly interpolation
         s, t = interp_u_two(p, P, S, T)
 
     pin_p = p[pin_cast]
@@ -433,7 +429,6 @@ def omega_surf(S, T, P, grid, **kwargs):
                 S,
                 T,
                 P,
-                n_good,
                 TOL_P_SOLVER,
                 eos,
                 ppc_fn,
@@ -457,10 +452,10 @@ def omega_surf(S, T, P, grid, **kwargs):
         # --- Update the surface (mutating s, t, p by vertsolve)
         timer_loc = time()
         p_old = p.copy()  # Record old surface for pinning and diagnostics
-        vertsolve(s, t, p, S, T, P, n_good, ϕ, TOL_P_SOLVER)
+        vertsolve(s, t, p, S, T, P, ϕ, TOL_P_SOLVER)
 
         # DEV:  time seems indistinguishable from using factory function as above
-        # _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, n_good, ϕ, TOL_P_SOLVER, eos)
+        # _vertsolve_omega(s, t, p, S, T, P, Sppc, Tppc, ϕ, TOL_P_SOLVER, eos)
 
         # Force p to stay constant at the reference column, identically.
         # This avoids any intolerance from the vertical solver.

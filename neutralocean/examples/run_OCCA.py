@@ -209,6 +209,7 @@ print(
 # In[Begin showing more advanced features]
 
 import numpy as np
+import numba as nb
 from neutralocean.mixed_layer import mixed_layer
 from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.label import veronis_density
@@ -256,6 +257,41 @@ print(
 # Pre-compute depth of the mixed layer
 z_ml = mixed_layer(S, T, Z, eos)
 
+# The correct way to remove the mixed layer from the omega surface algorithm
+# is to pass the p_ml parameter, e.g. pass `p_ml=z_ml` in the call below.
+# However, here we'll use a more drastic approach: setting our 3D hydrographic
+# data to NaN above the mixed layer.
+# This serves as a test of the new interpolation methods that allow for NaN data
+# in the top of the water column followed by valid (non-NaN) data in the middle
+# where the interpolation is done, followed by more NaN data at the bottom.
+# This is to allow for models or data with ice shelves.
+# Note, this drastic NaN'ing of the input (S,T) data is not expected to give
+# exactly the same results as by passing the p_ml parameter, since
+# (a) with p_ml, the mixed layer removal is not applied until after the first
+#     iteration, and
+# (b) with PCHIPs, the interpolant just below the mixed layer is affected by
+#     a few of the lower bottles in the mixed layer.
+# (c) with p_ml, the surface is set to NaN only if it goes above p_ml which
+#     is any real number, whereas with the data-NaN'ing approach, discrete
+#     bottles are set to NaN so the surface will only be valid if it is below
+#     the first valid bottle below what was NaN'ed out.
+
+
+@nb.njit
+def mixedlayer2nan(S, T, Z, z_ml):
+    for n in np.ndindex(z_ml.shape):
+        z = z_ml[n]
+        for k in range(nk):
+            if Z[k] < z:
+                S[(*n, k)] = np.nan
+                T[(*n, k)] = np.nan
+            else:
+                break
+
+
+mixedlayer2nan(S.values, T.values, Z, z_ml)
+
+
 s, t, z, d = omega_surf(
     S,
     T,
@@ -266,10 +302,10 @@ s, t, z, d = omega_surf(
     pin_cast=(i0, j0),
     pin_p=z0,
     eos=(eos, eos_s_t),
+    interp="pchip",
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
-    p_ml=z_ml,
 )
 
 # potential and anomaly surfaces don't take `p_ml` as an argument, since they
@@ -295,12 +331,8 @@ T1 = T.values[180, 80, :]
 s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # Or the more manual version:
-n_good = find_first_nan(S1)[()]
 ppc_fn = select_ppc("linear", "1")
-S1ppc, T1ppc = (ppc_fn(Z, C) for C in (S1, T1))
-s1, t1, z1 = _ntp_bottle_to_cast(
-    sB, tB, zB, S1ppc, T1ppc, Z, n_good, 1e-4, eos
-)
+s1, t1, z1 = _ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z, 1e-4, eos, ppc_fn)
 
 
 # In[Work with Numpy arrays instead of xarrays]

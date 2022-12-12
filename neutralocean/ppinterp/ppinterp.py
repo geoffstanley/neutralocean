@@ -22,6 +22,9 @@ https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calc
 import numpy as np
 import numba as nb
 
+from .lib import valid_range_1
+from .pchip import pchip_coeffs_1
+
 
 @nb.njit
 def ppval_i(dx, Yppc, i, d=0):
@@ -190,18 +193,3 @@ def ppval_two(x, X, Yppc, Zppc, d, y, z):
     calls `np.searchsorted` half as many times.
     """
     y[0], z[0] = ppval1_two(x, X, Yppc, Zppc, d)
-
-
-@nb.njit
-def diff_1d_samesize(x):
-    """
-    First difference in one dimension; appends nan so output same size as input.
-
-    A simple function like `np.diff` that numba can work with.
-    """
-
-    d = np.empty(x.size, dtype=x.dtype)
-    for i in range(d.size):
-        d[i] = x[i + 1] - x[i]
-    d[-1] = np.nan
-    return d

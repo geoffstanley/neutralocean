@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-from .ppinterp import diff_1d_samesize
+from .lib import diff_1d_samesize, valid_range_1
 
 
 def pchip_coeffs(X, Y):
@@ -63,21 +63,23 @@ def pchip_coeffs_1(X, Y):
     # Note, np.diff does not work with nb.njit, here.
     # Also, using our own numba.njit'ed function is faster than np.ediff1d
     h = diff_1d_samesize(X)  # distance between data sites
-    δ = diff_1d_samesize(Y) / h  # slope of linear interpolant between data sites
+    δ = diff_1d_samesize(Y) / h  # linear slope between data sites
 
-    K = X.size  # Number of data points included possible NaN's
+    nk = X.size  # Number of data points included possible NaN's
 
-    # Count the number of consecutive valid (non-NaN) data points.
-    k = K
-    for i in range(K):
-        if np.isnan(X[i]) or np.isnan(Y[i]):
-            k = i
-            break
+    # Find k0 = index to first valid data site, and
+    # k1 such that k1 - 1 = index to last valid data site
+    k, K = valid_range_1(X + Y)
+    # TODO: Remove this, and assume k = 0 and K = len(X)?  Do this if we only
+    #       want to use ppinterp inside for loops, within which we trim the
+    #       data to only its finite values.  i.e. do this if we're happy with
+    #       interp1d for all of our "universal" kind of interpolation.
 
-    d = np.zeros(k)  # slope of interpolant at data sites
-    C = np.full((K, 4), np.nan)
+    d = np.zeros(K)  # slope of interpolant at data sites
+    #                  Note elements 0, ... k-1 of d will be unused.
+    C = np.full((nk, 4), np.nan)
 
-    if k > 2:
+    if K - k > 2:
 
         # Calculate PCHIP slopes
         #  Slopes at end points:
@@ -86,13 +88,17 @@ def pchip_coeffs_1(X, Y):
         #   d[i] = weighted average of δ[i-1] and δ[i] when they have the same sign.
         #   d[i] = 0 when δ[i-1] and δ[i] have opposites signs or either is zero.
 
-        d[0] = ((2 * h[0] + h[1]) * δ[0] - h[0] * δ[1]) / (h[0] + h[1])
-        if np.sign(d[0]) != np.sign(δ[0]):
-            d[0] = 0
-        elif (np.sign(δ[0]) != np.sign(δ[1])) and (abs(d[0]) > abs(3 * δ[0])):
-            d[0] = 3 * δ[0]
+        d[k] = ((2 * h[k] + h[k + 1]) * δ[k] - h[k] * δ[k + 1]) / (
+            h[k] + h[k + 1]
+        )
+        if np.sign(d[k]) != np.sign(δ[k]):
+            d[k] = 0
+        elif (np.sign(δ[k]) != np.sign(δ[k + 1])) and (
+            abs(d[k]) > abs(3 * δ[k])
+        ):
+            d[k] = 3 * δ[k]
 
-        for i in range(1, k - 1):
+        for i in range(k + 1, K - 1):
             if np.sign(δ[i - 1]) * np.sign(δ[i]) > 0:
                 w1 = h[i - 1] + 2 * h[i]
                 w2 = 2 * h[i - 1] + h[i]
@@ -100,46 +106,48 @@ def pchip_coeffs_1(X, Y):
             else:
                 d[i] = 0
 
-        d[k - 1] = ((2 * h[k - 2] + h[k - 3]) * δ[k - 2] - h[k - 2] * δ[k - 3]) / (
-            h[k - 2] + h[k - 3]
-        )
-        if np.sign(d[k - 1]) != np.sign(δ[k - 2]):
-            d[k - 1] = 0
-        elif (np.sign(δ[k - 2]) != np.sign(δ[k - 3])) and (
-            abs(d[k - 1]) > abs(3 * δ[k - 2])
+        d[K - 1] = (
+            (2 * h[K - 2] + h[K - 3]) * δ[K - 2] - h[K - 2] * δ[K - 3]
+        ) / (h[K - 2] + h[K - 3])
+        if np.sign(d[K - 1]) != np.sign(δ[K - 2]):
+            d[K - 1] = 0
+        elif (np.sign(δ[K - 2]) != np.sign(δ[K - 3])) and (
+            abs(d[K - 1]) > abs(3 * δ[K - 2])
         ):
-            d[k - 1] = 3 * δ[k - 2]
+            d[K - 1] = 3 * δ[K - 2]
 
         # Build piecewise cubic Hermite polynomial
-        for i in range(k - 1):
+        for i in range(k, K - 1):
             dzzdx = (δ[i] - d[i]) / h[i]
             dzdxdx = (d[i + 1] - δ[i]) / h[i]
             C[i, 0] = (dzdxdx - dzzdx) / h[i]
             C[i, 1] = 2 * dzzdx - dzdxdx
             C[i, 2] = d[i]
 
-    elif k == 2:
+    elif K - k == 2:
         # Special case: use linear interpolation.
 
-        δ = (Y[1] - Y[0]) / (X[1] - X[0])
+        δ = (Y[k + 1] - Y[k]) / (X[k + 1] - X[k])
 
-        C[0, 0] = 0
-        C[0, 1] = 0
-        C[0, 2] = δ
+        C[k, 0] = 0
+        C[k, 1] = 0
+        C[k, 2] = δ
 
-    # else:  # k == 1
-    #     leave coefficients as nans.  Ignore case of x = X[0] while
-    #     having X[1:] == np.nan and/or Y[1:] == np.nan.  That case
+    # else:  # K - k == 1
+    #     leave coefficients as nans.  Ignore case of x = X[k] while
+    #     having X[k+1:] == np.nan and/or Y[k+1:] == np.nan.  That case
     #     cannot be handled here, since setting the coefficients to
-    #     be [0, 0, 0, Y[0]], i.e. a constant function, would mean the
-    #     interpolant would be Y[0] when evaluated at x > X[0], but we
-    #     only want it to be Y[0] at x = X[0] precisely.
+    #     be [0, 0, 0, Y[k]], i.e. a constant function, would mean the
+    #     interpolant would be Y[k] when evaluated at x > X[k], but we
+    #     only want it to be Y[k] at x = X[k] precisely.
 
     C[:, 3] = Y
 
     return C
 
 
-@nb.guvectorize([(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)")
+@nb.guvectorize(
+    [(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)"
+)
 def _pchip_coeffs(X, Y, dummy, Yppc):
     Yppc[:, :] = pchip_coeffs_1(X, Y)

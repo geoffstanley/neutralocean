@@ -91,8 +91,8 @@ def _pchip_coeffs(X, Y, i):
     dY = [0.0, 0.0]
 
     # Check whether x is adjacent to the start or end of this X
-    at_start = i == 1
-    at_end = (i == len(X) - 1) or np.isnan(X[i + 1]) or np.isnan(Y[i + 1])
+    at_start = (i == 1) or np.isnan(X[i - 2] + Y[i - 2])
+    at_end = (i == len(X) - 1) or np.isnan(X[i + 1] + Y[i + 1])
 
     if at_start and at_end:
 
@@ -125,7 +125,9 @@ def _pchip_coeffs(X, Y, i):
             DY[2] = (Y[i + 1] - Y[i]) / h[2]
 
             #  Noncentered, shape-preserving, three-point formula:
-            dY[0] = ((2.0 * h[1] + h[2]) * DY[1] - h[1] * DY[2]) / (h[1] + h[2])
+            dY[0] = ((2.0 * h[1] + h[2]) * DY[1] - h[1] * DY[2]) / (
+                h[1] + h[2]
+            )
             if np.sign(dY[0]) != np.sign(DY[1]):
                 dY[0] = 0.0
             elif (np.sign(DY[1]) != np.sign(DY[2])) and (
@@ -157,7 +159,9 @@ def _pchip_coeffs(X, Y, i):
                 dY[0] = 0.0
 
             #  Noncentered, shape-preserving, three-point formula:
-            dY[1] = ((h[0] + 2.0 * h[1]) * DY[1] - h[1] * DY[0]) / (h[0] + h[1])
+            dY[1] = ((h[0] + 2.0 * h[1]) * DY[1] - h[1] * DY[0]) / (
+                h[0] + h[1]
+            )
             if np.sign(dY[1]) != np.sign(DY[1]):
                 dY[1] = 0.0
             elif (np.sign(DY[1]) != np.sign(DY[0])) and (

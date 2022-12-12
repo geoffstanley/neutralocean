@@ -73,7 +73,7 @@ def veronis_density(
         Method for vertical interpolation.  Use `'linear'` for linear
         interpolation, and `'pchip'` for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
-        `interp1d`.
+        `ppinterp`.
 
     eos : function
 
@@ -176,7 +176,9 @@ def _int_x_k(p, k, dp, P, Sppc, Tppc, eos_s_t):
 
     # If p == P[k+1], this returns 0.0
 
-    n = np.int(np.ceil((P[k + 1] - p) / dp)) + 1  # points between p and P[k], inclusive
+    # Number of points between p and P[k], inclusive
+    n = np.int(np.ceil((P[k + 1] - p) / dp)) + 1
+
     p_ = np.linspace(p, P[k + 1], n)  # intervals are not larger than dp
 
     # Use piecewise polynomial coefficients as provided. Be sure to pass the

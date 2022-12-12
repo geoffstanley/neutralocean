@@ -136,6 +136,8 @@ def mixed_layer(
     else:  # eos computes specific volume
         DD = 1 / eos(S, T, ref_p) - 1 / eos(SB, TB, ref_p)
 
+    # TODO: Update this to handle ice shelf cavity friendly interpolation
+
     # Find the pressure or depth at which the potential density difference
     # exceeds the threshold pot_dens_diff
     return interp_fn(pot_dens_diff, DD, P)

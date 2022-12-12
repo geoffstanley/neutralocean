@@ -2,6 +2,7 @@ import numpy as np
 import numba as nb
 
 from neutralocean.traj import _ntp_bottle_to_cast
+from neutralocean.ppinterp import valid_range_1
 
 
 @nb.njit
@@ -71,7 +72,7 @@ def bfs_conncomp1(indptr, indices, root, good):
 
 @nb.njit
 def bfs_conncomp1_wet(
-    indptr, indices, root, s, t, p, S, T, P, n_good, tol_p, eos, ppc_fn, p_ml
+    indptr, indices, root, s, t, p, S, T, P, tol_p, eos, ppc_fn, p_ml
 ):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting.
@@ -102,11 +103,6 @@ def bfs_conncomp1_wet(
         3D practical / Absolute salinity and potential / Conservative
         temperature and pressure / depth in the ocean
 
-    n_good : ndarray
-
-        Pre-computed number of ocean data points in each water column.
-        This should be computed as `n_good = lib.find_first_nan(S)`.
-
     tol_p : float
 
         Error tolerance when root-finding to update the pressure or depth of
@@ -125,14 +121,14 @@ def bfs_conncomp1_wet(
         Function to compute piecewise polynomial coefficients for an interpolator.
         Construct this as
         `neutralocean.ppinterp.select_ppc("linear", kind="1")`
-        for linear interpolation.  For other interpolants, replace "linear"
+        for linear interpolation.  For other interpolants, replace `"linear"`
         (see `select_ppc` documentation).
 
     p_ml : ndarray
 
         Pressure or depth of the base of the mixed layer.
         If NTP links that enter the mixed layer are to be retained, then pass
-        `p_ml = np.full_like(n_good, -np.inf)`.
+        `p_ml = np.full_like(s.shape, -np.inf)`.
 
 
     Returns
@@ -155,9 +151,7 @@ def bfs_conncomp1_wet(
     newly_wet = 0
 
     good = np.isfinite(p)  # Good nodes
-
-    # Try wetting only these locations: ocean and not currently in the surface
-    dry = (n_good > 1) & ~good
+    dry = ~good  # nodes to try wetting
 
     # Flatten lateral dimension of inputs to be 1D.  Use reshape() to get a view.
     # ... removed this!  Should already have been done.
@@ -169,7 +163,6 @@ def bfs_conncomp1_wet(
     # S = np.reshape(S, (N, nk))
     # T = np.reshape(T, (N, nk))
     # P = np.reshape(P, (N, nk))
-    # n_good = np.reshape(n_good, -1)
     # p_ml = np.reshape(p_ml, -1)  # flatten
 
     if good[root]:
@@ -194,19 +187,22 @@ def bfs_conncomp1_wet(
                 elif dry[n]:
                     # n is "dry".  Try wetting.
 
-                    Sppc = ppc_fn(P[n], S[n])
-                    Tppc = ppc_fn(P[n], T[n])
+                    Sn = S[n]
+                    Tn = T[n]
+                    Pn = P[n]
 
+                    # assume S and T have same nan-structure
+                    k, K = valid_range_1(Sn + Pn)
+
+                    if K - k <= 1:
+                        # At most 1 valid ocean data site.  Can't interpolate
+                        # with that.  Mark as not dry, so don't revisit.
+                        dry[n] = False
+                        continue
+
+                    # Do NTP link from bottle at m to cast at n.
                     s[n], t[n], p[n] = _ntp_bottle_to_cast(
-                        s[m],
-                        t[m],
-                        p[m],
-                        Sppc,
-                        Tppc,
-                        P[n],
-                        n_good[n],
-                        tol_p,
-                        eos,
+                        s[m], t[m], p[m], Sn, Tn, Pn, tol_p, eos, ppc_fn
                     )
 
                     if np.isfinite(p[n]) and p[n] > p_ml[n]:

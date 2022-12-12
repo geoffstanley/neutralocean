@@ -16,7 +16,6 @@ from neutralocean.lib import (
     _xr_out,
     _process_pin_cast,
     _process_casts,
-    _process_n_good,
     _process_eos,
 )
 
@@ -201,11 +200,6 @@ def potential_surf(S, T, P, **kwargs):
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
-    n_good : ndarray, Default None
-
-        Pre-computed number of ocean data points in each water column.
-        If None, this is computed as `n_good = lib.find_first_nan(S)`.
-
     diags : bool, Default True
 
         If True, calculate diagnostics (4th output).  If False, 4th output is
@@ -304,7 +298,7 @@ def anomaly_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    grid, vert_dim, eos, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, eos, grav, rho_c, interp, diags, output, TOL_P_SOLVER :
         See `potential_surf`
 
     Examples
@@ -357,7 +351,6 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
     grid = kwargs.get("grid")
-    n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
     ppc_fn = select_ppc(interp, "1")
@@ -366,7 +359,6 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
-    n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
     if diags and not (isinstance(grid, dict) and "edges" in grid):
         raise ValueError("grid['edges'] must be provided when diags is True")
@@ -381,7 +373,7 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     # Solve non-linear root finding problem in each cast
     vertsolve = _make_vertsolve(eos, ppc_fn, ans_type)
     timer = time()
-    s, t, p = vertsolve(S, T, P, n_good, ref, isoval, TOL_P_SOLVER)
+    s, t, p = vertsolve(S, T, P, ref, isoval, TOL_P_SOLVER)
 
     if pin_p is not None:  # pin_cast must also be valid
         # Adjust the surface at the pinning cast slightly, to match the pinning

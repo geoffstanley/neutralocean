@@ -11,4 +11,5 @@ just a single vertical cast, but this may require a large amount of memory to
 store the coefficients; thus, for this purpose `interp1d` is often preferable.
 """
 from .ppinterp import ppval1, ppval, ppval1_two, ppval_two, ppval_i
+from .lib import valid_range_1, valid_range
 from .tools import select_ppc

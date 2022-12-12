@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-from .ppinterp import diff_1d_samesize
+from .lib import diff_1d_samesize
 
 
 def linear_coeffs(X, Y):
@@ -58,6 +58,8 @@ def linear_coeffs_1(X, Y):
     return C
 
 
-@nb.guvectorize([(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)")
+@nb.guvectorize(
+    [(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)"
+)
 def _linear_coeffs(X, Y, two, C):
     C[:, :] = linear_coeffs_1(X, Y)

@@ -6,7 +6,7 @@ import numba as nb
 from neutralocean.ppinterp import select_ppc, ppval1_two
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.lib import find_first_nan
+from neutralocean.ppinterp import valid_range_1
 
 
 @nb.njit
@@ -50,7 +50,7 @@ def ntp_bottle_to_cast(
         practical / Absolute salinity, potential / Conservative temperature,
         and pressure or depth of the bottle
 
-    S, T, P : 1D ndarray of float
+    S, T, P : 1D array of float
 
         practical / Absolute salinity, potential / Conservative temperature,
         and pressure or depth of data points on the cast.  `P` must increase
@@ -76,7 +76,7 @@ def ntp_bottle_to_cast(
         Method for vertical interpolation.  Use `'linear'` for linear
         interpolation, and `'pchip'` for Piecewise Cubic Hermite Interpolating
         Polynomials.  Other interpolants can be added through the subpackage,
-        `interp1d`.
+        `ppinterp`.
 
     eos : str or function, Default 'gsw'
 
@@ -107,39 +107,18 @@ def ntp_bottle_to_cast(
 
     eos = make_eos(eos, grav, rho_c)
     ppc_fn = select_ppc(interp, "1")
-    n_good = find_first_nan(S)
 
-    Sppc = ppc_fn(P, S)
-    Tppc = ppc_fn(P, T)
-
-    return _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos)
+    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, tol_p, eos, ppc_fn)
 
 
 @nb.njit
-def _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos):
-    """Find the neutral tangent plane from a bottle to a cast
-
-    Fast version of `ntp_bottle_to_cast`, with all inputs supplied.
+def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, tol_p, eos, ppc_fn):
+    """Fast version of `ntp_bottle_to_cast`.
 
     Parameters
     ----------
-    sB, tB, pB : float
-        See ntp_bottle_to_cast
-
-    Sppc, Tppc : ndarray
-        Piecewise Polynomial Coefficients for interpolants of Salinity and
-        Temperature in terms of `P`.
-
-    P : ndarray
-        See ntp_bottle_to_cast
-
-    n_good : int
-
-        Number of valid (non-NaN) data points on the cast.  That is,
-        `S[0:n_good-1]`, `T[0:n_good-1]`, and `P[0:n_good-1]` should all
-        be non-NaN.  Compute this as `n_good = find_first_nan(S)`, where `S`
-        and `T` are the salinity and temperature on the cast, from which `Sppc`
-        and `Tppc` were constucted.
+    sB, tB, pB, S, T, P, tol_p : float
+        See `ntp_bottle_to_cast`
 
     eos : function
         Equation of state for the density or specific volume as a function of
@@ -148,8 +127,9 @@ def _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos):
         This function should be `@numba.njit` decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
 
-    tol_p : float, Default 1e-4
-        See ntp_bottle_to_cast
+    ppc_fn : function
+        Function that calculates piecewise polynomial coefficients, such as
+        returned by `neutralocean.ppinterp.select_ppc`
 
     Returns
     -------
@@ -157,12 +137,19 @@ def _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos):
         See ntp_bottle_to_cast
     """
 
-    if n_good > 1:
+    k, K = valid_range_1(S + P)  # S and T have same nan-structure
+
+    if K - k > 1:
+
+        # Trim data to valid range and build interpolant
+        P = P[k:K]
+        Sppc = ppc_fn(P, S[k:K])
+        Tppc = ppc_fn(P, T[k:K])
 
         args = (sB, tB, pB, Sppc, Tppc, P, eos)
 
         # Search for a sign-change, expanding outward from an initial guess
-        lb, ub = guess_to_bounds(_func, pB, P[0], P[n_good - 1], args)
+        lb, ub = guess_to_bounds(_func, pB, P[0], P[-1], args)
 
         if np.isfinite(lb):
             # A sign change was discovered, so a root exists in the interval.
@@ -175,13 +162,13 @@ def _ntp_bottle_to_cast(sB, tB, pB, Sppc, Tppc, P, n_good, tol_p, eos):
         else:
             s, t, p = np.nan, np.nan, np.nan
 
-    else:
+    else:  # K - k <= 1, so at most one valid data site. Can't interpolate that.
         s, t, p = np.nan, np.nan, np.nan
 
     return s, t, p
 
 
-# To do: add vert_dim argument
+# TODO: add vert_dim argument
 def neutral_trajectory(
     S,
     T,
@@ -269,27 +256,25 @@ def neutral_trajectory(
     p = np.full(nc, np.nan)
 
     # Evaluate S and T on first cast at p0
-    Sc = S[0, :]
-    Tc = T[0, :]
-    Pc = P[0, :]
-    Sppc = ppc_fn(Pc, Sc)
-    Tppc = ppc_fn(Pc, Tc)
-    s[0], t[0] = ppval1_two(p0, Pc, Sppc, Tppc)
+    Sppc = ppc_fn(P[0, :], S[0, :])
+    Tppc = ppc_fn(P[0, :], T[0, :])
+    s[0], t[0] = ppval1_two(p0, P[0, :], Sppc, Tppc)
     p[0] = p0
 
     # Loop over remaining casts
     for c in range(1, nc):
 
-        Sc = S[c, :]
-        Tc = T[c, :]
-        Pc = P[c, :]
-        Sppc = ppc_fn(Pc, Sc)
-        Tppc = ppc_fn(Pc, Tc)
-
         # Make a neutral connection from previous bottle to the cast (S[c,:], T[c,:], P[c,:])
-        K = find_first_nan(Sc)
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
-            s[c - 1], t[c - 1], p[c - 1], Sppc, Tppc, Pc, K, tol_p, eos
+            s[c - 1],
+            t[c - 1],
+            p[c - 1],
+            S[c, :],
+            T[c, :],
+            P[c, :],
+            tol_p,
+            eos,
+            ppc_fn,
         )
 
         if np.isnan(p[c]):
