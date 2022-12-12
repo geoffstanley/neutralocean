@@ -202,7 +202,7 @@ def bfs_conncomp1_wet(
 
                     # Do NTP link from bottle at m to cast at n.
                     s[n], t[n], p[n] = _ntp_bottle_to_cast(
-                        s[m], t[m], p[m], Sn, Tn, Pn, tol_p, eos, ppc_fn
+                        s[m], t[m], p[m], Sn, Tn, Pn, k, K, tol_p, eos, ppc_fn
                     )
 
                     if np.isfinite(p[n]) and p[n] > p_ml[n]:

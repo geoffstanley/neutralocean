@@ -108,17 +108,26 @@ def ntp_bottle_to_cast(
     eos = make_eos(eos, grav, rho_c)
     ppc_fn = select_ppc(interp, "1")
 
-    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, tol_p, eos, ppc_fn)
+    k, K = valid_range_1(S + P)  # S and T have same nan-structure
+
+    return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn)
 
 
 @nb.njit
-def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, tol_p, eos, ppc_fn):
+def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
     """Fast version of `ntp_bottle_to_cast`.
 
     Parameters
     ----------
     sB, tB, pB, S, T, P, tol_p : float
         See `ntp_bottle_to_cast`
+
+    k, K : int
+        `k` is the index to the first finite value in `S + P`.
+        `K` is the index to the first NaN value in `S + P` after `k`.
+        If `S + P` is all NaN, then `k = len(S)`.
+        If `S + P` is all NaN or if `(S + P)[k:]` is all finite, then `K = len(S)`.
+        See `neutralocean.ppinterp.lib.valid_range_1`.
 
     eos : function
         Equation of state for the density or specific volume as a function of
@@ -136,8 +145,6 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, tol_p, eos, ppc_fn):
     s, t, p : float
         See ntp_bottle_to_cast
     """
-
-    k, K = valid_range_1(S + P)  # S and T have same nan-structure
 
     if K - k > 1:
 
@@ -265,13 +272,19 @@ def neutral_trajectory(
     for c in range(1, nc):
 
         # Make a neutral connection from previous bottle to the cast (S[c,:], T[c,:], P[c,:])
+        Sc = S[c, :]
+        Tc = T[c, :]
+        Pc = P[c, :]
+        k, K = valid_range_1(Sc + Pc)
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
             s[c - 1],
             t[c - 1],
             p[c - 1],
-            S[c, :],
-            T[c, :],
-            P[c, :],
+            Sc,
+            Tc,
+            Pc,
+            k,
+            K,
             tol_p,
             eos,
             ppc_fn,
