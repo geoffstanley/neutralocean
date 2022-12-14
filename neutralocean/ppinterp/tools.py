@@ -28,44 +28,35 @@ def make_pp(
             "Expected `num_dep_vars` in (1, 2); got {num_dep_vars}"
         )
 
-    if interpolant == "linear":
-        if out == "coeffs":
-            if kind == "u":
-                fcn_name = "linear_coeffs"
-            elif kind == "1":
-                # No check of `nans`: the code for linear_coeffs_1 is unaffected
-                fcn_name = "linear_coeffs_1"
-        else:  # build interpolator
-            if kind == "u":
-                if num_dep_vars == 1:
-                    fcn_name = "linear_interp"
-                else:
-                    fcn_name = "linear_interp_two"
-            elif kind == "1":
-                if num_dep_vars == 1:
-                    fcn_name = "linear_interp_1"
-                else:
-                    fcn_name = "linear_interp_1_two"
-    elif interpolant == "pchip":
-        if out == "coeffs":
-            if kind == "u":
-                fcn_name = "pchip_coeffs"
-            elif kind == "1":
-                if nans:
-                    fcn_name = "pchip_coeffs_1"
-                else:
-                    fcn_name = "pchip_coeffs_1_nonan"
-        else:  # build interpolator
-            if kind == "u":
-                if num_dep_vars == 1:
-                    fcn_name = "pchip_interp"
-                else:
-                    fcn_name = "pchip_interp_two"
-            elif kind == "1":
-                if num_dep_vars == 1:
-                    fcn_name = "pchip_interp_1"
-                else:
-                    fcn_name = "pchip_interp_1_two"
+    if out == "coeffs" and num_dep_vars != 1:
+        raise ValueError(
+            "With `out='coeffs'`, currently only handles `num_dep_vars=1`"
+        )
+
+    if nans == False:
+        if out == "interp" or kind == "u":
+            raise ValueError(
+                "With `nans=False`, expected `out='coeffs'` and `kind='1'`."
+            )
+
+    # Begin programmatically generating the function name to import
+    if kind == "1":
+        kind = "_1"
+    elif kind == "u":
+        kind = ""
+
+    if nans == False and interpolant == "pchip":
+        nans = "_nonan"
+    else:
+        # if interpolant == "linear", just use regular coeffs_1 function.
+        nans = ""
+
+    if num_dep_vars == 1:
+        num_dep_vars = ""
+    elif num_dep_vars == 2:
+        num_dep_vars = "_two"
+
+    fcn_name = interpolant + "_" + out + kind + nans + num_dep_vars
 
     # Below is equivalent to
     # from neutralocean.ppinterp.`interpolant` import `fcn_name`
