@@ -9,7 +9,7 @@ import numpy as np
 from time import time
 
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.ppinterp import ppval1_two, select_ppc
+from neutralocean.ppinterp import ppval_1_two, make_pp, valid_range_1
 from neutralocean.ntp import ntp_epsilon_errors_norms
 from neutralocean.lib import (
     _xrs_in,
@@ -353,7 +353,10 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     grid = kwargs.get("grid")
     interp = kwargs.get("interp", "linear")
 
-    ppc_fn = select_ppc(interp, "1")
+    # Build function that calculates coefficients of a piecewise polynomial
+    # interpolant, doing 1 problem at a time, and knowing there will be no nans
+    # in the input data.
+    ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
     # Process arguments
     sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
@@ -378,11 +381,13 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     if pin_p is not None:  # pin_cast must also be valid
         # Adjust the surface at the pinning cast slightly, to match the pinning
         # pressure / depth.  This fixes small deviations of order `TOL_P_SOLVER`
-        n0 = pin_cast
-        p[n0] = pin_p
-        Sppcn0 = ppc_fn(P[n0], S[n0])
-        Tppcn0 = ppc_fn(P[n0], T[n0])
-        s[n0], t[n0] = ppval1_two(pin_p, P[n0], Sppcn0, Tppcn0)
+        n = pin_cast
+        p[n] = pin_p
+        Sn, Tn, Pn = S[n], T[n], P[n]
+        k, K = valid_range_1(Sn + Pn)  # Sn and Tn have same nan-structure
+        Sppcn = ppc_fn(Pn[k:K], Sn[k:K])
+        Tppcn = ppc_fn(Pn[k:K], Tn[k:K])
+        s[n], t[n] = ppval_1_two(pin_p, Pn[k:K], Sppcn, Tppcn)
 
     d = dict()
     if diags:
@@ -463,12 +468,14 @@ def _choose_ref_isoval(
     # >>> _isopycnal(ans_type, S, T, P, ref, pin_cast, pin_p)
     # >>> _isopycnal(ans_type, S, T, P, pin_cast, pin_p)
     if isoval is None:  # => pin_cast and pin_p are both not None
-        n0 = pin_cast  # evaluate S and T on the surface at the chosen location
-        # s0, t0 = interp_fn(pin_p, P[n0], S[n0], T[n0])
+        n = pin_cast  # evaluate S and T on the surface at the chosen location
+        # s0, t0 = interp_fn(pin_p, P[n], S[n], T[n])
 
-        Sppc = ppc_fn(P[n0], S[n0])
-        Tppc = ppc_fn(P[n0], T[n0])
-        s0, t0 = ppval1_two(pin_p, P[n0], Sppc, Tppc)
+        Sn, Tn, Pn = S[n], T[n], P[n]
+        k, K = valid_range_1(Sn + Pn)  # Sn and Tn have same nan-structure
+        Sppcn = ppc_fn(Pn[k:K], Sn[k:K])
+        Tppcn = ppc_fn(Pn[k:K], Tn[k:K])
+        s0, t0 = ppval_1_two(pin_p, Pn[k:K], Sppcn, Tppcn)
 
         if ans_type == "potential":
             if ref is None:

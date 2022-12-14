@@ -1,15 +1,6 @@
 """
-Core functions to evaluate piecewise polynomial interpolants (or their
-derivatives) in one dimension.  Additional functions are provided that do
-this for two such interpolants, to facilitate the interpolation of paired
-variables like salinity and temperature. 
-
-This subpackage is ideally suited when interpolation to many different
-evaluation sites is needed, such as when solving a nonlinear equation
-involving the interpolants, because it pre-computes the piecewise polynomial
-coefficients once, and then interpolation to a given evaluation site is fast.
-However, if the interpolant needs to be evaluated just once or a few times,
-the subpackage `interp1d` may be preferred.
+Functions to evaluate piecewise polynomials, given their coefficients, in one
+dimension.
 """
 
 
@@ -22,8 +13,9 @@ https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calc
 import numpy as np
 import numba as nb
 
-from .lib import valid_range_1
-from .pchip import pchip_coeffs_1
+# import functools as ft
+
+# from .lib import valid_range_1
 
 
 @nb.njit
@@ -59,7 +51,7 @@ def ppval_i(dx, Yppc, i, d=0):
 
 
 @nb.njit
-def ppval1(x, X, Yppc, d=0):
+def ppval_1(x, X, Yppc, d=0):
     """
     Evaluate a single piecewise polynomial (PP).
 
@@ -98,10 +90,10 @@ def ppval1(x, X, Yppc, d=0):
     # Next, merge (a) and (b) cases so that
     #   1 <= i <= len(X) - 1
     # is guaranteed, and
-    #   X[0 ] <= x <= X[1]  when  i = 1
+    #   X[0]  <= x <= X[1]  when  i = 1
     #   X[i-1] < x <= X[i]  when  i > 1
     # Then subtract 1 so that
-    #   X[0 ] <= x <= X[1]   when  i = 0
+    #   X[0]  <= x <= X[1]   when  i = 0
     #   X[i]  <  x <= X[i+1] when  i > 0
     i = max(0, np.searchsorted(X, x) - 1)
 
@@ -158,15 +150,44 @@ def ppval(x, X, Yppc, d, y):
     lies between.  As such, nonsense results will arise if `X` is not
     sorted along its last dimension.
     """
-    y[0] = ppval1(x, X, Yppc, d)
+    y[0] = ppval_1(x, X, Yppc, d)
+
+
+# @nb.njit
+# def ppinterp1(x, X, Y, d, ppc_fn):
+#     """Build and evaluate a piecewise polynomial"""
+
+#     k, K = valid_range_1(X + Y)
+
+#     if K - k > 1:
+#         # Trim data to valid range, build interpolant, evaluate interpolant
+#         X = X[k:K]
+#         Yppc = ppc_fn(X, Y[k:K])
+#         return ppval_1(x, X, Yppc, d)
+#     else:
+#         return np.nan
+
+
+# @ft.lru_cache
+# def make_ppinterpolator(ppc_fn):
+#     """Build a "universal" interpolator"""
+
+#     @nb.guvectorize(
+#         [(nb.f8, nb.f8[:], nb.f8[:], nb.i8, nb.f8[:])],
+#         "(),(n),(n),()->()",
+#     )
+#     def fn(x, X, Y, d, y):
+#         y[0] = ppinterp1_fast(x, X, Y, d, ppc_fn)
+
+#     return fn
 
 
 @nb.njit
-def ppval1_two(x, X, Yppc, Zppc, d=0):
+def ppval_1_two(x, X, Yppc, Zppc, d=0):
     """
     Evaluate two piecewise polynomials.
 
-    As `ppval1` but a second input, `Zppc`, provides a second set of Piecewise
+    As `ppval_1` but a second input, `Zppc`, provides a second set of Piecewise
     Polynomial Coefficients.  Correspondingly, a second output, `z`, is returned.
     """
     if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
@@ -192,4 +213,27 @@ def ppval_two(x, X, Yppc, Zppc, d, y, z):
     Calling `ppval_two` is faster than calling `ppval` twice, since the former
     calls `np.searchsorted` half as many times.
     """
-    y[0], z[0] = ppval1_two(x, X, Yppc, Zppc, d)
+    y[0], z[0] = ppval_1_two(x, X, Yppc, Zppc, d)
+
+
+# @nb.njit
+# def ppinterp1_two(x, X, Y, Z, d, ppc_fn):
+
+#     k, K = valid_range_1(X + Y)
+
+#     if K - k > 1:
+#         # Trim data to valid range, build interpolant, evaluate interpolant
+#         X = X[k:K]
+#         Yppc = ppc_fn(X, Y[k:K])
+#         Zppc = ppc_fn(X, Z[k:K])
+#         return ppval_1_two(x, X, Yppc, Zppc, d)
+#     else:
+#         return np.nan, np.nan
+
+
+# @nb.guvectorize(
+#     [(nb.f8, nb.f8[:], nb.f8[:], nb.f8[:], nb.i8, nb.f8[:], nb.f8[:])],
+#     "(),(n),(n),(n),()->(),()",
+# )
+# def ppinterp_two(x, X, Y, Z, d, y, z):
+#     y[0], z[0] = ppinterp1_two(x, X, Y, Z, d)

@@ -7,8 +7,7 @@ from scipy.sparse.linalg import spsolve
 
 from neutralocean.surface.isopycnal import _isopycnal
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.interp1d import make_interpolator
-from neutralocean.ppinterp import select_ppc
+from neutralocean.ppinterp import make_pp
 from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
 from neutralocean.grid.graph import edges_to_graph
 from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
@@ -262,8 +261,14 @@ def omega_surf(S, T, P, grid, **kwargs):
     OMEGA_FORMULATION = kwargs.get("OMEGA_FORMULATION", "poisson")
     interp = kwargs.get("interp", "linear")
 
-    ppc_fn = select_ppc(interp, "1")
-    interp_u_two = make_interpolator(interp, 0, "u", True)
+    # Build function that calculates coefficients of a piecewise polynomial
+    # interpolant, doing 1 problem at a time, and knowing there will be no nans
+    # in the input data.
+    ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
+
+    # Build function that evaluates two piecewise polynomial interpolants (with
+    # the same set of independent data), doing n problems at a time.
+    interp_two = make_pp(interp, kind="u", out="interp", num_dep_vars=2)
 
     sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
@@ -354,7 +359,7 @@ def omega_surf(S, T, P, grid, **kwargs):
 
         # Interpolate S and T onto the surface
         # TODO: Update this to handle ice shelf cavity friendly interpolation
-        s, t = interp_u_two(p, P, S, T)
+        s, t = interp_two(p, P, S, T)
 
     pin_p = p[pin_cast]
 

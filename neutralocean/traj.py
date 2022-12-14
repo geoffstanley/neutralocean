@@ -3,7 +3,7 @@
 import numpy as np
 import numba as nb
 
-from neutralocean.ppinterp import select_ppc, ppval1_two
+from neutralocean.ppinterp import make_pp, ppval_1_two
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.ppinterp import valid_range_1
@@ -15,7 +15,7 @@ def _func(p, sB, tB, pB, Sppc, Tppc, P, eos):
     # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB)
     # here, eos is always evaluated at the average pressure or depth, (p +
     # pB)/2.
-    s, t = ppval1_two(p, P, Sppc, Tppc)
+    s, t = ppval_1_two(p, P, Sppc, Tppc)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
 
@@ -106,7 +106,7 @@ def ntp_bottle_to_cast(
     """
 
     eos = make_eos(eos, grav, rho_c)
-    ppc_fn = select_ppc(interp, "1")
+    ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
     k, K = valid_range_1(S + P)  # S and T have same nan-structure
 
@@ -138,7 +138,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
 
     ppc_fn : function
         Function that calculates piecewise polynomial coefficients, such as
-        returned by `neutralocean.ppinterp.select_ppc`
+        returned by `neutralocean.ppinterp.make_pp`
 
     Returns
     -------
@@ -164,7 +164,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
             p = brent(_func, lb, ub, tol_p, args)
 
             # Interpolate S and T onto the updated surface
-            s, t = ppval1_two(p, P, Sppc, Tppc)
+            s, t = ppval_1_two(p, P, Sppc, Tppc)
 
         else:
             s, t, p = np.nan, np.nan, np.nan
@@ -252,7 +252,7 @@ def neutral_trajectory(
     """
 
     eos = make_eos(eos, grav, rho_c)
-    ppc_fn = select_ppc(interp, "1")
+    ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
     nc, nk = S.shape
     # assert(all(size(T) == size(S)), 'T must be same size as S')
@@ -265,7 +265,7 @@ def neutral_trajectory(
     # Evaluate S and T on first cast at p0
     Sppc = ppc_fn(P[0, :], S[0, :])
     Tppc = ppc_fn(P[0, :], T[0, :])
-    s[0], t[0] = ppval1_two(p0, P[0, :], Sppc, Tppc)
+    s[0], t[0] = ppval_1_two(p0, P[0, :], Sppc, Tppc)
     p[0] = p0
 
     # Loop over remaining casts

@@ -126,17 +126,48 @@ On the Fly
 .. autofunction:: neutralocean.interp1d.make_interpolator
 
 
-Piecewise Polynomial (PP) coefficients
---------------------------------------
+Piecewise Polynomial (PP)
+-------------------------
 .. automodule:: neutralocean.ppinterp.__init__
 
-.. autofunction:: neutralocean.ppinterp.linear.linear_coeffs
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs
+.. autofunction:: neutralocean.ppinterp.tools.make_pp
 
 .. autofunction:: neutralocean.ppinterp.ppval
 
+.. autofunction:: neutralocean.ppinterp.ppval_1
+
+.. autofunction:: neutralocean.ppinterp.ppval_i
+
 .. autofunction:: neutralocean.ppinterp.ppval_two
+
+.. autofunction:: neutralocean.ppinterp.ppval_1_two
+
+.. autofunction:: neutralocean.ppinterp.linear.linear_interp
+
+.. autofunction:: neutralocean.ppinterp.linear.linear_interp_1
+
+.. autofunction:: neutralocean.ppinterp.linear.linear_coeffs
+
+.. autofunction:: neutralocean.ppinterp.linear.linear_coeffs_1
+
+.. autofunction:: neutralocean.ppinterp.linear.linear_interp_two
+
+.. autofunction:: neutralocean.ppinterp.linear.linear_interp_1_two
+
+.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp
+
+.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp_1
+
+.. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs
+
+.. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs_1
+
+.. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs_1_nonan
+
+.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp_two
+
+.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp_1_two
+
 
 Synthetic Ocean
 ===============

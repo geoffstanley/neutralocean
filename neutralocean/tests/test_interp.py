@@ -3,7 +3,7 @@ import pytest
 
 from neutralocean.lib import find_first_nan
 from neutralocean.interp1d import make_interpolator
-from neutralocean.ppinterp import select_ppc, ppval
+from neutralocean.ppinterp import make_pp, ppval
 from scipy.interpolate import UnivariateSpline, PchipInterpolator
 
 N = 4  # number of 1D interpolation problems
@@ -52,7 +52,9 @@ def test_interp(interp, num_deriv, x):
         k = min(find_first_nan(Y[i]), find_first_nan(X[i]))
         try:
             if interp == "linear":
-                fn = UnivariateSpline(X[i, 0:k], Y[i, 0:k], k=1, s=0, ext="raise")
+                fn = UnivariateSpline(
+                    X[i, 0:k], Y[i, 0:k], k=1, s=0, ext="raise"
+                )
             elif interp == "pchip":
                 fn = PchipInterpolator(X[i, 0:k], Y[i, 0:k], extrapolate=False)
             fn = fn.derivative(num_deriv)
@@ -73,7 +75,7 @@ def test_interp(interp, num_deriv, x):
 
     # Interpolate with our methods:
     # second, with piecewise polynomial coefficients, using ppinterp
-    ppc_fn = select_ppc(interp, "u")
+    ppc_fn = make_pp(interp, kind="u", out="coeffs")
     Yppc = ppc_fn(X, Y)
     y2 = np.empty_like(y)
     for j in range(x.size):

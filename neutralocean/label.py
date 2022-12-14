@@ -1,6 +1,6 @@
 import numpy as np
 
-from .ppinterp import select_ppc, ppval1_two, ppval_i
+from .ppinterp import make_pp, ppval_1_two, ppval_i
 from .lib import _process_eos
 
 # CHECK VALUE from MATLAB, with densjmd95 (non-Boussinesq) as the eos:
@@ -149,7 +149,7 @@ def veronis_density(
     k0 = max(1, np.searchsorted(P, p0))
     k1 = max(1, np.searchsorted(P, p1))
 
-    ppc_fn = select_ppc(interp, "1")
+    ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=True)
     Sppc = ppc_fn(P, S)
     Tppc = ppc_fn(P, T)
 
@@ -165,7 +165,7 @@ def veronis_density(
     d1 -= _int_x_k(p1, k1 - 1, dp, P, Sppc, Tppc, eos_s_t)
 
     # Calculate potential density, referenced to p_ref, at p0
-    s0, t0 = ppval1_two(p0, P, Sppc, Tppc)
+    s0, t0 = ppval_1_two(p0, P, Sppc, Tppc)
     d0 = eos(s0, t0, p_ref)
 
     return d0 + d1

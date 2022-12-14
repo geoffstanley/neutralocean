@@ -1,23 +1,74 @@
-from .linear import linear_coeffs, linear_coeffs_1
-from .pchip import pchip_coeffs, pchip_coeffs_1
+import functools as ft
+from importlib import import_module
 
 
-def select_ppc(interpolant="linear", kind="u"):
-    """Select function for building piecewise polynomial coefficients."""
+@ft.lru_cache(maxsize=10)
+def make_pp(
+    interpolant="linear",
+    kind="u",
+    out="coeffs",
+    nans=True,
+    num_dep_vars=1,
+):
+    """Make function for piecewise polynomial interpolation."""
+
+    if interpolant not in ("linear", "pchip"):
+        raise ValueError(
+            f"Expected `interpolant` in ('lienar', 'pchip'); got {interpolant}"
+        )
+
     if kind not in ("1", "u"):
         raise ValueError(f"Expected `kind` in ('1', 'u'); got {kind}")
 
-    if interpolant == "linear":
-        if kind == "1":
-            return linear_coeffs_1
-        elif kind == "u":
-            return linear_coeffs
-    elif interpolant == "pchip":
-        if kind == "1":
-            return pchip_coeffs_1
-        elif kind == "u":
-            return pchip_coeffs
-    else:
+    if out not in ("coeffs", "interp"):
+        raise ValueError(f"Expected `out` in ('coeffs', 'interp'); got {out}")
+
+    if num_dep_vars not in (1, 2):
         raise ValueError(
-            f"Expected `interpolant` in ('linear', 'pchip'); got {interpolant}"
+            "Expected `num_dep_vars` in (1, 2); got {num_dep_vars}"
         )
+
+    if interpolant == "linear":
+        if out == "coeffs":
+            if kind == "u":
+                fcn_name = "linear_coeffs"
+            elif kind == "1":
+                # No check of `nans`: the code for linear_coeffs_1 is unaffected
+                fcn_name = "linear_coeffs_1"
+        else:  # build interpolator
+            if kind == "u":
+                if num_dep_vars == 1:
+                    fcn_name = "linear_interp"
+                else:
+                    fcn_name = "linear_interp_two"
+            elif kind == "1":
+                if num_dep_vars == 1:
+                    fcn_name = "linear_interp_1"
+                else:
+                    fcn_name = "linear_interp_1_two"
+    elif interpolant == "pchip":
+        if out == "coeffs":
+            if kind == "u":
+                fcn_name = "pchip_coeffs"
+            elif kind == "1":
+                if nans:
+                    fcn_name = "pchip_coeffs_1"
+                else:
+                    fcn_name = "pchip_coeffs_1_nonan"
+        else:  # build interpolator
+            if kind == "u":
+                if num_dep_vars == 1:
+                    fcn_name = "pchip_interp"
+                else:
+                    fcn_name = "pchip_interp_two"
+            elif kind == "1":
+                if num_dep_vars == 1:
+                    fcn_name = "pchip_interp_1"
+                else:
+                    fcn_name = "pchip_interp_1_two"
+
+    # Below is equivalent to
+    # from neutralocean.ppinterp.`interpolant` import `fcn_name`
+    return import_module(
+        "neutralocean.ppinterp." + interpolant
+    ).__getattribute__(fcn_name)

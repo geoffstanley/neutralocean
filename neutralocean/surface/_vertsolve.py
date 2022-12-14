@@ -5,7 +5,7 @@ import numba as nb
 import functools
 
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.ppinterp import ppval1_two, valid_range_1
+from neutralocean.ppinterp import ppval_1_two, valid_range_1
 
 
 @functools.lru_cache(maxsize=10)
@@ -73,7 +73,7 @@ def _vertsolve(S, T, P, ref, d0, tol_p, eos, ppc_fn, zero_func):
                 p[n] = brent(zero_func, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = ppval1_two(p[n], Pn, Sppcn, Tppcn, 0)
+                s[n], t[n] = ppval_1_two(p[n], Pn, Sppcn, Tppcn, 0)
 
     return s, t, p
 
@@ -120,7 +120,7 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
                 p[n] = brent(_zero_potential, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = ppval1_two(p[n], Pn, Sppcn, Tppcn)
+                s[n], t[n] = ppval_1_two(p[n], Pn, Sppcn, Tppcn)
 
             else:
                 # Ensure s,t,p all have the same nan structure
@@ -137,7 +137,7 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
 @nb.njit
 def _zero_potential(p, Sppc, Tppc, P, ref_p, isoval, eos):
     # Evaluate the potential density in a given cast, minus a given isovalue
-    s, t = ppval1_two(p, P, Sppc, Tppc, 0)
+    s, t = ppval_1_two(p, P, Sppc, Tppc, 0)
     return eos(s, t, ref_p) - isoval
 
 
@@ -145,5 +145,5 @@ def _zero_potential(p, Sppc, Tppc, P, ref_p, isoval, eos):
 def _zero_anomaly(p, Sppc, Tppc, P, ref, isoval, eos):
     # Evaluate the specific volume (or in-situ density) anomaly in a given cast,
     # minus a given isovalue
-    s, t = ppval1_two(p, P, Sppc, Tppc)
+    s, t = ppval_1_two(p, P, Sppc, Tppc)
     return eos(s, t, p) - eos(ref[0], ref[1], p) - isoval

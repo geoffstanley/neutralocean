@@ -1,6 +1,6 @@
 """ Mixed Layer """
 
-from neutralocean.interp1d import make_interpolator
+from neutralocean.ppinterp import make_pp
 from neutralocean.eos.tools import make_eos, vectorize_eos
 from neutralocean.lib import _process_casts, _process_vert_dim
 
@@ -118,7 +118,7 @@ def mixed_layer(
     eos = vectorize_eos(eos)
 
     # Make universal interpolator from the interpolation kernel
-    interp_fn = make_interpolator(interp, 0, "u", False)
+    interp_fn = make_pp(interp, kind="u", out="interp")
 
     # Convert vert_dim from str to int if needed
     vert_dim = _process_vert_dim(vert_dim, S)
@@ -136,8 +136,6 @@ def mixed_layer(
     else:  # eos computes specific volume
         DD = 1 / eos(S, T, ref_p) - 1 / eos(SB, TB, ref_p)
 
-    # TODO: Update this to handle ice shelf cavity friendly interpolation
-
     # Find the pressure or depth at which the potential density difference
     # exceeds the threshold pot_dens_diff
-    return interp_fn(pot_dens_diff, DD, P)
+    return interp_fn(pot_dens_diff, DD, P, 0)

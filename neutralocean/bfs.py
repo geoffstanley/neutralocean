@@ -120,9 +120,9 @@ def bfs_conncomp1_wet(
 
         Function to compute piecewise polynomial coefficients for an interpolator.
         Construct this as
-        `neutralocean.ppinterp.select_ppc("linear", kind="1")`
+        `neutralocean.ppinterp.make_pp("linear", kind="1", nans=False)`
         for linear interpolation.  For other interpolants, replace `"linear"`
-        (see `select_ppc` documentation).
+        (see `make_pp` documentation).
 
     p_ml : ndarray
 
