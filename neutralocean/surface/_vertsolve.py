@@ -5,7 +5,7 @@ import numba as nb
 import functools
 
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.ppinterp import ppval_1_two, valid_range_1
+from neutralocean.ppinterp import ppval_1_two, valid_range_1_two
 
 
 @functools.lru_cache(maxsize=10)
@@ -51,7 +51,7 @@ def _vertsolve(S, T, P, ref, d0, tol_p, eos, ppc_fn, zero_func):
         Tn = T[n]
         Pn = P[n]
 
-        k, K = valid_range_1(Sn + Pn)  # S and T have same nan-structure
+        k, K = valid_range_1_two(Sn, Pn)  # S and T have same nan-structure
 
         if K - k > 1:
 
@@ -92,7 +92,7 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
         Tn = T[n]
         Pn = P[n]
 
-        k, K = valid_range_1(Sn + Pn)  # S and T have same nan-structure
+        k, K = valid_range_1_two(Sn, Pn)  # S and T have same nan-structure
         if K - k > 1 and np.isfinite(ϕn):
 
             pn = p[n]

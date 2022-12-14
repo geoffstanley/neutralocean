@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-from .lib import diff_1d_samesize, valid_range_1
+from .lib import diff_1d_samesize, valid_range_1_two
 from .ppinterp import ppval_i
 
 
@@ -84,7 +84,7 @@ def pchip_coeffs_1(X, Y):
     # Find k = index to first valid data site, and
     # K such that K - 1 = index to last valid data site in contiguous range
     #                     of valid data after index k.
-    k, K = valid_range_1(X + Y)
+    k, K = valid_range_1_two(X, Y)
     # TODO: Remove this, and assume k = 0 and K = len(X)?  Do this if we only
     #       want to use ppinterp inside for loops, within which we trim the
     #       data to only its finite values.  i.e. do this if we're happy with

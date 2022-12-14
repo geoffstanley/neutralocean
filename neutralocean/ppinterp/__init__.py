@@ -49,5 +49,5 @@ The `make_pp` factory function will help select the desired variant of the
 """
 
 from .ppinterp import ppval_1, ppval, ppval_1_two, ppval_two, ppval_i
-from .lib import valid_range_1, valid_range
+from .lib import valid_range_1, valid_range_1_two, valid_range
 from .tools import make_pp

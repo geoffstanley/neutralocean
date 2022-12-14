@@ -43,10 +43,11 @@ On the Fly
 Piecewise Polynomial (PP) coefficients
 --------------------------------------
 
-.. autofunction:: neutralocean.ppinterp.lib.valid_range_1
-
 .. autofunction:: neutralocean.ppinterp.lib.valid_range
 
+.. autofunction:: neutralocean.ppinterp.lib.valid_range_1
+
+.. autofunction:: neutralocean.ppinterp.lib.valid_range_1_two
 
 Root finding in 1D
 ==================

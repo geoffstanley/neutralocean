@@ -6,7 +6,7 @@ import numba as nb
 from neutralocean.ppinterp import make_pp, ppval_1_two
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.ppinterp import valid_range_1
+from neutralocean.ppinterp import valid_range_1_two
 
 
 @nb.njit
@@ -108,7 +108,7 @@ def ntp_bottle_to_cast(
     eos = make_eos(eos, grav, rho_c)
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
-    k, K = valid_range_1(S + P)  # S and T have same nan-structure
+    k, K = valid_range_1_two(S, P)  # S and T have same nan-structure
 
     return _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn)
 
@@ -275,7 +275,7 @@ def neutral_trajectory(
         Sc = S[c, :]
         Tc = T[c, :]
         Pc = P[c, :]
-        k, K = valid_range_1(Sc + Pc)
+        k, K = valid_range_1_two(Sc, Pc)
         s[c], t[c], p[c] = _ntp_bottle_to_cast(
             s[c - 1],
             t[c - 1],

@@ -2,7 +2,7 @@ import numpy as np
 import numba as nb
 
 from neutralocean.traj import _ntp_bottle_to_cast
-from neutralocean.ppinterp import valid_range_1
+from neutralocean.ppinterp import valid_range_1_two
 
 
 @nb.njit
@@ -192,7 +192,7 @@ def bfs_conncomp1_wet(
                     Pn = P[n]
 
                     # assume S and T have same nan-structure
-                    k, K = valid_range_1(Sn + Pn)
+                    k, K = valid_range_1_two(Sn, Pn)
 
                     if K - k <= 1:
                         # At most 1 valid ocean data site.  Can't interpolate
