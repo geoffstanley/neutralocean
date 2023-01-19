@@ -8,6 +8,7 @@ import importlib
 modules = {"gsw": "specvol", "jmd95": "rho", "jmdfwg06": "rho"}
 
 
+@ft.lru_cache(maxsize=10)
 def _make_eos(eos, derivs, num_p_derivs=0, grav=None, rho_c=None):
     if isinstance(eos, str):
         if eos in modules:
