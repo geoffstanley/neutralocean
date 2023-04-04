@@ -102,6 +102,7 @@ def aggsum(a, idx, n):
     return b
 
 
+# TODO: Abstract `val_bot` to be `val_at`; change `n_good` to `k`; careful with +1 index.
 def val_bot(T, n_good):
     """Evaluate tracer at the bottom ocean grid cell
 
@@ -126,7 +127,7 @@ def val_bot(T, n_good):
     --------
 
     Evaluate temperature, having data in each water column, at the bottom grid cell
-    
+
     >>> T = np.empty((3, 2, 10))  # (longitude, latitude, depth), let us say
     >>> T[..., :] = np.arange(10, 0, -1)  # decreasing along depth dim from 10 to 1
     >>> T[0, 0, :] = np.nan  # make cast (0,0) be land
@@ -255,12 +256,6 @@ def _process_casts(S, T, P, vert_dim):
 
     S, T, P = (_contiguous_casts(x, vert_dim) for x in (S, T, P))
     return S, T, P
-
-
-def _process_n_good(S, n_good=None):
-    if n_good is None:
-        n_good = find_first_nan(S)
-    return n_good
 
 
 def _interp_casts(S, T, P, interp_fn, Sppc=None, Tppc=None):

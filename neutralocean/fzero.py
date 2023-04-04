@@ -2,14 +2,14 @@
 Functions for finding the zero of a univariate function.
 """
 
-import numba
 import numpy as np
+import numba as nb
 
 
 eps = np.finfo(np.float64).eps
 
 
-@numba.njit
+@nb.njit
 def brent_guess(f, x, A, B, t, args=()):
     """
     Find a zero of a function within a given range, starting from a guess
@@ -39,7 +39,7 @@ def brent_guess(f, x, A, B, t, args=()):
     return brent(f, a, b, t, args)
 
 
-@numba.njit
+@nb.njit
 def brent(f, a, b, t, args=()):
     """
     Find a zero of a univariate function within a given range
@@ -149,7 +149,7 @@ def brent(f, a, b, t, args=()):
     return b
 
 
-@numba.njit
+@nb.njit
 def guess_to_bounds(f, x, A, B, args=()):
     """
     Search for a range containing a sign change, expanding geometrically
@@ -199,17 +199,23 @@ def guess_to_bounds(f, x, A, B, args=()):
         a = A
     else:
         a = x
-        fapos = f(a, *args) > 0.0
 
     # Similarly, set b = x, except for machine precision problems.
     if dxp == 0:
         b = B
     else:
         b = x
-        if dxm == 0.0:
-            fbpos = fapos  # since a = b = x
-        else:
+
+    if a > A:
+        fbpos = f(b, *args) > 0.0
+    else:  # a == A
+        if b == B:
+            # So dxm == 0 and dxp == 0.  So A very nearly equals B, but could
+            # have A != B due to machine precision problems
+            fapos = f(a, *args) > 0.0
             fbpos = f(b, *args) > 0.0
+        else:  # b < B
+            fapos = f(a, *args) > 0.0
 
     while True:
         if a > A:

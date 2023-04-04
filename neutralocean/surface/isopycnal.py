@@ -9,14 +9,13 @@ import numpy as np
 from time import time
 
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.ppinterp import ppval1_two, select_ppc
+from neutralocean.ppinterp import ppval_1_two, make_pp, valid_range_1
 from neutralocean.ntp import ntp_epsilon_errors_norms
 from neutralocean.lib import (
     _xrs_in,
     _xr_out,
     _process_pin_cast,
     _process_casts,
-    _process_n_good,
     _process_eos,
 )
 
@@ -201,11 +200,6 @@ def potential_surf(S, T, P, **kwargs):
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
-    n_good : ndarray, Default None
-
-        Pre-computed number of ocean data points in each water column.
-        If None, this is computed as `n_good = lib.find_first_nan(S)`.
-
     diags : bool, Default True
 
         If True, calculate diagnostics (4th output).  If False, 4th output is
@@ -304,7 +298,7 @@ def anomaly_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    grid, vert_dim, eos, grav, rho_c, interp, n_good, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, eos, grav, rho_c, interp, diags, output, TOL_P_SOLVER :
         See `potential_surf`
 
     Examples
@@ -357,16 +351,17 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
     grid = kwargs.get("grid")
-    n_good = kwargs.get("n_good")
     interp = kwargs.get("interp", "linear")
 
-    ppc_fn = select_ppc(interp, "1")
+    # Build function that calculates coefficients of a piecewise polynomial
+    # interpolant, doing 1 problem at a time, and knowing there will be no nans
+    # in the input data.
+    ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
     # Process arguments
     sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
-    n_good = _process_n_good(S, n_good)  # call after _process_casts
     eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
     if diags and not (isinstance(grid, dict) and "edges" in grid):
         raise ValueError("grid['edges'] must be provided when diags is True")
@@ -381,16 +376,18 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     # Solve non-linear root finding problem in each cast
     vertsolve = _make_vertsolve(eos, ppc_fn, ans_type)
     timer = time()
-    s, t, p = vertsolve(S, T, P, n_good, ref, isoval, TOL_P_SOLVER)
+    s, t, p = vertsolve(S, T, P, ref, isoval, TOL_P_SOLVER)
 
     if pin_p is not None:  # pin_cast must also be valid
         # Adjust the surface at the pinning cast slightly, to match the pinning
         # pressure / depth.  This fixes small deviations of order `TOL_P_SOLVER`
-        n0 = pin_cast
-        p[n0] = pin_p
-        Sppcn0 = ppc_fn(P[n0], S[n0])
-        Tppcn0 = ppc_fn(P[n0], T[n0])
-        s[n0], t[n0] = ppval1_two(pin_p, P[n0], Sppcn0, Tppcn0)
+        n = pin_cast
+        p[n] = pin_p
+        Sn, Tn, Pn = S[n], T[n], P[n]
+        k, K = valid_range_1(Sn + Pn)  # Sn and Tn have same nan-structure
+        Sppcn = ppc_fn(Pn[k:K], Sn[k:K])
+        Tppcn = ppc_fn(Pn[k:K], Tn[k:K])
+        s[n], t[n] = ppval_1_two(pin_p, Pn[k:K], Sppcn, Tppcn)
 
     d = dict()
     if diags:
@@ -471,12 +468,14 @@ def _choose_ref_isoval(
     # >>> _isopycnal(ans_type, S, T, P, ref, pin_cast, pin_p)
     # >>> _isopycnal(ans_type, S, T, P, pin_cast, pin_p)
     if isoval is None:  # => pin_cast and pin_p are both not None
-        n0 = pin_cast  # evaluate S and T on the surface at the chosen location
-        # s0, t0 = interp_fn(pin_p, P[n0], S[n0], T[n0])
+        n = pin_cast  # evaluate S and T on the surface at the chosen location
+        # s0, t0 = interp_fn(pin_p, P[n], S[n], T[n])
 
-        Sppc = ppc_fn(P[n0], S[n0])
-        Tppc = ppc_fn(P[n0], T[n0])
-        s0, t0 = ppval1_two(pin_p, P[n0], Sppc, Tppc)
+        Sn, Tn, Pn = S[n], T[n], P[n]
+        k, K = valid_range_1(Sn + Pn)  # Sn and Tn have same nan-structure
+        Sppcn = ppc_fn(Pn[k:K], Sn[k:K])
+        Tppcn = ppc_fn(Pn[k:K], Tn[k:K])
+        s0, t0 = ppval_1_two(pin_p, Pn[k:K], Sppcn, Tppcn)
 
         if ans_type == "potential":
             if ref is None:

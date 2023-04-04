@@ -213,27 +213,33 @@ print(
 # In[Begin showing more advanced features]
 
 import numpy as np
+import numba as nb
 from neutralocean.mixed_layer import mixed_layer
 from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.label import veronis_density
-from neutralocean.lib import _process_casts, find_first_nan
-from neutralocean.interp1d import make_interpolator
-from neutralocean.ppinterp import select_ppc
+from neutralocean.lib import _process_casts
+from neutralocean.ppinterp import make_pp
 from neutralocean.eos import make_eos_p, vectorize_eos
-from neutralocean.traj import ntp_bottle_to_cast, _ntp_bottle_to_cast
+from neutralocean.traj import ntp_bottle_to_cast
 
 # In[Show vertical interpolation]
 
-# Make interpolation function using same interpolation kernel ("pchip") as last
-# ANS surface constructed above.  Evaluate the interpolate, not any of its
-# derivatives (deriv=0).  Make a universal interpolator (kind="u") to handle
-# the entire dataset in one function call.  Interpolate salinity and temperature
-# in one pass (two=True).
-interp_two = make_interpolator("pchip", deriv=0, kind="u", two=True)
+# Build interpolation function using same interpolation kernel ("pchip") as
+# last ANS surface constructed above.
+# Allow this to operate across all water columns with one call (kind="u").
+# Evaluate the interpolant rather than build its coefficients (out="interp").
+# Allow that there could be NaNs in the data (nans=True).
+# There will be two numpy arrays of dependent data (S, T), sharing the same
+# independent data Z (num_dep_vars=2).
+interp_two = make_pp(
+    "pchip", kind="u", out="interp", nans=True, num_dep_vars=2
+)
 
 # Apply interpolation function to interpolate salinity and temperature onto the
 # depth of the surface.  This requires working with numpy arrays, not xarrays.
-s_, t_ = interp_two(z.values, Z, S.values, T.values)
+# Evaluate the interpolant, not any of its derivatives (d=0).
+s_, t_ = interp_two(z.values, Z, S.values, T.values, d=0)
+
 
 # Check that the results of the above interpolation match (to machine precision)
 # the results returned from omega_surf above.
@@ -260,6 +266,41 @@ print(
 # Pre-compute depth of the mixed layer
 z_ml = mixed_layer(S, T, Z, eos)
 
+# The correct way to remove the mixed layer from the omega surface algorithm
+# is to pass the p_ml parameter, e.g. pass `p_ml=z_ml` in the call below.
+# However, here we'll use a more drastic approach: setting our 3D hydrographic
+# data to NaN above the mixed layer.
+# This serves as a test of the new interpolation methods that allow for NaN data
+# in the top of the water column followed by valid (non-NaN) data in the middle
+# where the interpolation is done, followed by more NaN data at the bottom.
+# This is to allow for models or data with ice shelves.
+# Note, this drastic NaN'ing of the input (S,T) data is not expected to give
+# exactly the same results as by passing the p_ml parameter, since
+# (a) with p_ml, the mixed layer removal is not applied until after the first
+#     iteration, and
+# (b) with PCHIPs, the interpolant just below the mixed layer is affected by
+#     a few of the lower bottles in the mixed layer.
+# (c) with p_ml, the surface is set to NaN only if it goes above p_ml which
+#     is any real number, whereas with the data-NaN'ing approach, discrete
+#     bottles are set to NaN so the surface will only be valid if it is below
+#     the first valid bottle below what was NaN'ed out.
+
+
+@nb.njit
+def mixedlayer2nan(S, T, Z, z_ml):
+    for n in np.ndindex(z_ml.shape):
+        z = z_ml[n]
+        for k in range(nk):
+            if Z[k] < z:
+                S[(*n, k)] = np.nan
+                T[(*n, k)] = np.nan
+            else:
+                break
+
+
+mixedlayer2nan(S.values, T.values, Z, z_ml)
+
+
 s, t, z, d = omega_surf(
     S,
     T,
@@ -270,10 +311,10 @@ s, t, z, d = omega_surf(
     pin_cast=(i0, j0),
     pin_p=z0,
     eos=(eos, eos_s_t),
+    interp="pchip",
     ITER_MAX=10,
     ITER_START_WETTING=1,
     TOL_P_SOLVER=1e-5,
-    p_ml=z_ml,
 )
 
 # potential and anomaly surfaces don't take `p_ml` as an argument, since they
@@ -288,7 +329,7 @@ print(f"RMS of ϵ is {e_RMS : 4e} [kg m-4])")
 e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert ϵ above into two 2D maps, one for zonal ϵ errors and one for meridional ϵ errors
-ex, ey = edgedata_to_maps(e, (ni, nj), (True, False))
+ex, ey = edgedata_to_maps(e, (ni, nj), g["wrap"])
 # These can then be mapped...
 
 # In[Neutral Tangent Plane bottle to cast]
@@ -297,15 +338,6 @@ sB, tB, zB = 35.0, 16.0, 500.0  # Thermodynamic properties of a given Bottle
 S1 = S.values[180, 80, :]
 T1 = T.values[180, 80, :]
 s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
-
-# Or the more manual version:
-n_good = find_first_nan(S1)[()]
-ppc_fn = select_ppc("linear", "1")
-S1ppc, T1ppc = (ppc_fn(Z, C) for C in (S1, T1))
-s1, t1, z1 = _ntp_bottle_to_cast(
-    sB, tB, zB, S1ppc, T1ppc, Z, n_good, 1e-4, eos
-)
-
 
 # In[Work with Numpy arrays instead of xarrays]
 
@@ -333,16 +365,20 @@ s, t, z, d = anomaly_surf(
 eos_z = make_eos_p("jmd95", g["grav"], g["ρ_c"])  # for scalar inputs
 eos_z = vectorize_eos(eos_z)  # for nd inputs
 
+# Build linear interpolation function, operating over a whole dataset (kind="u"),
+# evaluating the interpolant on the fly (out="interp"), for two dependent
+# variables (num_dep_vars=2).
+interp_two = make_pp("linear", kind="u", out="interp", num_dep_vars=2)
+
 # Earth sidereal day period [s]
 Earth_day = 86164
 
 # Coriolis param [s-1] on tracer grid
 f = 2 * (2 * np.pi / Earth_day) * np.sin(g["YCvec"] * (np.pi / 180))
 
-linterp_dx_utwo = make_interpolator("linear", deriv=1, kind="u", two=True)
-sz, tz = linterp_dx_utwo(
-    z, Z, S.values, T.values
-)  # ∂S/∂Z and ∂T/∂Z, on the surface
+# evaluate first derivative (d=1) of S(z) and T(z) at depth z.  That is, eval
+# ∂S/∂Z and ∂T/∂Z, on the surface.
+sz, tz = interp_two(z, Z, S.values, T.values, 1)
 rs, rt = eos_s_t(s, t, z)  # ∂ρ/∂S and ∂ρ/∂T, on the surface
 
 # ∂δ/∂z on the surface, where δ is the in-situ density anomaly

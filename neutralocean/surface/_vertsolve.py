@@ -5,7 +5,7 @@ import numba as nb
 import functools
 
 from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.ppinterp import ppval1_two
+from neutralocean.ppinterp import ppval_1_two, valid_range_1_two
 
 
 @functools.lru_cache(maxsize=10)
@@ -37,24 +37,27 @@ def _make_vertsolve(eos, ppc_fn, ans_type):
 
 
 @nb.njit
-def _vertsolve(S, T, P, n_good, ref, d0, tol_p, eos, ppc_fn, zero_func):
+def _vertsolve(S, T, P, ref, d0, tol_p, eos, ppc_fn, zero_func):
 
-    s = np.full(n_good.shape, np.nan)
-    t = np.full(n_good.shape, np.nan)
-    p = np.full(n_good.shape, np.nan)
+    shape2D = S.shape[0:-1]
+    s = np.full(shape2D, np.nan)
+    t = np.full(shape2D, np.nan)
+    p = np.full(shape2D, np.nan)
 
-    for n in np.ndindex(s.shape):
-        k = n_good[n]
-        if k > 1:
+    for n in np.ndindex(shape2D):
 
-            # Select this water column
-            tup = (*n, slice(k))
-            Sn = S[tup]
-            Tn = T[tup]
-            Pn = P[tup]
+        # Select this water column
+        Sn = S[n]
+        Tn = T[n]
+        Pn = P[n]
 
-            Sppcn = ppc_fn(Pn, Sn)
-            Tppcn = ppc_fn(Pn, Tn)
+        k, K = valid_range_1_two(Sn, Pn)  # S and T have same nan-structure
+
+        if K - k > 1:
+
+            Pn = Pn[k:K]
+            Sppcn = ppc_fn(Pn, Sn[k:K])
+            Tppcn = ppc_fn(Pn, Tn[k:K])
 
             args = (Sppcn, Tppcn, Pn, ref, d0, eos)
 
@@ -70,31 +73,34 @@ def _vertsolve(S, T, P, n_good, ref, d0, tol_p, eos, ppc_fn, zero_func):
                 p[n] = brent(zero_func, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = ppval1_two(p[n], Pn, Sppcn, Tppcn, 0)
+                s[n], t[n] = ppval_1_two(p[n], Pn, Sppcn, Tppcn, 0)
 
     return s, t, p
 
 
 @nb.njit
-def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, ppc_fn):
+def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
     # Note!  mutates s, t, p
 
     for n in np.ndindex(s.shape):
         ϕn = ϕ[n]
         if ϕn == 0.0:
             continue  # leave s,t,p unchanged (avoid creating errors of size tol_p)
-        k = n_good[n]
-        if k > 1 and np.isfinite(ϕn):
 
-            # Select this water column
-            tup = (*n, slice(k))
-            Sn = S[tup]
-            Tn = T[tup]
-            Pn = P[tup]
+        # Select this water column
+        Sn = S[n]
+        Tn = T[n]
+        Pn = P[n]
+
+        k, K = valid_range_1_two(Sn, Pn)  # S and T have same nan-structure
+        if K - k > 1 and np.isfinite(ϕn):
+
             pn = p[n]
+            Pn = Pn[k:K]
 
-            Sppcn = ppc_fn(Pn, Sn)
-            Tppcn = ppc_fn(Pn, Tn)
+            # Build interpolant's coefficients for this water column
+            Sppcn = ppc_fn(Pn, Sn[k:K])
+            Tppcn = ppc_fn(Pn, Tn[k:K])
 
             # Evaluate difference between
             # (a) eos at location on the cast where the pressure or depth is p, and
@@ -114,7 +120,7 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, ppc_fn):
                 p[n] = brent(_zero_potential, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = ppval1_two(p[n], Pn, Sppcn, Tppcn)
+                s[n], t[n] = ppval_1_two(p[n], Pn, Sppcn, Tppcn)
 
             else:
                 # Ensure s,t,p all have the same nan structure
@@ -131,7 +137,7 @@ def _vertsolve_omega(s, t, p, S, T, P, n_good, ϕ, tol_p, eos, ppc_fn):
 @nb.njit
 def _zero_potential(p, Sppc, Tppc, P, ref_p, isoval, eos):
     # Evaluate the potential density in a given cast, minus a given isovalue
-    s, t = ppval1_two(p, P, Sppc, Tppc, 0)
+    s, t = ppval_1_two(p, P, Sppc, Tppc, 0)
     return eos(s, t, ref_p) - isoval
 
 
@@ -139,5 +145,5 @@ def _zero_potential(p, Sppc, Tppc, P, ref_p, isoval, eos):
 def _zero_anomaly(p, Sppc, Tppc, P, ref, isoval, eos):
     # Evaluate the specific volume (or in-situ density) anomaly in a given cast,
     # minus a given isovalue
-    s, t = ppval1_two(p, P, Sppc, Tppc)
+    s, t = ppval_1_two(p, P, Sppc, Tppc)
     return eos(s, t, p) - eos(ref[0], ref[1], p) - isoval
