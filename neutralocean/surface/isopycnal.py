@@ -390,6 +390,8 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
         s[n], t[n] = ppval_1_two(pin_p, Pn[k:K], Sppcn, Tppcn)
 
     d = dict()
+    d["ref"] = ref
+    d["isoval"] = isoval
     if diags:
         d["timer"] = time() - timer
         e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t)
@@ -404,9 +406,6 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
                 f" | RMS(ϵ) = {e_RMS:.8e}",
                 f" | {d['timer']:.3f} sec",
             )
-
-        d["ref"] = ref
-        d["isoval"] = isoval
 
     s, t, p = (_xr_out(x, xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr)))
     return s, t, p, d

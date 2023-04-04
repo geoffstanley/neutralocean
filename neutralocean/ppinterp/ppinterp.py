@@ -13,10 +13,6 @@ https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calc
 import numpy as np
 import numba as nb
 
-# import functools as ft
-
-# from .lib import valid_range_1
-
 
 @nb.njit
 def ppval_i(dx, Yppc, i, d=0):
@@ -153,35 +149,6 @@ def ppval(x, X, Yppc, d, y):
     y[0] = ppval_1(x, X, Yppc, d)
 
 
-# @nb.njit
-# def ppinterp1(x, X, Y, d, ppc_fn):
-#     """Build and evaluate a piecewise polynomial"""
-
-#     k, K = valid_range_1(X + Y)
-
-#     if K - k > 1:
-#         # Trim data to valid range, build interpolant, evaluate interpolant
-#         X = X[k:K]
-#         Yppc = ppc_fn(X, Y[k:K])
-#         return ppval_1(x, X, Yppc, d)
-#     else:
-#         return np.nan
-
-
-# @ft.lru_cache
-# def make_ppinterpolator(ppc_fn):
-#     """Build a "universal" interpolator"""
-
-#     @nb.guvectorize(
-#         [(nb.f8, nb.f8[:], nb.f8[:], nb.i8, nb.f8[:])],
-#         "(),(n),(n),()->()",
-#     )
-#     def fn(x, X, Y, d, y):
-#         y[0] = ppinterp1_fast(x, X, Y, d, ppc_fn)
-
-#     return fn
-
-
 @nb.njit
 def ppval_1_two(x, X, Yppc, Zppc, d=0):
     """
@@ -214,26 +181,3 @@ def ppval_two(x, X, Yppc, Zppc, d, y, z):
     calls `np.searchsorted` half as many times.
     """
     y[0], z[0] = ppval_1_two(x, X, Yppc, Zppc, d)
-
-
-# @nb.njit
-# def ppinterp1_two(x, X, Y, Z, d, ppc_fn):
-
-#     k, K = valid_range_1(X + Y)
-
-#     if K - k > 1:
-#         # Trim data to valid range, build interpolant, evaluate interpolant
-#         X = X[k:K]
-#         Yppc = ppc_fn(X, Y[k:K])
-#         Zppc = ppc_fn(X, Z[k:K])
-#         return ppval_1_two(x, X, Yppc, Zppc, d)
-#     else:
-#         return np.nan, np.nan
-
-
-# @nb.guvectorize(
-#     [(nb.f8, nb.f8[:], nb.f8[:], nb.f8[:], nb.i8, nb.f8[:], nb.f8[:])],
-#     "(),(n),(n),(n),()->(),()",
-# )
-# def ppinterp_two(x, X, Y, Z, d, y, z):
-#     y[0], z[0] = ppinterp1_two(x, X, Y, Z, d)

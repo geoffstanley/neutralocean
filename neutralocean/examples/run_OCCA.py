@@ -28,8 +28,8 @@ z0 = 1500.0
 
 # make Boussinesq version of the Jackett and McDougall (1995) equation of state
 # --- which is what OCCA used --- and its partial derivatives
-eos = make_eos("jmd95", g["grav"], g["ρ_c"])
-eos_s_t = make_eos_s_t("jmd95", g["grav"], g["ρ_c"])
+eos = make_eos("jmd95", g["grav"], g["rho_c"])
+eos_s_t = make_eos_s_t("jmd95", g["grav"], g["rho_c"])
 
 # Build grid adjacency and distance information for neutralocean functions
 grid = build_grid(
@@ -46,7 +46,7 @@ s, t, z, d = potential_surf(
     grid=grid,
     eos="jmd95",
     grav=g["grav"],
-    rho_c=g["ρ_c"],
+    rho_c=g["rho_c"],
     vert_dim="Depth_c",
     ref=0.0,
     isoval=1027.5,
@@ -65,7 +65,7 @@ s, t, z, d = potential_surf(
     grid=grid,
     eos="jmd95",
     grav=g["grav"],
-    rho_c=g["ρ_c"],
+    rho_c=g["rho_c"],
     vert_dim="Depth_c",
     ref=0.0,
     pin_cast=(i0, j0),
@@ -255,10 +255,10 @@ if not (s_check and t_check):
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
-ρ_v = veronis_density(S_ref_cast, T_ref_cast, Z, z0, eos="jmd95")
+rho_v = veronis_density(S_ref_cast, T_ref_cast, Z, z0, eos="jmd95")
 print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
-    f" has Veronis density {ρ_v} kg m-3"
+    f" has Veronis density {rho_v} kg m-3"
 )
 
 # In[Remove mixed layer from an omega surface]
@@ -362,7 +362,7 @@ s, t, z, d = anomaly_surf(
 # In[Calculate a large-scale potential vorticity on our surface]
 
 # Create function for partial deriv of equation of state with respect to depth z
-eos_z = make_eos_p("jmd95", g["grav"], g["ρ_c"])  # for scalar inputs
+eos_z = make_eos_p("jmd95", g["grav"], g["rho_c"])  # for scalar inputs
 eos_z = vectorize_eos(eos_z)  # for nd inputs
 
 # Build linear interpolation function, operating over a whole dataset (kind="u"),

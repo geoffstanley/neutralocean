@@ -45,7 +45,7 @@ def load_OCCA():
     d2r = np.pi / 180
 
     g = dict()  # model grid and parameters
-    g["ρ_c"] = 1027.5  # A guess. Same as ECCO2
+    g["rho_c"] = 1027.5  # A guess. Same as ECCO2
     g["grav"] = 9.81  # A guess. Same as ECCO2
     g["rSphere"] = 6.37e6  # A guess. Same as ECCO2
     g["resx"] = 1  # 1 grid cell per zonal degree
