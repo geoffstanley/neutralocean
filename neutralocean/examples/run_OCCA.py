@@ -45,6 +45,8 @@ s, t, z, d = potential_surf(
     Z,
     grid=grid,
     eos="jmd95",
+    grav=g["grav"],
+    rho_c=g["ρ_c"],
     vert_dim="Depth_c",
     ref=0.0,
     isoval=1027.5,
@@ -62,6 +64,8 @@ s, t, z, d = potential_surf(
     Z,
     grid=grid,
     eos="jmd95",
+    grav=g["grav"],
+    rho_c=g["ρ_c"],
     vert_dim="Depth_c",
     ref=0.0,
     pin_cast=(i0, j0),
@@ -78,7 +82,7 @@ print(
 # This takes the reference depth `ref` to match `pin_p`.
 # Also illustrate using xarray coordinates for pin_cast.
 # Also use PCHIPs as the vertical interpolants.
-# Also provide the equation of state and its partial derivatives w.r.t S and T.
+# Also provide the (pre-made) equation of state and its partial derivatives w.r.t S and T.
 s, t, z, d = potential_surf(
     S,
     T,

@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dxG=1.0, dyG=1.0):
+def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0):
     """
     Build pairs of adjacent grid points and associated geometry for a rectilinear grid
 
@@ -15,16 +15,20 @@ def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dxG=1.0, dyG=1.0):
         Specifies periodicity.  The i'th dimension is periodic when `periodic[i]` is True.
 
     dxC : float or ndarray, Default 1.0
-        Distance between adjacent grid points in the 1st dimension.
+        Distance between adjacent grid points in the 1st ('x') dimension
 
     dyC : float or ndarray, Default 1.0
-        Distance between adjacent grid points in the 2nd dimension
-
-    dxG : float or ndarray, Default 1.0
-        Distance of the face between adjacent grid points in the 2nd dimension
+        Distance between adjacent grid points in the 2nd ('y') dimension
 
     dyG : float or ndarray, Default 1.0
-        Distance of the face between adjacent grid points in the 1st dimension
+        Distance (in the 2nd, 'y' dimension) of the face between grid points
+        that are adjacent in the 1st ('x') dimension
+        Lives at same location as `dxC`.
+
+    dxG : float or ndarray, Default 1.0
+        Distance (in the 1st, 'x' dimension) of the face between grid points
+        that are adjacent in the 2nd ('y') dimension.
+        Lives at same location as `dyC`.
 
     Returns
     -------
@@ -51,7 +55,7 @@ def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dxG=1.0, dyG=1.0):
     grid = dict()
     grid["edges"] = _build_edges(dims, periodic)
     grid["dist"] = _build_edgedata(dims, periodic, (dxC, dyC))
-    grid["distperp"] = _build_edgedata(dims, periodic, (dxG, dyG))
+    grid["distperp"] = _build_edgedata(dims, periodic, (dyG, dxG))
     return grid
 
 

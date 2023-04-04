@@ -4,7 +4,7 @@ import xgcm
 
 
 def build_grid(
-    n, face_connections, dims, xsh, ysh, dxC=1.0, dyC=1.0, dxG=1.0, dyG=1.0
+    n, face_connections, dims, xsh, ysh, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0
 ):
     """
     Make a list of edges between adjacent nodes in a graph consisting of
@@ -65,11 +65,15 @@ def build_grid(
     dyC : float or ndarray, Default 1.0
         Distance between adjacent grid points in the 'j' dimension
 
-    dxG : float or ndarray, Default 1.0
-        Distance of the face between adjacent grid points in the 'j' dimension
-
     dyG : float or ndarray, Default 1.0
-        Distance of the face between adjacent grid points in the 'i' dimension
+        Distance (in the 'j' dimension) of the face between grid points that
+        are adjacent in the 'i' dimension.
+        Lives at the same location as `dxC`.
+
+    dxG : float or ndarray, Default 1.0
+        Distance (in the 'i' dimension) of the face between grid points that
+        are adjacent in the 'j' dimension.
+        Lives at the same location as `dyC`.
 
 
     Returns
@@ -101,15 +105,15 @@ def build_grid(
     assert ysh[0] in ("l", "r"), "Expected ysh to be either 'left' or 'right'"
 
     # If given DataArrays, check the dims are correct then convert to numpy arrays.
-    if all(hasattr(x, "dims") for x in (dxC, dyC, dxG, dyG)):
+    if all(hasattr(x, "dims") for x in (dxC, dyC, dyG, dxG)):
         assert (
             dxC.dims == dyG.dims
         ), "Expected dxC and dyG to have the same coordinates"
         assert (
             dyC.dims == dxG.dims
         ), "Expected dyC and dxG to have the same coordinates"
-    dxC, dyC, dxG, dyG = (
-        x.values if hasattr(x, "values") else x for x in (dxC, dyC, dxG, dyG)
+    dxC, dyC, dyG, dxG = (
+        x.values if hasattr(x, "values") else x for x in (dxC, dyC, dyG, dxG)
     )
 
     im1, jm1 = _build_im1_jm1(n, face_connections, dims, xsh, ysh)
@@ -135,8 +139,8 @@ def build_grid(
     # Build list of distances of the faces between adjacent nodes, in the same
     # order as the pairs of nodes built by edges.
     distperp = np.empty(N * 2, dtype=float)
-    distperp[:N] = dxG.reshape(-1)
-    distperp[N:] = dyG.reshape(-1)
+    distperp[:N] = dxG.reshape(-1)  # dxG lives at same place as dyC
+    distperp[N:] = dyG.reshape(-1)  # dyG lives at same place as dxC
 
     # Trim out invalid edges, i.e. those for which one of the two nodes was
     # filled by `apply_as_grid_ufunc` to have a value of -1.

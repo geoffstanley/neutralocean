@@ -37,8 +37,8 @@ file_ST = (
 
 # Load horizontal grid information
 ds = xr.open_dataset(file_grid)
-XC, YC, dxC, dyC, dxG, dyG = (
-    ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dxG", "dyG")
+XC, YC, dxC, dyC, dyG, dxG = (
+    ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dyG", "dxG")
 )
 ds.close()
 
@@ -95,7 +95,7 @@ nf = len(next(iter(face_connections.values())))
 
 # Build list of adjacent water columns and distances between those water column pairs
 xsh = ysh = "left"
-grid = build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dxG, dyG)
+grid = build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dyG, dxG)
 
 
 # Make Boussinesq version of the Jackett and McDougall (1995) equation of state
@@ -241,8 +241,8 @@ grid_llc = xgcm.Grid(
 )
 
 # Backward differences in both horizontal directions
-SSTx_ = grid_llc.diff(T[..., 0], "X").values
-SSTy_ = grid_llc.diff(T[..., 0], "Y").values
+SSTx_ = grid_llc.diff(T[..., k], "X").values
+SSTy_ = grid_llc.diff(T[..., k], "Y").values
 
 
 # Begin checks.
@@ -250,11 +250,20 @@ SSTy_ = grid_llc.diff(T[..., 0], "Y").values
 # First, check the two differencing methods are equal, everywhere
 assert np.array_equal(SSTx, SSTx_, equal_nan=True)
 assert np.array_equal(SSTy, SSTy_, equal_nan=True)
+print(
+    "Test for equivalence between neutralocean grid differencing and xgcm grid differencing: passed."
+)
 
 # Now, check that differencing makes sense at an interior point
 (t, j, i) = (9, 40, 40)
 assert SSTx[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j, i - 1, k])
 assert SSTy[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j - 1, i, k])
+print(
+    f"SSTx[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j}, {i - 1}, {k}])"
+)
+print(
+    f"SSTy[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j - 1}, {i}, {k}])"
+)
 
 # Check that differencing makes sense across a boundary.  Find the second point
 # that is involved in the difference across the boundary.  Verify by hand that
