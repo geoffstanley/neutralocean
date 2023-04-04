@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
 
-from neutralocean.lib import find_first_nan
 from neutralocean.interp1d import make_interpolator
-from neutralocean.ppinterp import make_pp, ppval
+from neutralocean.ppinterp import make_pp, ppval, valid_range_1
 from scipy.interpolate import UnivariateSpline, PchipInterpolator
 
 N = 4  # number of 1D interpolation problems
@@ -49,14 +48,15 @@ def test_interp(interp, num_deriv, x):
     # Interpolate with SciPy
     y = np.full((N, x.size), np.nan, dtype=float)
     for i in range(N):
-        k = min(find_first_nan(Y[i]), find_first_nan(X[i]))
+        k, K = valid_range_1(X[i] + Y[i])
+        # k = min(find_first_nan(Y[i]), find_first_nan(X[i]))
         try:
             if interp == "linear":
                 fn = UnivariateSpline(
-                    X[i, 0:k], Y[i, 0:k], k=1, s=0, ext="raise"
+                    X[i, k:K], Y[i, k:K], k=1, s=0, ext="raise"
                 )
             elif interp == "pchip":
-                fn = PchipInterpolator(X[i, 0:k], Y[i, 0:k], extrapolate=False)
+                fn = PchipInterpolator(X[i, k:K], Y[i, k:K], extrapolate=False)
             fn = fn.derivative(num_deriv)
             for j in range(x.size):
                 y[i, j] = fn(x[j])

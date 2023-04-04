@@ -102,30 +102,37 @@ def aggsum(a, idx, n):
     return b
 
 
-# TODO: Abstract `val_bot` to be `val_at`; change `n_good` to `k`; careful with +1 index.
-def val_bot(T, n_good):
-    """Evaluate tracer at the bottom ocean grid cell
+def val_at(T, k):
+    """Evaluate nD array at given indices along its last dimension
 
     Parameters
     ----------
     T : ndarray
-        Input tracer data like salinity, temperature, pressure, or depth.
+        Input array. Can be 1D or nD.
 
-    n_good : ndarray, Default None
-        Number of good (non-NaN) elements in each 1D array making up `T` along its
-        last dimension, e.g. each water column if `T` is arranged with depth as
-        its last dimension.  This can be calculated as `n_good = find_first_nan(x)`
-        where `x` is the salinity or temperature --- namely a variable that has
-        data for each water column.
+    k : int or ndarray
+        Index at which to evaluate T along its last dimension.
+        Can be an int or (n-1)D.
 
     Returns
     -------
-    T_bot : ndarray
-        The input `T` evaluated at the bottommost ocean grid cell.
+    Tk : ndarray
+        The input `T` evaluated with its last index equal to `k`.
+
+
+    Notes
+    -----
+    If `T` is 3D and `k` is 2D, then `Tk[i,j] = T[i,j,k[i,j]]` for
+    each valid `(i,j)`.
+
+    If `T` is 1D and `k` is 2D, then `Tk[i,j] = T[k[i,j]]` for
+    each valid `(i,j)`.
+
+    If `T` is 3D and `k` is an int, then `Tk[i,j] = T[i,j,k]` for
+    each valid `(i,j)`.
 
     Examples
     --------
-
     Evaluate temperature, having data in each water column, at the bottom grid cell
 
     >>> T = np.empty((3, 2, 10))  # (longitude, latitude, depth), let us say
@@ -133,28 +140,29 @@ def val_bot(T, n_good):
     >>> T[0, 0, :] = np.nan  # make cast (0,0) be land
     >>> T[0, 1, 3:] = np.nan  # make cast (0,1) be only 3 ocean cells deep
     >>> n_good = find_first_nan(T)
-    >>> val_bot(T, n_good)
+    >>> val_at(T, n_good - 1)
     array([[nan,  8.], [ 1.,  1.], [ 1.,  1.]])
 
     Evaluate the depth at the bottom grid cell
 
     >>> Z = np.linspace(0, 4500, 10)  # grid cell centre's are at depths 0, 500, 1000, ..., 4500.
-    >>> val_bot(Z, n_good)  # using n_good calculated from T as above
+    >>> val_at(Z, n_good - 1)  # Z doesn't have NaN structure, so use n_good from T as above
     array([[  nan, 1000.], [4500., 4500.], [4500., 4500.]])
     """
-
-    if T.ndim == n_good.ndim + 1:
-        # if n_good[i,j] == 0, this will index T[i,j,-1] which will be nan, so T_bot[i,j] == nan.
-        T_bot = np.take_along_axis(T, n_good[..., None] - 1, -1).squeeze()
-    elif T.ndim == 1:
-        # select the bottom element and then correct land casts where n_good is 0
-        T_bot = T[n_good - 1]
-        T_bot[n_good == 0] = np.nan
+    if isinstance(k, int) or T.ndim == 1:
+        # select the k'th element along the last dimension of T
+        Tk = T[..., k]
+    elif T.ndim == k.ndim + 1:
+        # if k[i,j] == 0, this will index T[i,j,-1] which will be nan, so T_bot[i,j] == nan.
+        Tk = np.take_along_axis(T, k[..., None], -1).squeeze()
     else:
         raise ValueError(
-            "T must be 1 dimensional or have 1 more dimension than n_good"
+            "T must be 1 dimensional or have 1 more dimension than k"
         )
-    return T_bot
+
+    # Set to NaN any place where k is negative
+    Tk[k < 0] = np.nan
+    return Tk
 
 
 def xr_to_np(S):

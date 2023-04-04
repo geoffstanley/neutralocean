@@ -2,7 +2,7 @@ import numpy as np
 from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.synthocean import synthocean
-from neutralocean.lib import find_first_nan, val_bot
+from neutralocean.lib import find_first_nan, val_at
 
 grav = 9.81
 rho_c = 1027.5
@@ -46,7 +46,7 @@ def test_potential_surf():
 
     # Calculate seafloor potential density
     n_good = find_first_nan(S)
-    S_bot, T_bot = (val_bot(x, n_good) for x in (S, T))
+    S_bot, T_bot = (val_at(x, n_good - 1) for x in (S, T))
     σ_bot = eos_ufunc(S_bot, T_bot, z_ref)
 
     σ = eos_ufunc(s, t, z_ref)
@@ -87,7 +87,7 @@ def test_anomaly_surf():
 
     # Calculate seafloor potential density
     n_good = find_first_nan(S)
-    S_bot, T_bot, Z_bot = (val_bot(x, n_good) for x in (S, T, Z))
+    S_bot, T_bot, Z_bot = (val_at(x, n_good - 1) for x in (S, T, Z))
     δ_bot = eos_ufunc(S_bot, T_bot, Z_bot) - eos_ufunc(s_ref, t_ref, Z_bot)
 
     δ = eos_ufunc(s, t, z) - eos_ufunc(s_ref, t_ref, z)
@@ -132,7 +132,7 @@ def test_omega_surf():
 
     # Calculate seafloor potential density
     n_good = find_first_nan(S)
-    S_bot, T_bot = (val_bot(x, n_good) for x in (S, T))
+    S_bot, T_bot = (val_at(x, n_good - 1) for x in (S, T))
     σ_bot = eos_ufunc(S_bot, T_bot, z_ref)
 
     σ = eos_ufunc(s, t, z_ref)

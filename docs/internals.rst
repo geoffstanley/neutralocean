@@ -64,4 +64,4 @@ Library functions
 
 .. autofunction:: neutralocean.lib.find_first_nan
 
-.. autofunction:: neutralocean.lib.val_bot
+.. autofunction:: neutralocean.lib.val_at
