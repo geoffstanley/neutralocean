@@ -75,7 +75,7 @@ grid = build_grid({"dist": graph_dist, "distperp": graph_distperp})
 
 # Potential specific volume surface, with given reference pressure and given isovalue.
 # This finds the surface satisfying
-#   ν(S, Θ, 0 dbar) = (1/1027.5) m^3 / kg
+#   ν(S, Θ, 0 dbar) = (1/1027.5) m3 / kg
 s, t, p, d = potential_surf(
     S,
     T,
@@ -93,7 +93,7 @@ print(
 
 # In-situ specific volume anomaly, with given reference S and Θ values and given isovalue.
 # This finds the surface satisfying
-#   ν(S, Θ, p) - ν(34.5 g/kg, 4.0°C, p) = 0 m^3 / kg
+#   ν(S, Θ, p) - ν(34.5 g/kg, 4.0°C, p) = 0 m3 / kg
 s0, t0 = 34.5, 4.0
 s, t, p, d = anomaly_surf(
     S,
@@ -126,7 +126,7 @@ eos_s_t = make_eos_s_t("gsw")
 e = ntp_epsilon_errors(s, t, p, grid, eos_s_t)
 print("The ϵ neutrality errors on the ω-surface are as follows:")
 for i in range(len(a)):
-    print(f"  From cast {a[i]} to cast {b[i]}, ϵ = {e[i]} m^2 kg^-1")
+    print(f"  From cast {a[i]} to cast {b[i]}, ϵ = {e[i]} m2 kg-1")
 print(
     "Note that the connection between casts 2 and 3 has virtually 0 neutrality "
     "error.  This is because cast 3 is ONLY connected to cast 2, so this link "

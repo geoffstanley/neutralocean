@@ -111,7 +111,7 @@ def val_at(T, k):
         Input array. Can be 1D or nD.
 
     k : int or ndarray
-        Index at which to evaluate T along its last dimension.
+        Index at which to evaluate `T` along its last dimension.
         Can be an int or (n-1)D.
 
     Returns

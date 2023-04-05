@@ -108,8 +108,8 @@ def potential_surf(S, T, P, **kwargs):
 
         `"isoval"` : float
 
-            Isovalue of potential density for surface (matching input `ref` if
-            given, otherwise this is calculated internally).
+            Isovalue of potential density for surface (matching input `isoval`
+            if given, otherwise this is calculated internally).
 
     Other Parameters
     ----------------
