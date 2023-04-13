@@ -280,8 +280,9 @@ def omega_surf(S, T, P, grid, **kwargs):
     N = np.prod(surf_shape)  # number of nodes (water columns)
     S, T, P = (np.reshape(X, (N, -1)) for X in (S, T, P))
 
-    # Update pinning cast to a linear index.
-    pin_cast = np.ravel_multi_index(pin_cast, surf_shape)
+    # Update pinning cast to a linear index, unless already so
+    if isinstance(pin_cast, (tuple, list)):
+        pin_cast = np.ravel_multi_index(pin_cast, surf_shape)
 
     # Prepare grid ratios for matrix problem.
     distratio = grid["distperp"] / grid["dist"]
@@ -650,9 +651,19 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
         ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
         return ϕ.reshape(p.shape)
 
+    # Get list of edges (a,b), ϵ neutrality errors, and geometric factors
+    # for the current connected component containing the reference cast, and
+    # map everything onto a set of N
     a, b, e, fac, ref = _omega_matsolve_helper(
         s, t, p, edges, distratio, m, mref, eos_s_t
     )
+
+    # Divergence of ϵ,
+    # D = ∑_{n ∈ N(m)} ϵₘₙ
+    #   = ∑_{j=1}^E  δ_{m, aⱼ} ϵ_{m, bⱼ}  +  ∑_{j=1}^E  δ_{m, bⱼ} ϵ_{m, aⱼ}
+    #   = ∑_{j=1}^E  δ_{m, aⱼ} ϵ_{m, bⱼ}  -  ∑_{j=1}^E  δ_{m, bⱼ} ϵ_{aⱼ, m}
+    # achieved by
+    D = aggsum(e, a, N) - aggsum(e, b, N)
 
     # Prepare diagonal entries of negative Laplacian.  For uniform geometry,
     # this simply counts the number of edges incident upon each node.  For
@@ -660,17 +671,12 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     # less near boundaries of the connected component.
     diag = aggsum(fac, a, N) + aggsum(fac, b, N)
 
-    # Divergence of ϵ:  D = ∑_{n ∈ N(m)} ε_{mn}.
-    # Note, ϵ = ϵ_{ab} = rs * (sb - sa) + rt * (tb - ta).
-    # For the connected component only.
-    D = aggsum(e, a, N) - aggsum(e, b, N)
-
     # Build the rows, columns, and values of the sparse matrix
     r = np.concatenate((a, b, np.arange(N)))
     c = np.concatenate((b, a, np.arange(N)))
     v = np.concatenate((-fac, -fac, diag))  # negative Laplacian
 
-    # Build the (negative) Laplacian sparse matrix with N rows and N columns
+    # Build the negative Laplacian sparse matrix with N rows and N columns
     L = csc_matrix((v, (r, c)), shape=(N, N))
 
     # Pinning surface at reference cast by ADDING the equation
@@ -701,10 +707,14 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
 def _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t):
     """
     Compute ϵ neutrality errors and geometry on the list of edges in the graph
-    that are between pairs of "wet" casts.  Also prune the list of edges to
-    just these edges, and remap the nodes they are incident upon from being
-    labelled (0, 1, ... ni*nj-1) for the entire 2D grid, to being labelled
-    (0, 1, ..., N-1) where N is the number of wet casts.
+    that are between pairs of "wet" casts.  Then, prune the list of edges to
+    just these "wet" edges that are within the connected component containing
+    the reference cast (whose linear index in the full space is `mref`), and
+    remap all nodes (water columns) from being labelled (0, 1, ... ni*nj-1)
+    for the entire 2D grid, to being labelled (0, 1, ..., N-1) where N is the
+    number of wet casts in this connected component.  The connected component
+    is determined by `m`, which is a list of nodes in the label set of the
+    full space, (0, 1, ... ni*nj-1).
     """
 
     N = len(m)
