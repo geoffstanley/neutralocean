@@ -2,7 +2,7 @@ import numpy as np
 import numba as nb
 
 from .lib import diff_1d_samesize
-from .ppinterp import ppval_i
+from .ppinterp import ppinterp_1, ppinterp_1_two
 
 
 def linear_coeffs(X, Y):
@@ -67,23 +67,52 @@ def _linear_coeffs(X, Y, len2array, C):
 
 
 @nb.njit
+def _linear_coeffs_i(X, Y, i):
+    """
+    Coefficients of a single Piece of a Linear Interpolant
+
+    Parameters
+    ----------
+    X : 1D array
+        Independent data
+
+    Y : 1D array
+        Dependent data
+
+    i : int
+        Select the interval of `X` that contains the eventual evaluation site
+        `x`. Specifically,
+            if `i == 0` then `X[0] <= x <= X[1]`, or
+            if `1 <= i <= len(X) - 1` then `X[i] < x <= X[i+1]`.
+
+        These facts about `i` are assumed true; they are not checked.
+
+    Returns
+    -------
+    C1, C0 : float
+        Piecewise Polynomial Coefficients that can be evaluated at `x`.
+
+    Notes
+    -----
+    To interpolate `Y` in terms of `X` at evaluation site `x`, simply evaluate
+    the piecewise polynomial whose coefficients are `Yppc` at `x` by
+        `pval(x - X[i], (C1, C0), 0)`
+    """
+    C1 = (Y[i + 1] - Y[i]) / (X[i + 1] - X[i])  # coeff of 1st degree term, x^1
+    C0 = Y[i]  # coeff of 0th degree term, x^0
+
+    return (C1, C0)
+
+
+@nb.njit
 def linear_interp_1(x, X, Y, d=0):
-    """Build and evaluate a piecewise polynomial, building (almost) only what's needed."""
-    if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
-        return np.nan
+    """Build and evaluate a piecewise polynomial, building only what's needed."""
+    return ppinterp_1(_linear_coeffs_i, x, X, Y, d)
 
-    #   X[0]  <= x <= X[1]   when  i = 0
-    #   X[i]  <  x <= X[i+1] when  i > 0
-    i = max(0, np.searchsorted(X, x) - 1)
 
-    dx = x - X[i]  # >= 0
-
-    # To evaluate a linear interpolant at x in the range x[i] < x <= X[i+1],
-    # we only need 2 data points: (i, i+1).
-
-    Yppc = linear_coeffs_1(X[i : i + 2], Y[i : i + 2])
-
-    return ppval_i(dx, Yppc, 0, d)
+@nb.njit
+def linear_interp_1_two(x, X, Y, Z, d=0):
+    return ppinterp_1_two(_linear_coeffs_i, x, X, Y, Z, d)
 
 
 @nb.guvectorize(
@@ -92,26 +121,6 @@ def linear_interp_1(x, X, Y, d=0):
 )
 def linear_interp(x, X, Y, d, y):
     y[0] = linear_interp_1(x, X, Y, d)
-
-
-@nb.njit
-def linear_interp_1_two(x, X, Y, Z, d=0):
-    """Build and evaluate two piecewise polynomials, building (almost) only what's needed."""
-    if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
-        return np.nan, np.nan
-
-    #   X[0]  <= x <= X[1]   when  i = 0
-    #   X[i]  <  x <= X[i+1] when  i > 0
-    i = max(0, np.searchsorted(X, x) - 1)
-
-    dx = x - X[i]  # >= 0
-
-    # To evaluate a linear interpolant at x in the range x[i] < x <= X[i+1],
-    # we only need 2 data points: (i, i+1).
-    Yppc = linear_coeffs_1(X[i : i + 2], Y[i : i + 2])
-    Zppc = linear_coeffs_1(X[i : i + 2], Z[i : i + 2])
-
-    return ppval_i(dx, Yppc, 0, d), ppval_i(dx, Zppc, 0, d)
 
 
 @nb.guvectorize(

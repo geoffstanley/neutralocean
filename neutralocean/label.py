@@ -1,6 +1,6 @@
 import numpy as np
 
-from .ppinterp import make_pp, ppval_1_two, ppval_i
+from .ppinterp import make_pp, ppval_1_two, pval
 from .lib import _process_eos
 
 # CHECK VALUE from MATLAB, with densjmd95 (non-Boussinesq) as the eos:
@@ -190,10 +190,10 @@ def _int_x_k(p, k, dp, P, Sppc, Tppc, eos_s_t):
     dtdp_ = np.zeros(n)
     for i in range(n):
         dx = p_[i] - P[k]
-        s_[i] = ppval_i(dx, Sppc, k, 0)
-        t_[i] = ppval_i(dx, Tppc, k, 0)
-        dsdp_[i] = ppval_i(dx, Sppc, k, 1)
-        dtdp_[i] = ppval_i(dx, Tppc, k, 1)
+        s_[i] = pval(dx, Sppc[k], 0)
+        t_[i] = pval(dx, Tppc[k], 0)
+        dsdp_[i] = pval(dx, Sppc[k], 1)
+        dtdp_[i] = pval(dx, Tppc[k], 1)
 
     # To use linear interpolation internally, replace the above lines with the following 7 lines
     # dP = P[k+1] - P[k]

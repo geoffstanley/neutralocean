@@ -2,7 +2,8 @@ import numpy as np
 import numba as nb
 
 from .lib import diff_1d_samesize, valid_range_1_two
-from .ppinterp import ppval_i
+
+from .ppinterp import ppinterp_1, ppinterp_1_two
 
 
 def pchip_coeffs(X, Y):
@@ -85,10 +86,6 @@ def pchip_coeffs_1(X, Y):
     # K such that K - 1 = index to last valid data site in contiguous range
     #                     of valid data after index k.
     k, K = valid_range_1_two(X, Y)
-    # TODO: Remove this, and assume k = 0 and K = len(X)?  Do this if we only
-    #       want to use ppinterp inside for loops, within which we trim the
-    #       data to only its finite values.  i.e. do this if we're happy with
-    #       interp1d for all of our "universal" kind of interpolation.
 
     return _pchip_coeffs_1(X, Y, k, K)
 
@@ -107,6 +104,9 @@ def pchip_coeffs_1_nonan(X, Y):
 
 @nb.njit
 def _pchip_coeffs_1(X, Y, k, K):
+    """
+    Coeffs for a single PCHIP when data is non-NaN on `k:K`
+    """
 
     # Note, np.diff does not work with nb.njit, here.
     # Also, using our own numba.njit'ed function is faster than np.ediff1d
@@ -178,12 +178,163 @@ def _pchip_coeffs_1(X, Y, k, K):
     #     having X[k+1:] == np.nan and/or Y[k+1:] == np.nan.  That case
     #     cannot be handled here, since setting the coefficients to
     #     be [0, 0, 0, Y[k]], i.e. a constant function, would mean the
-    #     interpolant would be Y[k] when evaluated at x > X[k], but we
+    #     interpolant would be Y[k] when evaluated 0at x > X[k], but we
     #     only want it to be Y[k] at x = X[k] precisely.
 
     C[:, 3] = Y
 
     return C
+
+
+@nb.njit
+def _pchip_coeffs_i(X, Y, i):
+    """
+    Coefficients of a single Piece of a PCHIP
+
+    Parameters
+    ----------
+    X : 1D array
+        Independent data
+
+    Y : 1D array
+        Dependent data
+
+    i : int
+        Select the interval of `X` that contains the eventual evaluation site
+        `x`. Specifically,
+            if `i == 0` then `X[0] <= x <= X[1]`, or
+            if `1 <= i <= len(X) - 1` then `X[i] < x <= X[i+1]`.
+
+        These facts about `i` are assumed true; they are not checked.
+
+    Returns
+    -------
+    C3, C2, C1, C0 : float
+        Piecewise Polynomial Coefficients that can be evaluated at `x`.
+
+    Notes
+    -----
+    To interpolate `Y` in terms of `X` at evaluation site `x`, simply evaluate
+    the piecewise polynomial whose coefficients are `Yppc` at `x` by
+        `pval(x - X[i], (C3, C2, C1, C0))`
+
+    This function is adapted from `_pchip_coeffs_1`
+    """
+
+    # Pre-assign sizes for PCHIP variables.
+    h = [0.0, 0.0, 0.0]
+    δ = [0.0, 0.0, 0.0]
+    d = [0.0, 0.0]
+
+    # Check whether x is adjacent to the start or end of this X
+    at_start = (i == 0) or np.isnan(X[i - 1] + Y[i - 1])
+    at_end = (i == len(X) - 2) or np.isnan(X[i + 2] + Y[i + 2])
+
+    if at_start and at_end:
+
+        # if np.isnan(X[i + 1]) or np.isnan(Y[i + 1]):
+        #     # Only one valid data point.  Leave the interpolant as NaN.
+        #     d[0], c, b = np.nan, np.nan, np.nan
+
+        # else:
+
+        # ||| X[0] <= x <= X[1] |||   Revert to Linear Interpolation
+        # If actually only one non-NaN data point, then d[0] will be NaN, so
+        # interpolant will evaluate to NaN.
+        d[0] = (Y[i + 1] - Y[i]) / (X[i + 1] - X[i])
+        C3, C2 = 0.0, 0.0
+
+    else:
+        if at_start:
+            #  ||| X[0] <= x <= X[1] < X[2] --->
+            h[1] = X[i + 1] - X[i]
+            h[2] = X[i + 2] - X[i + 1]
+            δ[1] = (Y[i + 1] - Y[i]) / h[1]
+            δ[2] = (Y[i + 2] - Y[i + 1]) / h[2]
+
+            #  Noncentered, shape-preserving, three-point formula:
+            d[0] = ((2.0 * h[1] + h[2]) * δ[1] - h[1] * δ[2]) / (h[1] + h[2])
+            if np.sign(d[0]) != np.sign(δ[1]):
+                d[0] = 0.0
+            elif (np.sign(δ[1]) != np.sign(δ[2])) and (
+                np.abs(d[0]) > np.abs(3.0 * δ[1])
+            ):
+                d[0] = 3.0 * δ[1]
+
+            # Standard PCHIP formula
+            if np.sign(δ[1]) * np.sign(δ[2]) > 0.0:
+                w1 = 2.0 * h[2] + h[1]
+                w2 = h[2] + 2.0 * h[1]
+                d[1] = (w1 + w2) / (w1 / δ[1] + w2 / δ[2])
+            else:
+                d[1] = 0.0
+
+        elif at_end:
+            # <--- X[i-1] < X[i] < x <= X[i+1] |||
+            h[0] = X[i] - X[i - 1]
+            h[1] = X[i + 1] - X[i]
+            δ[0] = (Y[i] - Y[i - 1]) / h[0]
+            δ[1] = (Y[i + 1] - Y[i]) / h[1]
+
+            # Standard PCHIP formula
+            if np.sign(δ[0]) * np.sign(δ[1]) > 0.0:
+                w1 = 2.0 * h[1] + h[0]
+                w2 = h[1] + 2.0 * h[0]
+                d[0] = (w1 + w2) / (w1 / δ[0] + w2 / δ[1])
+            else:
+                d[0] = 0.0
+
+            #  Noncentered, shape-preserving, three-point formula:
+            d[1] = ((h[0] + 2.0 * h[1]) * δ[1] - h[1] * δ[0]) / (h[0] + h[1])
+            if np.sign(d[1]) != np.sign(δ[1]):
+                d[1] = 0.0
+            elif (np.sign(δ[1]) != np.sign(δ[0])) and (
+                np.abs(d[1]) > np.abs(3 * δ[1])
+            ):
+
+                d[1] = 3.0 * δ[1]
+
+        else:
+            # <--- X[i-1] < X[i] < x <= X[i+1] < X[i+2] --->
+            h[0] = X[i] - X[i - 1]  # Way faster to do this
+            h[1] = X[i + 1] - X[i]  # than
+            h[2] = X[i + 2] - X[i + 1]  # diff(X(i-1:i+3))
+            δ[0] = (Y[i] - Y[i - 1]) / h[0]
+            δ[1] = (Y[i + 1] - Y[i]) / h[1]
+            δ[2] = (Y[i + 2] - Y[i + 1]) / h[2]
+
+            # Standard PCHIP formula
+            for j in range(2):
+                if np.sign(δ[j]) * np.sign(δ[j + 1]) > 0.0:
+                    w1 = 2.0 * h[j + 1] + h[j]
+                    w2 = h[j + 1] + 2.0 * h[j]
+                    d[j] = (w1 + w2) / (w1 / δ[j] + w2 / δ[j + 1])
+                else:
+                    d[j] = 0.0
+
+        # Polynomial coefficients for this piece
+        dzzdx = (δ[1] - d[0]) / h[1]
+        dzdxdx = (d[1] - δ[1]) / h[1]
+        C3 = (dzdxdx - dzzdx) / h[1]  # coeff of the 3rd degree term (x^3)
+        C2 = 2 * dzzdx - dzdxdx  # coeff of 2nd degree term (x^2)
+
+    # The following code evaluates the `d`'th deriviative of the cubic
+    # interpolant at `x`.
+    # s = x - X[i]
+    # if d == 0:
+    #     y = Y[i] + s * (d[0] + s * (C2 + s * C3))
+    # elif d == 1:  # first derivative
+    #     y = d[0] + s * (2 * C2 + 3 * s * C3)
+    # elif d == 2:  # second derivative
+    #     y = 2 * C2 + 6 * s * C3
+    # elif d == 3:  # third derivative
+    #     y = 6 * C3
+    # else:
+    #     y = 0.0
+    # return y
+
+    # Faster to return tuple than build an np.array just to deconstruct it later
+    return C3, C2, d[0], Y[i]
 
 
 @nb.guvectorize(
@@ -195,53 +346,12 @@ def _pchip_coeffs(X, Y, len4array, Yppc):
 
 @nb.njit
 def pchip_interp_1(x, X, Y, d=0):
-    """Build and evaluate a piecewise polynomial, building (almost) only what's needed."""
-    if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
-        return np.nan
-
-    #   X[0]  <= x <= X[1]   when  i = 0
-    #   X[i]  <  x <= X[i+1] when  i > 0
-    i = max(0, np.searchsorted(X, x) - 1)
-
-    dx = x - X[i]  # >= 0
-
-    # To evaluate a PCHIP at x in the range x[i] < x <= X[i+1], a PCHIP needs
-    # 4 data points: (i-1, i, i+1, i+2).
-    n = X.size
-    a = max(i - 1, 0)
-    b = min(i + 3, n)
-
-    # Build coefficients. Note, element `a` or `b-1` could be nan, hence we
-    # don't use pchip_coeffs_1_nonan.
-    Yppc = pchip_coeffs_1(X[a:b], Y[a:b])
-
-    return ppval_i(dx, Yppc, i - a, d)
+    return ppinterp_1(_pchip_coeffs_i, x, X, Y, d)
 
 
 @nb.njit
 def pchip_interp_1_two(x, X, Y, Z, d=0):
-    """Build and evaluate two piecewise polynomials, building (almost) only what's needed."""
-    if np.isnan(x) or x < X[0] or X[-1] < x or np.isnan(X[0]):
-        return np.nan, np.nan
-
-    #   X[0]  <= x <= X[1]   when  i = 0
-    #   X[i]  <  x <= X[i+1] when  i > 0
-    i = max(0, np.searchsorted(X, x) - 1)
-
-    dx = x - X[i]  # >= 0
-
-    # To evaluate a PCHIP at x in the range x[i] < x <= X[i+1], a PCHIP needs
-    # 4 data points: (i-1, i, i+1, i+2).
-    n = X.size
-    a = max(i - 1, 0)
-    b = min(i + 3, n)
-
-    # Build coefficients. Note, element `a` or `b-1` could be nan, hence we
-    # don't use pchip_coeffs_1_nonan.
-    Yppc = pchip_coeffs_1(X[a:b], Y[a:b])
-    Zppc = pchip_coeffs_1(X[a:b], Z[a:b])
-
-    return ppval_i(dx, Yppc, i - a, d), ppval_i(dx, Zppc, i - a, d)
+    return ppinterp_1_two(_pchip_coeffs_i, x, X, Y, Z, d)
 
 
 @nb.guvectorize(

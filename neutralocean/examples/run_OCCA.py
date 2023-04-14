@@ -21,7 +21,7 @@ g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
-# Select pinning cast in the middle of the domain
+# Select pinning cast in the equatorial Pacific
 i0 = int(ni / 2)
 j0 = int(nj / 2)
 z0 = 1500.0
@@ -162,7 +162,10 @@ print(
 # In[Omega surfaces]
 
 # Initialize omega surface with a (locally referenced) potential density surface.
-# Provide grid distances.
+# Provide grid distances. By default, does as many iterations as needed to get
+# the root-mean-square change in the locally referenced potential density from
+# one iteration to the next to drop below 10^-7 kg m-3, or a maximum of 10
+# iterations.
 s, t, z, d = omega_surf(
     S,
     T,
@@ -172,8 +175,6 @@ s, t, z, d = omega_surf(
     pin_cast=(i0, j0),
     pin_p=z0,
     eos=(eos, eos_s_t),
-    ITER_MAX=10,
-    ITER_START_WETTING=1,
 )
 print(
     f" ** The omega-surface"
@@ -186,6 +187,9 @@ print(
 # Use PCHIP interpolation rather than the default, linear interpolation.
 # Remove the mixed layer, calculated internally according to the given parameters --
 #   see `mixed_layer` for details on these parameters.
+# Specify a higher max number of iterations, and quit iterations when the
+# depth change from one iteration to the next has a root-mean-square value less
+# than 1e-6 m.
 s, t, z, d = omega_surf(
     S,
     T,
@@ -198,14 +202,44 @@ s, t, z, d = omega_surf(
     eos=(eos, eos_s_t),
     interp="pchip",
     p_ml={"bottle_index": 1, "ref_p": 0.0},
-    ITER_MAX=10,
-    ITER_START_WETTING=1,
-    TOL_P_SOLVER=1e-5,
+    ITER_MAX=20,
+    TOL_P_CHANGE_RMS=1e-6,
+    TOL_LRPD_MAV=0.0,  # deactivate this exit tolerance
+    TOL_P_SOLVER=1e-7,
 )
+z_omega = z  # save for next
 print(
     f" ** The omega-surface"
     f" initialized from an in-situ density anomaly surface (referenced locally to cast {(i0,j0)} at {z0}m)"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
+)
+
+# Initialize omega surface with a pre-computed surface.
+# In this case, let's continue from the above omega surface, but change the
+# pinning location. Since the above omega surface is very nearly converged,
+# this omega surface should basically match the above one. Indeed, it will
+# do one iteration and find it is below the RMS depth change tolerance, and exit.
+i1, j1 = 315, 110  # North Atlantic
+s, t, z, d = omega_surf(
+    S,
+    T,
+    Z,
+    grid,
+    vert_dim="Depth_c",
+    pin_cast=(i1, j1),
+    p_init=z_omega,
+    eos=(eos, eos_s_t),
+    interp="pchip",
+    ITER_MAX=10,
+    ITER_START_WETTING=99,  # greater than ITER_MAX, so no wetting
+    TOL_P_CHANGE_RMS=1e-6,
+    TOL_LRPD_MAV=0.0,  # deactivate this exit tolerance
+    TOL_P_SOLVER=1e-7,
+)
+print(
+    f" ** The omega-surface"
+    f" initialized from an omega surface and pinned to the cast {(i1,j1)} at {z0}m)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 
