@@ -21,8 +21,7 @@ def pchip_coeffs(X, Y):
 
         `X` must be monotonically increasing in its last dimension.
         That is, `X[*i,:]` should be monotonically increasing for any
-        `i` tuple indexing all but the last dimension.  NaN's in `X`
-        are treated as +Inf.
+        `i` tuple indexing all but the last dimension.
 
     Y : ndarray
 
@@ -38,6 +37,8 @@ def pchip_coeffs(X, Y):
 
     Notes
     -----
+    If `X` and `Y` have NaN's, only the first contiguous block of non-NaN data
+    between both `X` and `Y` is used.
 
     Evaluate the piecewise polynomial at `x` as
 
@@ -194,7 +195,7 @@ def _pchip_coeffs_i(X, Y, i):
     Parameters
     ----------
     X : 1D array
-        Independent data
+        Independent data, monotonically increasing
 
     Y : 1D array
         Dependent data

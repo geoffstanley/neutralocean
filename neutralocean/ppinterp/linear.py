@@ -19,8 +19,7 @@ def linear_coeffs(X, Y):
 
         `X` must be monotonically increasing in its last dimension.
         That is, `X[*i,:]` should be monotonically increasing for any
-        `i` tuple indexing all but the last dimension.  NaN's in `X`
-        are treated as +Inf.
+        `i` tuple indexing all but the last dimension.
 
     Y : ndarray
 
@@ -36,6 +35,8 @@ def linear_coeffs(X, Y):
 
     Notes
     -----
+    If `X` and `Y` have NaN's, only the first contiguous block of non-NaN data
+    between both `X` and `Y` is used.
 
     Evaluate the piecewise polynomial at `x` as
 
@@ -74,7 +75,7 @@ def _linear_coeffs_i(X, Y, i):
     Parameters
     ----------
     X : 1D array
-        Independent data
+        Independent data, monotonically increasing
 
     Y : 1D array
         Dependent data
@@ -101,7 +102,7 @@ def _linear_coeffs_i(X, Y, i):
     C1 = (Y[i + 1] - Y[i]) / (X[i + 1] - X[i])  # coeff of 1st degree term, x^1
     C0 = Y[i]  # coeff of 0th degree term, x^0
 
-    return (C1, C0)
+    return C1, C0
 
 
 @nb.njit
