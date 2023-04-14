@@ -22,8 +22,7 @@ ni, nj, nk = S.shape
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
 # Select pinning cast in the equatorial Pacific
-i0 = int(ni / 2)
-j0 = int(nj / 2)
+i0, j0 = 220, 80
 z0 = 1500.0
 
 # make Boussinesq version of the Jackett and McDougall (1995) equation of state
@@ -90,10 +89,12 @@ s, t, z, d = potential_surf(
     grid=grid,
     eos=(eos, eos_s_t),
     vert_dim="Depth_c",
-    pin_cast={"Longitude_t": 180.5, "Latitude_t": 0.5},
+    pin_cast={"Longitude_t": 220.5, "Latitude_t": 0.5},
     pin_p=z0,
     interp="pchip",
 )
+assert z.values[i0, j0] == z0  # check pin_cast was indeed (i0,j0)
+z_sigma = z  # save for later
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" intersecting the cast at (180.5 E, 0.5 N) at depth {z0}m"
@@ -152,6 +153,7 @@ s, t, z, d = anomaly_surf(
     pin_cast=(i0, j0),
     pin_p=z0,
 )
+z_delta = z  # save for later
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
@@ -176,6 +178,7 @@ s, t, z, d = omega_surf(
     pin_p=z0,
     eos=(eos, eos_s_t),
 )
+s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to {z0}m)"
@@ -207,7 +210,7 @@ s, t, z, d = omega_surf(
     TOL_LRPD_MAV=0.0,  # deactivate this exit tolerance
     TOL_P_SOLVER=1e-7,
 )
-z_omega = z  # save for next
+z_omega_converged = z  # save for next
 print(
     f" ** The omega-surface"
     f" initialized from an in-situ density anomaly surface (referenced locally to cast {(i0,j0)} at {z0}m)"
@@ -228,7 +231,7 @@ s, t, z, d = omega_surf(
     grid,
     vert_dim="Depth_c",
     pin_cast=(i1, j1),
-    p_init=z_omega,
+    p_init=z_omega_converged,
     eos=(eos, eos_s_t),
     interp="pchip",
     ITER_MAX=10,
@@ -254,31 +257,31 @@ from neutralocean.label import veronis_density
 from neutralocean.lib import _process_casts
 from neutralocean.ppinterp import make_pp
 from neutralocean.eos import make_eos_p, vectorize_eos
-from neutralocean.traj import ntp_bottle_to_cast
+from neutralocean.traj import ntp_bottle_to_cast, neutral_trajectory
 
 # In[Show vertical interpolation]
 
-# Build interpolation function using same interpolation kernel ("pchip") as
-# last ANS surface constructed above.
+# Build interpolation function using same interpolation kernel ("linear") as
+# omega surface we saved above.
 # Allow this to operate across all water columns with one call (kind="u").
 # Evaluate the interpolant rather than build its coefficients (out="interp").
 # Allow that there could be NaNs in the data (nans=True).
 # There will be two numpy arrays of dependent data (S, T), sharing the same
 # independent data Z (num_dep_vars=2).
 interp_two = make_pp(
-    "pchip", kind="u", out="interp", nans=True, num_dep_vars=2
+    "linear", kind="u", out="interp", nans=True, num_dep_vars=2
 )
 
 # Apply interpolation function to interpolate salinity and temperature onto the
 # depth of the surface.  This requires working with numpy arrays, not xarrays.
 # Evaluate the interpolant, not any of its derivatives (d=0).
-s_, t_ = interp_two(z.values, Z, S.values, T.values, d=0)
+s_, t_ = interp_two(z_omega.values, Z, S.values, T.values, 0)
 
 
 # Check that the results of the above interpolation match (to machine precision)
 # the results returned from omega_surf above.
-s_check = np.allclose(s.values, s_, atol=1e-15, equal_nan=True)
-t_check = np.allclose(t.values, t_, atol=1e-15, equal_nan=True)
+s_check = np.allclose(s_omega.values, s_, atol=1e-15, equal_nan=True)
+t_check = np.allclose(t_omega.values, t_, atol=1e-15, equal_nan=True)
 if not (s_check and t_check):
     print(
         "Something's wrong; should be able to reconstruct salinity and "
@@ -294,6 +297,57 @@ print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
     f" has Veronis density {rho_v} kg m-3"
 )
+
+# In[Neutral Trajectory]
+
+# neutral trajectory depth along meridional section
+znt = np.full(nj, np.nan)
+
+# Build a neutral trajectory going northwards from cast at (i0, j0), starting
+# at depth of z0. Put result into `znt`
+Snt = S[i0, j0:nj, :]
+Tnt = T[i0, j0:nj, :]
+s_, t_, z_ = neutral_trajectory(Snt, Tnt, Z, z0, eos=eos)
+znt[j0:nj] = z_
+
+# As above, but go southwards.
+Snt = S[i0, j0:0:-1, :]
+Tnt = T[i0, j0:0:-1, :]
+s_, t_, z_ = neutral_trajectory(Snt, Tnt, Z, z0, eos=eos)
+znt[j0:0:-1] = z_
+
+# Consider three other trajectories along this meridional section, following ANSs
+zom = z_omega[i0, :].values  # omega
+zpd = z_sigma[i0, :].values  # potential density
+zda = z_delta[i0, :].values  # density anomaly
+
+# Find index to furthest south cast that has all four trajectories
+j_south = np.argmax(
+    np.all(
+        np.isfinite(np.array((znt, zom, zpd, zda))),
+        axis=0,
+    )
+)
+print(
+    f"From (i,j)={(i0,j0)} at {z0}m moving south to j={j_south}, ...\n"
+    f"Neutral Trajectory              ends at {znt[j_south]:8.4f}m depth,\n"
+    f"Omega Surface                   ends at {zom[j_south]:8.4f}m depth,\n"
+    f"Potential Density Surface       ends at {zpd[j_south]:8.4f}m depth,\n"
+    f"In-situ density anomaly surface ends at {zda[j_south]:8.4f}m depth."
+)
+
+print(
+    "Uncomment below to plot neutral trajectory and ANSs along meridional section"
+)
+# import matplotlib.pyplot as plt
+# lat = g["YCvec"]  # latitudes
+# fig, ax = plt.subplots()
+# ax.plot(lat, -zom, label="omega")
+# ax.plot(lat, -zpd, label="potential density")
+# ax.plot(lat, -zda, label="in-situ density anomaly")
+# ax.plot(lat, -znt, "--k", label="neutral trajectory")
+# ax.scatter(lat[j0], -z0)  # reference latitude and depth.
+# ax.legend()
 
 # In[Remove mixed layer from an omega surface]
 
@@ -356,7 +410,7 @@ s, t, z, d = omega_surf(
 # z[z < z_ml] = np.nan
 
 # In[Neutrality errors on a surface]
-e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, z, grid, eos_s_t)
+e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, z_omega, grid, eos_s_t)
 print(f"RMS of ϵ is {e_RMS : 4e} [kg m-4])")
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns

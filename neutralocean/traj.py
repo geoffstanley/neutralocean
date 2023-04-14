@@ -3,10 +3,11 @@
 import numpy as np
 import numba as nb
 
-from neutralocean.ppinterp import make_pp, ppval_1_two
+from neutralocean.ppinterp import make_pp, ppval_1_nonan_two
 from neutralocean.eos.tools import make_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.ppinterp import valid_range_1_two
+from neutralocean.lib import _process_casts
 
 
 @nb.njit
@@ -15,7 +16,7 @@ def _func(p, sB, tB, pB, Sppc, Tppc, P, eos):
     # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB)
     # here, eos is always evaluated at the average pressure or depth, (p +
     # pB)/2.
-    s, t = ppval_1_two(p, P, Sppc, Tppc)
+    s, t = ppval_1_nonan_two(p, P, Sppc, Tppc)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
 
@@ -164,7 +165,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
             p = brent(_func, lb, ub, tol_p, args)
 
             # Interpolate S and T onto the updated surface
-            s, t = ppval_1_two(p, P, Sppc, Tppc)
+            s, t = ppval_1_nonan_two(p, P, Sppc, Tppc)
 
         else:
             s, t, p = np.nan, np.nan, np.nan
@@ -175,12 +176,12 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
     return s, t, p
 
 
-# TODO: add vert_dim argument
 def neutral_trajectory(
     S,
     T,
     P,
     p0,
+    vert_dim=-1,
     tol_p=1e-4,
     interp="linear",
     eos="gsw",
@@ -196,7 +197,7 @@ def neutral_trajectory(
 
     Parameters
     ----------
-    S, T, P : 2D ndarray
+    S, T, P : 2D ndarray or xarray
 
         1D data specifying the practical / Absolute salinity, and potential /
         Conservative temperature, and pressure / depth down a 1D sequence of casts.
@@ -216,6 +217,19 @@ def neutral_trajectory(
 
     Other Parameters
     ----------------
+    vert_dim : int or str, Default -1
+
+        Specifies which dimension of `S`, `T` (and `P` if 3D) is vertical.
+
+        If `S` and `T` are `ndarray`, then `vert_dim` is the `int` indexing
+        the vertical dimension of `S` and `T` (e.g. -1 indexes the last
+        dimension).
+
+        If `S` and `T` are `xarray.DataArray`, then `vert_dim` is a `str`
+        naming the vertical dimension of `S` and `T`.
+
+        Ideally, `vert_dim` is -1.  See `Notes`.
+
     tol_p : float, Default 1e-4
 
         Error tolerance when root-finding to update the pressure / depth of
@@ -253,6 +267,7 @@ def neutral_trajectory(
 
     eos = make_eos(eos, grav, rho_c)
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
+    S, T, P = _process_casts(S, T, P, vert_dim)
 
     nc, nk = S.shape
     # assert(all(size(T) == size(S)), 'T must be same size as S')
@@ -262,33 +277,36 @@ def neutral_trajectory(
     t = np.full(nc, np.nan)
     p = np.full(nc, np.nan)
 
-    # Evaluate S and T on first cast at p0
-    Sppc = ppc_fn(P[0, :], S[0, :])
-    Tppc = ppc_fn(P[0, :], T[0, :])
-    s[0], t[0] = ppval_1_two(p0, P[0, :], Sppc, Tppc)
-    p[0] = p0
+    # Loop over casts
+    for c in range(0, nc):
 
-    # Loop over remaining casts
-    for c in range(1, nc):
-
-        # Make a neutral connection from previous bottle to the cast (S[c,:], T[c,:], P[c,:])
         Sc = S[c, :]
         Tc = T[c, :]
         Pc = P[c, :]
         k, K = valid_range_1_two(Sc, Pc)
-        s[c], t[c], p[c] = _ntp_bottle_to_cast(
-            s[c - 1],
-            t[c - 1],
-            p[c - 1],
-            Sc,
-            Tc,
-            Pc,
-            k,
-            K,
-            tol_p,
-            eos,
-            ppc_fn,
-        )
+
+        if c == 0:
+            # Evaluate S and T on first cast at p0
+            Sppc = ppc_fn(Pc[k:K], Sc[k:K])
+            Tppc = ppc_fn(Pc[k:K], Tc[k:K])
+            s[0], t[0] = ppval_1_nonan_two(p0, Pc[k:K], Sppc, Tppc)
+            p[0] = p0
+        else:
+
+            # Make a neutral connection from previous bottle to the cast (S[c,:], T[c,:], P[c,:])
+            s[c], t[c], p[c] = _ntp_bottle_to_cast(
+                s[c - 1],
+                t[c - 1],
+                p[c - 1],
+                Sc,
+                Tc,
+                Pc,
+                k,
+                K,
+                tol_p,
+                eos,
+                ppc_fn,
+            )
 
         if np.isnan(p[c]):
             # The neutral trajectory incropped or outcropped
