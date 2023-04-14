@@ -360,7 +360,7 @@ def omega_surf(S, T, P, grid, **kwargs):
 
         # Interpolate S and T onto the surface
         # TODO: Update this to handle ice shelf cavity friendly interpolation
-        s, t = interp_two(p, P, S, T)
+        s, t = interp_two(p, P, S, T, 0)
 
     pin_p = p[pin_cast]
 
