@@ -79,10 +79,9 @@ def _build_edges(dims, periodic):
     i2 = ni - i1  # ni when periodic, ni - 1 when non-periodic
     j2 = nj - j1
 
-    # Calculate number of edges
-    Ei = i2 * nj
-    Ej = ni * j2
-    E = Ei + Ej
+    Ei = i2 * nj  # number of edges in i dimension
+    Ej = ni * j2  # number of edges in j dimension
+    E = Ei + Ej  #  number of edges in total
 
     a, b = (np.empty(E, dtype=int) for x in (0, 1))  # prealloc space
 
@@ -169,14 +168,15 @@ def edgedata_to_maps(edgedata, dims, periodic):
     """
 
     ni, nj = dims
-    N = ni * nj  # number of nodes
 
     i1 = int(not periodic[0])  # 0 when periodic, 1 when non-periodic
     j1 = int(not periodic[1])
 
+    Ei = (ni - i1) * nj  # number of edges in i dimension
+
     Fi, Fj = (np.full((ni, nj), np.nan) for x in (0, 1))
 
-    Fi[i1:, :] = edgedata[:N].reshape((ni - i1, nj))
-    Fj[:, j1:] = edgedata[N:].reshape((ni, nj - j1))
+    Fi[i1:, :] = edgedata[:Ei].reshape((ni - i1, nj))
+    Fj[:, j1:] = edgedata[Ei:].reshape((ni, nj - j1))
 
     return Fi, Fj
