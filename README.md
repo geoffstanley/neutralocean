@@ -5,11 +5,15 @@
 </a>
 
 <a href="https://badge.fury.io/py/neutralocean">
-    <img alt="latest docs" src="https://badge.fury.io/py/neutralocean.svg">
+    <img alt="pypi package" src="https://badge.fury.io/py/neutralocean.svg">
 </a>
 
 <a href="https://anaconda.org/conda-forge/neutralocean">
-    <img alt="latest docs" src="https://img.shields.io/conda/vn/conda-forge/neutralocean.svg">
+    <img alt="conda-forge package" src="https://img.shields.io/conda/vn/conda-forge/neutralocean.svg">
+</a>
+
+<a href="https://github.com/geoffstanley/neutralocean/actions/workflows/python-package.yml">
+    <img alt="tests" src="https://github.com/geoffstanley/neutralocean/actions/workflows/python-package.yml/badge.svg">
 </a>
 
 Calculate neutral surfaces in the ocean, using Python.
