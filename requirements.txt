@@ -1,0 +1,12 @@
+# The following are dependencies required for unit testing only.
+# Dependencies present in setup.cfg that are not needed for unit
+# testing have been commented out.
+
+numba
+numpy
+# xarray
+scipy
+gsw
+# pooch
+# xgcm
+# netcdf4
