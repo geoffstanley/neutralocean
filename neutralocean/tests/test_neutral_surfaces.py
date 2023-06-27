@@ -3,6 +3,9 @@ from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.synthocean import synthocean
 from neutralocean.lib import find_first_nan, val_at
+from neutralocean.ntp import ntp_epsilon_errors
+from neutralocean.grid.rectilinear import build_grid
+from neutralocean.grid import divergence
 
 grav = 9.81
 rho_c = 1027.5
@@ -10,21 +13,23 @@ eos = make_eos("jmd95", grav, rho_c)
 eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
 eos_ufunc = vectorize_eos(eos)
 
+# Make a simple ocean dataset
+ni, nj, nk = 16, 32, 50
+wrap = (False, False)  # non-periodic in both horizontal dimensions
+S, T, Z, _ = synthocean((ni, nj, nk), wrap=wrap)
+# Raise the sea-floor in some casts
+# Make one profile be land, and three profiles have a shallower bottom
+# (the last having just one valid bottle)
+S[1, 1, 45:] = T[1, 1, 45:] = np.nan  # deep ocean
+S[2, 1, 5:] = T[2, 1, 5:] = np.nan  # shallow ocean
+S[3, 1, 1:] = T[3, 1, 1:] = np.nan  # coastal ocean (1 valid bottle)
 
-def make_simple_stp(shape):
-    S, T, Z, _ = synthocean(shape)
-    # Raise the sea-floor in some casts
-    # Make one profile be land, and three profiles have a shallower bottom
-    # (the last having just one valid bottle)
-    S[1, 1, 45:] = T[1, 1, 45:] = np.nan  # deep ocean
-    S[2, 1, 5:] = T[2, 1, 5:] = np.nan  # shallow ocean
-    S[3, 1, 1:] = T[3, 1, 1:] = np.nan  # coastal ocean (1 valid bottle)
-    return S, T, Z
+# Build grid adjacency and distance information for neutralocean functions
+grid = build_grid((ni, nj), wrap)
 
 
 def test_potential_surf():
     # Test sigma_surf using a prescribed reference depth and isovalue
-    S, T, Z = make_simple_stp((16, 32, 50))
     z_ref = 0.0
     isoval = 1027.0
     s, t, z, _ = potential_surf(
@@ -63,7 +68,6 @@ def test_potential_surf():
 
 def test_anomaly_surf():
     # Test delta_surf using prescribed reference values and isovalue
-    S, T, Z = make_simple_stp((16, 32, 50))
     s_ref, t_ref = 34.5, 4.0
     isoval = 0.0
     s, t, z, _ = anomaly_surf(
@@ -102,47 +106,35 @@ def test_anomaly_surf():
     )
 
 
-"""
-omega test not done yet
 def test_omega_surf():
     # Test omega_surf, initialized from a potential density surface
-    S, T, Z = make_simple_stp((16, 32, 50))
-    z_ref = 0.0
-    isoval = 1027.0
-    i0, j0 = (int(x / 2) for x in S.shape[:-1])  # ref cast in middle of domain
+    z0 = 2000.0
+    i0, j0 = (int(x / 2) for x in (ni, nj))  # ref cast in middle of domain
+
+    # Calculate initial surface as a potential density surface
+    s, t, z, _ = potential_surf(
+        S, T, Z, pin_cast=(i0, j0), pin_p=z0, eos=eos, diags=False
+    )
+
+    # Calculate divergence of ϵ on initial surface
+    e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
+    divg_e_init = divergence(e, grid["edges"])
+
+    # Calculate omega surface, and divergence of ϵ on it
     s, t, z, d = omega_surf(
         S,
         T,
         Z,
-        ref=z_ref,
-        isoval=isoval,
+        grid,
         pin_cast=(i0, j0),
-        eos=eos,
-        eos_s_t=eos_s_t,
-        TOL_P_SOLVER=1e-8,
+        p_init=z,
+        eos=(eos, eos_s_t),
         diags=True,
-        wrap=(False, False),
     )
 
-    σ = np.ma.masked_invalid(eos_ufunc(s, t, z_ref))
-    assert np.ma.allclose(σ, isoval)
+    e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
+    divg_e = divergence(e, grid["edges"])
 
-    # Calculate surface potential density
-    σ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], z_ref)
-
-    # Calculate seafloor potential density
-    n_good = find_first_nan(S)
-    S_bot, T_bot = (val_at(x, n_good - 1) for x in (S, T))
-    σ_bot = eos_ufunc(S_bot, T_bot, z_ref)
-
-    σ = eos_ufunc(s, t, z_ref)
-
-    # check for each cast that
-    # potential density on surface nearly matches isovalue,
-    # or the surface does not intersect this cast (σ is nan) because of one of
-    # three conditions: the cast was land, the surface outcropped, or the surface incropped.
-    assert np.all(
-        (np.abs(σ - isoval) < 1e-8)
-        | (np.isnan(σ) & ((n_good == 0) | (isoval < σ_sfc) | (σ_bot < isoval)))
-    )
-"""
+    # Check ratio of ∇⋅ϵ, between initial and converged surface, is small
+    rms = lambda x: np.sqrt(np.nanmean(np.square(x)))
+    assert rms(divg_e) / rms(divg_e_init) < 1e-4

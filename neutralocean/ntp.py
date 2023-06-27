@@ -28,7 +28,7 @@ def ntp_epsilon_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
     -------
     e : array
         The epsilon neutrality errors on the surface.
-        `e[i]` is the neutrality error between nodes `a[i]` and `b[i]`, where
+        `e[i]` is the neutrality error from node `a[i]` to node `b[i]`, where
         `a, b = grid['edges']`.
     """
 
@@ -163,5 +163,5 @@ def _ntp_epsilon_error1(s, t, p, a, b, eos_s_t):
             0.5 * (t[a_] + t[b_]),
             0.5 * (p[a_] + p[b_]),
         )
-        e[i] = rs * (s[b[i]] - s[a[i]]) + rt * (t[b[i]] - t[a[i]])
+        e[i] = rs * (s[b_] - s[a_]) + rt * (t[b_] - t[a_])
     return e
