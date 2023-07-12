@@ -8,27 +8,58 @@ def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0):
     Parameters
     ----------
     dims : tuple of int
-        dimensions of the grid.  i'th element gives number of grid cells in the
-        i'th direction, for i = 1,2.
+        Dimensions of the grid. 
+        `dims[i]` is the number of grid cells in the i'th direction, for i = 1,2.
 
     periodic : tuple of bool
-        Specifies periodicity.  The i'th dimension is periodic when `periodic[i]` is True.
+        Specifies periodicity. 
+        The i'th dimension is periodic when `periodic[i]` is True.
 
     dxC : float or ndarray, Default 1.0
-        Distance between adjacent grid points in the 1st ('x') dimension
+        Distance between adjacent grid points in the 1st ('x') dimension.
+        Specifically, `dxC[i,j]` is the distance between the centers of cells
+        `(i,j)` and `(i-1,j)`. 
 
     dyC : float or ndarray, Default 1.0
-        Distance between adjacent grid points in the 2nd ('y') dimension
+        Distance between adjacent grid points in the 2nd ('y') dimension.
+        Specifically, `dyC[i,j]` is the distance between the centers of cells 
+        `(i,j)` and `(i,j-1)`. 
 
     dyG : float or ndarray, Default 1.0
         Distance (in the 2nd, 'y' dimension) of the face between grid points
-        that are adjacent in the 1st ('x') dimension
+        that are adjacent in the 1st ('x') dimension.
         Lives at same location as `dxC`.
+        Specifically, `dyG[i,j]` is the distance of the interface between
+        cells `(i,j)` and `(i-1,j)`.
 
     dxG : float or ndarray, Default 1.0
         Distance (in the 1st, 'x' dimension) of the face between grid points
         that are adjacent in the 2nd ('y') dimension.
         Lives at same location as `dyC`.
+        Specifically, `dxG[i,j]` is the distance of the interface between
+        cells `(i,j)` and `(i,j-1)`.
+        
+    Notes
+    -----
+    The above notes for `dxC`, `dyC`, `dyG`, `dxG` are valid for 
+    `0 <= i <= ni-1` and `0 <= j <= nj-1`, where `dims == (ni, nj)`,
+    using Python's -1 indexing notation:
+        
+    - `dxC[0,j]` is the distance between the centers of cells `(0,j)` and `(ni-1,j)`
+    - `dyG[0,j]` is the distance  of  the  face between cells `(0,j)` and `(ni-1,j)`
+    - `dyC[0,j]` is the distance between the centers of cells `(i,0)` and `(i,nj-1)`
+    - `dxG[0,j]` is the distance  of  the  face between cells `(i,0)` and `(i,nj-1)`
+        
+    If `periodic[0]` is False, `dxC[0,j]` and `dyG[0,j]` are not used.
+
+    If `periodic[1]` is False, `dyC[i,0]` and `dxG[i,0]` are not used.
+    
+    Broadcasting: The shape of `dxC`, `dyC`, `dyG`, `dxG` will be broadcast to 
+    shape `dims == (ni, nj)`. 
+    Example on a latitude-longitude grid: the meridional grid distances are 
+    constant, so `dyC` and `dyG` can be passed as scalars rather than 2D arrays;
+    likewise, the zonal grid distances only depend on latitude, so `dxC` and 
+    `dxG` can be passed as 1D arrays of length `nj`.
 
     Returns
     -------

@@ -13,7 +13,7 @@ Example.  Suppose we took 4 casts from the ocean, with three in a triangle and a
    :width: 360px
 
 The nodes (vertical casts) are labelled ``0, 1, ... N-1``, where ``N`` is the number of casts (here ``N = 4``).  
-The order doesn't really matter, but once it's chosen we then specify the edges (pairs of adjacent casts) as a list of length ``E`` (here ``E = 4``), with each element itself a 2-element list.  Here, ``edges = ((0, 1), (0, 2), (1, 2), (2, 3))``.
+The order doesn't really matter, but once it's chosen we then specify the edges (pairs of adjacent casts) as a 2D array of shape ``(2, E)``. Here, ``E = 4`` and ``edges = np.array([[0, 0, 1, 2], [1, 2, 2, 3]])``. Alternatively, ``edges`` can be a tuple/list of length 2, with each element a tuple/list of length ``E``: ``edges = ((0, 0, 1, 2), (1, 2, 2, 3))``. What matters is, letting ``a = edges[0]`` and ``b = edges[1]``, that the nodes ``a[i]`` and ``b[i]`` are adjacent, for each ``i = 0, ..., E-1``.
 
 For a **rectilinear grid** (such as a lat-lon grid), most casts are adjacent to four other casts.  We can label the casts ``0, 1, ..., N-1`` starting in the south-west and going first across longitudes and then across latitudes, ending in the north-east.  The order doesn't really matter, but must be specified.  
 
@@ -28,23 +28,21 @@ Example.  A 4 x 3 grid with ``N = 12`` that is periodic in longitude (x-axis) bu
 
 	The order of casts is determined by your data is stored in memory.  Suppose Salinity and Temperature are presented as 3D arrays of size ``(nj,ni,nk)``, which are the number of grid points in the latitudinal, longitudinal, and vertical dimensions, respectively.  The data is actually stored in memory as a long 1D array with the first ``nk`` elements being data from the "first" cast, the next ``nk`` elements being data from the "second" cast, etc.  This orders the casts.  Ideally, the vertical dimension is last (varying fastest in memory); if not, you can use the ``vert_dim`` argument and ``neutralocean`` will internally reorder your data to be so.
 
-The pairs of adjacent casts are encoded as
+The pairs of adjacent casts can be encoded as
 
 .. code-block:: python
 
-	edges = (
-	    (0, 1), (1,  2), ( 2,  3), ( 3, 0),  # 1st row of connections
-	    (4, 5), (5,  6), ( 6,  7), ( 7, 4),  # 2nd row of connections
-	    (8, 9), (9, 10), (10, 11), (11, 8),  # 3rd row of connections
-	    (0, 4), (1,  5), ( 2,  6), ( 3, 7),  # 1st column of connections
-	    (4, 8), (5,  9), ( 6, 10), ( 7,11),  # 2nd column of connections
-    )
+   edges = (
+       (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 4, 5, 6, 7, 8, 9, 10, 11),
+       (3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 0, 1, 2, 3, 4, 5, 6,  7),
+   )
+   #   <--------- x connections ----------->, <--- y connections --->
 
 If the grid also gives geometric information, we should give it to ``neutralocean``.  
 If casts *m* and *n* are adjacent, 
 let :math:`\Delta_{m,n}` be the distance between cell centers of casts *m* and *n*, and 
 let :math:`\Delta^\perp_{m,n}` be the distance of the *face* between the cells of casts *m* and *n*.
-This geometric information is encoded as two ``E``-length lists, ``dist`` and ``distperp`` respectively, given in the same order as ``edges``.  E.g. ``dist[i]`` is the distance between casts ``edges[i][0]`` and ``edges[i][1]``.  
+This geometric information is encoded as two ``E``-length lists, ``dist`` and ``distperp`` respectively, given in the same order as ``edges``.  E.g. ``dist[i]`` is the distance between casts ``edges[0][i]`` and ``edges[1][i]``.  
 This geometry for the 4x3 example can be illustrated as follows (not showing all geometric info):
 
 .. figure:: img/grid-graph-dists.png

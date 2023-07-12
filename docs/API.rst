@@ -116,18 +116,9 @@ TEOS-10 GSW
 .. autofunction:: neutralocean.eos.gsw.specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp
 
 
-(Vertical) Interpolation
-========================
+(Vertical) Interpolation using Piecewise Polynomials (PP)
+=========================================================
 
-On the Fly
-----------
-.. automodule:: neutralocean.interp1d.__init__
-
-.. autofunction:: neutralocean.interp1d.make_interpolator
-
-
-Piecewise Polynomial (PP)
--------------------------
 .. automodule:: neutralocean.ppinterp.__init__
 
 .. autofunction:: neutralocean.ppinterp.tools.make_pp
@@ -135,8 +126,6 @@ Piecewise Polynomial (PP)
 .. autofunction:: neutralocean.ppinterp.ppval
 
 .. autofunction:: neutralocean.ppinterp.ppval_1
-
-.. autofunction:: neutralocean.ppinterp.ppval_i
 
 .. autofunction:: neutralocean.ppinterp.ppval_two
 

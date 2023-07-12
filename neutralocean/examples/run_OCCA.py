@@ -21,7 +21,8 @@ g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
-# Select pinning cast in the equatorial Pacific
+# Select pinning cast in the equatorial Pacific. 
+# The following surfaces will intersect cast (i0,j0) at a depth of z0.
 i0, j0 = 220, 80
 z0 = 1500.0
 

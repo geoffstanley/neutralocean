@@ -5,43 +5,9 @@ Equation of State
 =================
 .. autofunction:: neutralocean.eos.tools.make_bsq
 
-(Vertical) Interpolation
-========================
-
-On the Fly
-----------
-.. autofunction:: neutralocean.interp1d.tools.make_kernel
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_1
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_1_fg
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_1_YZ
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_1_fg_YZ
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_n
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_n_YZ
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_n_fg
-
-.. autofunction:: neutralocean.interp1d.interp1d._interp_n_fg_YZ
-
-.. autofunction:: neutralocean.interp1d.linear._linterp
-
-.. autofunction:: neutralocean.interp1d.linear._linterp1
-
-.. autofunction:: neutralocean.interp1d.pchip._pchip
-
-.. autofunction:: neutralocean.interp1d.pchip._pchip1
-
-.. autofunction:: neutralocean.interp1d.pchip._pchip2
-
-.. autofunction:: neutralocean.interp1d.pchip._pchip3
-
-Piecewise Polynomial (PP) coefficients
---------------------------------------
+(Vertical) Interpolation using Piecewise Polynomials (PP)
+=========================================================
+.. autofunction:: neutralocean.ppinterp.pval
 
 .. autofunction:: neutralocean.ppinterp.lib.valid_range
 
@@ -61,7 +27,6 @@ Root finding in 1D
 
 Library functions
 =================
-
 .. autofunction:: neutralocean.lib.find_first_nan
 
 .. autofunction:: neutralocean.lib.val_at

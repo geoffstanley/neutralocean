@@ -20,7 +20,7 @@
 from neutralocean import __version__
 
 project = 'Neutral Ocean'
-copyright = '2022, Geoffrey Stanley'
+copyright = '2023, Geoffrey Stanley'
 author = 'Geoffrey Stanley'
 
 # The full version, including alpha/beta/rc tags

@@ -13,19 +13,31 @@ def graph_binary_fcn(edges, nodevals, binary_fcn):
 
     Parameters
     ----------
-    edges : tuple
-        The edges in a graph, a 2-element tuple with the following:
-
-        a, b : array of int
-            Pairs of adjacent nodes in the graph.
-            Nodes `a[i]` and `b[i]`, are adjacent.
-
+    edges : 2D array of int of shape `(2, E)`
+    
+        The edges in a graph whose nodes are labelled `0, ..., N-1`. 
+        Denoting `a = edges[0]` and `b = edges[1]`,
+        - the nodes labelled `a[i]` and `b[i]` are adjacent, for `0 <= i <= E-1`
+        - must have `0 <= a[i], b[i] <= N-1` for `0 <= i <= E-1`, so `edges` is
+        referring to valid nodes. 
+        
     nodevals : array-like
         values at the nodes in a graph
 
     binary_fcn : function
         A `numba.njit` function accepting two numbers and returning one number.
 
+    Notes
+    -----
+    
+    `edges` can instead be a tuple of length 2, with each element
+    a tuple of int of length `E`.
+    If `edges` is a 2D array of shape `(E, 2)` or is a tuple of length `E`
+    with each element a tuple of int of length 2, then one must convert it
+    as follows:
+        
+    >>> edges = numpy.array(edges).transpose()
+    
     Returns
     -------
     ev : 1d array
