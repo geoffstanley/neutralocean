@@ -54,8 +54,10 @@ The lists ``edges``, ``dist``, and ``distperp`` are passed to ``neutralocean`` a
 
 To ease building these lists, we provide ``build_grid`` functions for various grid types.  
 See :ref:`the Grids API<API:Grids>`.  
-For the first generic graph example, we'd use ``neutralocean.grids.graph.build_grid``.
+For the first generic graph example, we'd use ``neutralocean.grid.graph.build_grid``.
 
-For the lat-lon example, we'd use ``neutralocean.grids.rectilinear.build_grid``.  See :ref:`examples:OCCA` for an example.
+For the lat-lon example, we'd use ``neutralocean.grid.rectilinear.build_grid``.  See :ref:`the OCCA example <ex OCCA>`.
 
-A close cousin of rectilinear grids (like lat-lon) is a **tiled rectilinear grid**, in which there are several (square) rectilinear grids that are placed next to each other, such as the `lat-lon-cap <https://ecco-v4-python-tutorial.readthedocs.io/fields.html#tile-native-lat-lon-cap-90-grid>`_ used by ECCOv4r4.  For these grids, use ``neutralocean.grids.xgcm.build_grid`` to build the ``grid`` dict.  This uses `xgcm <https://xgcm.readthedocs.io/>`_ to handle the tiling, with `face connections <https://xgcm.readthedocs.io/en/latest/grid_topology.html>`_ specified in the xgcm way.  See :ref:`examples:ECCOv4` for an example.
+A close cousin of rectilinear grids (like lat-lon) is a **tiled rectilinear grid**, in which there are several (square) rectilinear grids that are placed next to each other, such as the `lat-lon-cap <https://ecco-v4-python-tutorial.readthedocs.io/fields.html#tile-native-lat-lon-cap-90-grid>`_ used by ECCOv4r4.  For these grids, use ``neutralocean.grid.xgcm.build_grid`` to build the ``grid`` dict.  This uses `xgcm <https://xgcm.readthedocs.io/>`_ to handle the tiling, with `face connections <https://xgcm.readthedocs.io/en/latest/grid_topology.html>`_ specified in the xgcm way.  See the :ref:`ECCOv4 example <ex ECCOv4>`.
+
+For a tripolar grid such as `ORCA <https://www.nemo-ocean.eu/doc/node108.html>`_ used by `NEMO <https://www.nemo-ocean.eu/>`_, we'd use ``neutralocean.grid.tripolar.build_grid``. See :ref:`the ORCA example <ex ORCA>`.

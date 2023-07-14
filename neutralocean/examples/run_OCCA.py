@@ -13,10 +13,6 @@ from neutralocean.grid.rectilinear import build_grid, edgedata_to_maps
 
 # In[Load OCCA data]
 
-# Load OCCA data from the local folder containing this script.
-# If it is not there, it will be downloaded to that folder.
-# If that folder does not have write permissions, it will be downloaded to temp
-# files, loaded into memory, then the temp files deleted.
 g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 Z = -g["RC"]  # Depth vector (note positive and increasing down)

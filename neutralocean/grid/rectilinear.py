@@ -8,22 +8,22 @@ def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0):
     Parameters
     ----------
     dims : tuple of int
-        Dimensions of the grid. 
-        `dims[i]` is the number of grid cells in the i'th direction, for i = 1,2.
+        Dimensions of the grid.
+        `dims[n]` is the number of grid cells in the n'th direction, for n = 1,2.
 
     periodic : tuple of bool
-        Specifies periodicity. 
-        The i'th dimension is periodic when `periodic[i]` is True.
+        Specifies periodicity.
+        The n'th dimension is periodic when `periodic[n]` is True.
 
     dxC : float or ndarray, Default 1.0
         Distance between adjacent grid points in the 1st ('x') dimension.
         Specifically, `dxC[i,j]` is the distance between the centers of cells
-        `(i,j)` and `(i-1,j)`. 
+        `(i,j)` and `(i-1,j)`.
 
     dyC : float or ndarray, Default 1.0
         Distance between adjacent grid points in the 2nd ('y') dimension.
-        Specifically, `dyC[i,j]` is the distance between the centers of cells 
-        `(i,j)` and `(i,j-1)`. 
+        Specifically, `dyC[i,j]` is the distance between the centers of cells
+        `(i,j)` and `(i,j-1)`.
 
     dyG : float or ndarray, Default 1.0
         Distance (in the 2nd, 'y' dimension) of the face between grid points
@@ -38,27 +38,28 @@ def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0):
         Lives at same location as `dyC`.
         Specifically, `dxG[i,j]` is the distance of the interface between
         cells `(i,j)` and `(i,j-1)`.
-        
+
     Notes
     -----
-    The above notes for `dxC`, `dyC`, `dyG`, `dxG` are valid for 
+    The above notes for `dxC`, `dyC`, `dyG`, `dxG` are valid for
     `0 <= i <= ni-1` and `0 <= j <= nj-1`, where `dims == (ni, nj)`,
     using Python's -1 indexing notation:
-        
+
     - `dxC[0,j]` is the distance between the centers of cells `(0,j)` and `(ni-1,j)`
     - `dyG[0,j]` is the distance  of  the  face between cells `(0,j)` and `(ni-1,j)`
     - `dyC[0,j]` is the distance between the centers of cells `(i,0)` and `(i,nj-1)`
     - `dxG[0,j]` is the distance  of  the  face between cells `(i,0)` and `(i,nj-1)`
-        
+
     If `periodic[0]` is False, `dxC[0,j]` and `dyG[0,j]` are not used.
 
     If `periodic[1]` is False, `dyC[i,0]` and `dxG[i,0]` are not used.
-    
-    Broadcasting: The shape of `dxC`, `dyC`, `dyG`, `dxG` will be broadcast to 
-    shape `dims == (ni, nj)`. 
-    Example on a latitude-longitude grid: the meridional grid distances are 
+
+    Broadcasting: The shape of `dxC`, `dyC`, `dyG`, `dxG` will be broadcast to
+    shape `dims == (ni, nj)`.
+
+    Example on a latitude-longitude grid: the meridional grid distances are
     constant, so `dyC` and `dyG` can be passed as scalars rather than 2D arrays;
-    likewise, the zonal grid distances only depend on latitude, so `dxC` and 
+    likewise, the zonal grid distances only depend on latitude, so `dxC` and
     `dxG` can be passed as 1D arrays of length `nj`.
 
     Returns
@@ -67,7 +68,7 @@ def build_grid(dims, periodic, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0):
         Containing the following:
 
         edges : tuple of length 2
-            Each element is an array of int of length E, where E is the number of
+            Each element is an array of int of length `E`, where `E` is the number of
             edges in the grid's graph, i.e. the number of pairs of adjacent water
             columns (including land) in the grid.
             If `edges = (a, b)`, the nodes (water columns) whose linear indices are
@@ -148,10 +149,22 @@ def _build_edgedata(dims, periodic, data):
         See `build_grid`
 
     data : tuple of ndarray
-        The data that lives on edges, i.e. between water columns.
-        The i'th element of the tuple gives data that lives between water
-        columns in the i'th dimension.
-        Will be broadcast to the size `dims`.
+        Data that lives on edges, i.e. between nodes (water columns).
+
+        With `dims == (ni, nj)`:
+
+        - `data[0][i, j]` lives between nodes [i, j] and [i-1, j], for `1 <= i <= ni-1`.
+
+        - `data[0][0, j]` lives between nodes [0, j] and [ni-1, j], if
+        `periodic[0]` is True, and is not used if `periodic[0]` is False.
+
+        - `data[1][i, j]` lives between nodes [i, j] and [i, j-1], for `1 <= j <= nj-1`.
+
+        - `data[1][i, 0]` lives between nodes [i, 0] and [i, nj-1], if
+        `periodic[1]` is True, and is not used if `periodic[1]` is False.
+
+        Each element of `data` will be broadcast to the size `dims`.
+
         Example: `data = (xdist, ydist)` where `xdist` is the distance
         between water columns in the x (first) dimension, and `ydist` is the
         distance between water columns in the y (second) dimension.

@@ -40,6 +40,14 @@ xgcm (tiled rectilinear)
 
 .. autofunction:: neutralocean.grid.xgcm.edgedata_to_maps
 
+tripolar
+--------
+
+.. autofunction:: neutralocean.grid.tripolar.build_grid
+
+.. autofunction:: neutralocean.grid.tripolar.edgedata_to_maps
+
+
 Graph
 -----
 .. autofunction:: neutralocean.grid.graph.build_grid
