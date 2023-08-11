@@ -43,7 +43,7 @@ def bfs_conncomp1(indptr, indices, root, good):
     """
 
     N = len(good)
-    qu = np.empty(N, dtype=np.int64)
+    qu = np.empty(N, dtype=np.int_)
 
     qt = -1  # Queue Tail
     qh = -1  # Queue Head
@@ -144,7 +144,7 @@ def bfs_conncomp1_wet(
     # N, nk = S.shape
     N = S.shape[0]  # Number of nodes (water columns)
 
-    qu = np.empty(N, dtype=np.int64)
+    qu = np.empty(N, dtype=np.int_)
 
     qt = -1  # Queue Tail
     qh = -1  # Queue Head

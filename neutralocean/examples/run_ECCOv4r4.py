@@ -21,7 +21,7 @@ print(
     "\nand one day of Salinity and Temperature 3D data at\n"
     "  https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4/OCEAN_TEMPERATURE_SALINITY_day_mean_2002-12-23_ECCO_V4r4_native_llc0090.nc"
     "\nYou will have to create an Earthdata Login first.  "
-    "Then edit the below variable, `folder_ecc4`, to point to the directory"
+    "Then edit the below variable, `folder_ecco4`, to point to the directory"
     " where you saved these two files."
 )
 

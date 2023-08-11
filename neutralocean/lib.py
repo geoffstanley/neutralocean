@@ -27,7 +27,7 @@ def find_first_nan(a):
         is not NaN, but `a[i,j,K]` is NaN.
     """
     nk = a.shape[-1]
-    k = np.full(a.shape[:-1], nk, dtype=np.int64)
+    k = np.full(a.shape[:-1], nk, dtype=np.int_)
     for n in np.ndindex(a.shape[0:-1]):
         for i in range(nk):
             if np.isnan(a[n][i]):

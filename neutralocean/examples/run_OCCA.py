@@ -444,7 +444,7 @@ s, t, z, d = anomaly_surf(
 )
 
 
-# In[Calculate a large-scale potential vorticity on our surface]
+# In[Calculate a large-scale potential vorticity on the above specvol anomaly surface]
 
 # Create function for partial deriv of equation of state with respect to depth z
 eos_z = make_eos_p("jmd95", g["grav"], g["rho_c"])  # for scalar inputs

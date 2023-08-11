@@ -177,7 +177,7 @@ def _int_x_k(p, k, dp, P, Sppc, Tppc, eos_s_t):
     # If p == P[k+1], this returns 0.0
 
     # Number of points between p and P[k], inclusive
-    n = np.int(np.ceil((P[k + 1] - p) / dp)) + 1
+    n = int(np.ceil((P[k + 1] - p) / dp)) + 1
 
     p_ = np.linspace(p, P[k + 1], n)  # intervals are not larger than dp
 

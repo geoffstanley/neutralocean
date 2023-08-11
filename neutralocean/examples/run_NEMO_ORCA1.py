@@ -45,8 +45,8 @@ T = ds["thetao"].isel({"time": timestep})  # potential temperature
 
 mesh = xr.open_dataset(file_mesh)  # contains horizontal grid information
 
-# Squeeze out singleton dimension in horizontal grid distances
-e1u, e2v, e2u, e1v = (mesh[x].squeeze() for x in ("e1u", "e2v", "e2u", "e1v"))
+# Squeeze out singleton dimension in horizontal grid distances and convert to numpy array
+e1u, e2v, e2u, e1v = (mesh[x].data.squeeze() for x in ("e1u", "e2v", "e2u", "e1v"))
 
 # Note: The ORCA1 tripolar horizontal grid is of size (nj, ni) == (291, 360).
 # The second dimension is periodic, handling longitude's periodic nature.
@@ -130,7 +130,7 @@ e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 # Convert ϵ above into two 2D maps, one each of the "x" and "y" dimensions
 ex, ey = edgedata_to_maps(e, (nj, ni))
 
-# These can then be mapped:
+# These can then be mapped, e.g.:
 # import matplotlib.pyplot as plt
 # plt.imshow(ex, origin="lower", vmin=-1e-9, vmax=1e-9)
 # plt.colorbar()

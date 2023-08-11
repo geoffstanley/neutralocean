@@ -22,20 +22,20 @@ def load_OCCA():
 
     # Use friendly pooch to download dataset, if it hasn't already done so
     # and cached it locally.
-    url_salt = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDsalt.0406annclim.nc"
-    url_theta = "ftp://mit.ecco-group.org/ecco_for_las/OCCA_1x1_v2/2004-6/annual/DDtheta.0406annclim.nc"
+    url_salt = "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/VREV1Z"
+    url_theta = "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/APHURG"
 
     hash_salt = (
-        "4d90ab2c6cf524bb56afed54a66e33172a9ed57382ab11014a46618be3e199e5"
+        "184ca879e0ed18a078f31160c16ec078701e0f1af4d6de44bd1e70cc200d111c"
     )
     hash_theta = (
-        "f9f30bda7fa006be802e4f705fc7608943945ffba4b628c8ae33310d2f696ba4"
+        "7fcef4663439e34b13de4b08a373a0e17b83bee2c621ea8ac07a8175fe15368e"
     )
 
     file_salt = pooch.retrieve(url=url_salt, known_hash=hash_salt)
     file_theta = pooch.retrieve(url=url_theta, known_hash=hash_theta)
 
-    ts = 0  # Select the first time step (the only time step in these files)
+    ts = 0  # Select the first time step (January)
 
     # Read grid info from the theta nc file
     ds = xr.open_dataset(file_theta).load()
@@ -54,7 +54,7 @@ def load_OCCA():
 
     # Lateral coordinates
     g["XCvec"], g["XGvec"], g["YCvec"], g["YGvec"] = (
-        np.require(ds[x].values, dtype=np.float64, requirements="C")
+        np.require(ds[x].values, dtype=np.double, requirements="C")
         for x in ("Longitude_t", "Longitude_u", "Latitude_t", "Latitude_v")
     )
 
@@ -65,7 +65,7 @@ def load_OCCA():
     g["DYCsc"] = g["DYGsc"]
 
     # Vertical coordinate and distances
-    g["RC"] = -np.require(ds.Depth_c, dtype=np.float64, requirements="C")
+    g["RC"] = np.require(-ds.Depth_c, dtype=np.double, requirements="C")
     g["DRC"] = np.diff(-g["RC"])
 
     g["nx"] = g["XCvec"].size
@@ -86,6 +86,6 @@ def load_OCCA():
 
     # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
     dims = ("Longitude_t", "Latitude_t", "Depth_c")
-    S, T = (x.transpose(*dims).astype(np.float64, order="C") for x in (S, T))
+    S, T = (x.transpose(*dims).astype(np.double, order="C") for x in (S, T))
 
     return g, S, T
