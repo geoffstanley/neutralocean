@@ -17,10 +17,14 @@ g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
-# Select pinning cast in the equatorial Pacific. 
-# The following surfaces will intersect cast (i0,j0) at a depth of z0.
+# Select pinning cast in the equatorial Pacific.
+# When these are used for 'pin_cast' and 'pin_p', the following surfaces will
+# intersect cast (i0,j0) at a depth of z0.
 i0, j0 = 220, 80
 z0 = 1500.0
+
+# Select vertical interpolation method. Options are "linear" or "pchip"
+interp_name = "linear"
 
 # make Boussinesq version of the Jackett and McDougall (1995) equation of state
 # --- which is what OCCA used --- and its partial derivatives
@@ -32,21 +36,20 @@ grid = build_grid(
     (ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
 )
 
+# Prepare some default options for potential_surf, anomaly_surf, and omega_surf
+opts = {}
+opts["grid"] = grid
+opts["interp"] = interp_name
+opts["vert_dim"] = "Depth_c"
+opts["eos"] = (eos, eos_s_t)
+
 # In[Potential Density surfaces]
 
-# Provide reference pressure (actually depth, in Boussinesq) and isovalue
-s, t, z, d = potential_surf(
-    S,
-    T,
-    Z,
-    grid=grid,
-    eos="jmd95",
-    grav=g["grav"],
-    rho_c=g["rho_c"],
-    vert_dim="Depth_c",
-    ref=0.0,
-    isoval=1027.5,
-)
+# Provide reference pressure (actually depth, in Boussinesq) and isovalue.
+args = opts.copy()
+args["ref"] = 0.0
+args["isoval"] = 1027.5
+s, t, z, d = potential_surf(S, T, Z, **args)
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" with isovalue = {d['isoval']}kg m-3"
@@ -54,19 +57,11 @@ print(
 )
 
 # Provide pin_cast and pin_p: the reference location and depth that the surface intersects
-s, t, z, d = potential_surf(
-    S,
-    T,
-    Z,
-    grid=grid,
-    eos="jmd95",
-    grav=g["grav"],
-    rho_c=g["rho_c"],
-    vert_dim="Depth_c",
-    ref=0.0,
-    pin_cast=(i0, j0),
-    pin_p=z0,
-)
+args = opts.copy()
+args["ref"] = 0.0
+args["pin_cast"] = (i0, j0)
+args["pin_p"] = z0
+s, t, z, d = potential_surf(S, T, Z, **args)
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
@@ -77,19 +72,15 @@ print(
 # Provide just the location to intersect `(pin_cast, pin_p)`.
 # This takes the reference depth `ref` to match `pin_p`.
 # Also illustrate using xarray coordinates for pin_cast.
-# Also use PCHIPs as the vertical interpolants.
-# Also provide the (pre-made) equation of state and its partial derivatives w.r.t S and T.
-s, t, z, d = potential_surf(
-    S,
-    T,
-    Z,
-    grid=grid,
-    eos=(eos, eos_s_t),
-    vert_dim="Depth_c",
-    pin_cast={"Longitude_t": 220.5, "Latitude_t": 0.5},
-    pin_p=z0,
-    interp="pchip",
-)
+# Also show how to just give the EOS name and the necessary parameters (g and rho_c)
+# for its Boussinesq version, rather than using the pre-made EOS's as above.
+args = opts.copy()
+args["pin_cast"] = {"Longitude_t": 220.5, "Latitude_t": 0.5}
+args["pin_p"] = z0
+args["eos"] = "jmd95"
+args["grav"] = g["grav"]
+args["rho_c"] = g["rho_c"]
+s, t, z, d = potential_surf(S, T, Z, **args)
 assert z.values[i0, j0] == z0  # check pin_cast was indeed (i0,j0)
 z_sigma = z  # save for later
 print(
@@ -103,16 +94,11 @@ print(
 
 # Provide reference salinity and potential temperature values
 s0, t0 = 34.5, 4.0
-s, t, z, d = anomaly_surf(
-    S,
-    T,
-    Z,
-    grid=grid,
-    eos=(eos, eos_s_t),
-    vert_dim="Depth_c",
-    ref=(s0, t0),
-    isoval=0.0,
-)
+
+args = opts.copy()
+args["ref"] = (s0, t0)
+args["isoval"] = 0.0
+s, t, z, d = anomaly_surf(S, T, Z, **args)
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" with isovalue = {d['isoval']}kg m-3"
@@ -120,17 +106,11 @@ print(
 )
 
 # Provide pin_cast and pin_p: the reference location and depth that the surface intersects
-s, t, z, d = anomaly_surf(
-    S,
-    T,
-    Z,
-    grid=grid,
-    eos=(eos, eos_s_t),
-    vert_dim="Depth_c",
-    ref=(s0, t0),
-    pin_cast=(i0, j0),
-    pin_p=z0,
-)
+args = opts.copy()
+args["ref"] = (s0, t0)
+args["pin_cast"] = (i0, j0)
+args["pin_p"] = z0
+s, t, z, d = anomaly_surf(S, T, Z, **args)
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
@@ -140,16 +120,10 @@ print(
 
 # Provide just the location to intersect: depth `pin_p` on cast `pin_cast`
 # This takes the reference S and T values from that location.
-s, t, z, d = anomaly_surf(
-    S,
-    T,
-    Z,
-    grid=grid,
-    eos=(eos, eos_s_t),
-    vert_dim="Depth_c",
-    pin_cast=(i0, j0),
-    pin_p=z0,
-)
+args = opts.copy()
+args["pin_cast"] = (i0, j0)
+args["pin_p"] = z0
+s, t, z, d = anomaly_surf(S, T, Z, **args)
 z_delta = z  # save for later
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
@@ -165,17 +139,10 @@ print(
 # the root-mean-square change in the locally referenced potential density from
 # one iteration to the next to drop below 10^-7 kg m-3, or a maximum of 10
 # iterations.
-s, t, z, d = omega_surf(
-    S,
-    T,
-    Z,
-    grid,
-    vert_dim="Depth_c",
-    pin_cast=(i0, j0),
-    pin_p=z0,
-    eos=(eos, eos_s_t),
-)
-s_omega, t_omega, z_omega = s, t, z  # save for later
+args = opts.copy()
+args["pin_cast"] = (i0, j0)
+args["pin_p"] = z0
+s, t, z, d = omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to {z0}m)"
@@ -184,30 +151,19 @@ print(
 )
 
 # Initialize omega surface with a (locally referenced) in-situ density anomaly surface.
-# Use PCHIP interpolation rather than the default, linear interpolation.
-# Remove the mixed layer, calculated internally according to the given parameters --
 #   see `mixed_layer` for details on these parameters.
 # Specify a higher max number of iterations, and quit iterations when the
 # depth change from one iteration to the next has a root-mean-square value less
-# than 1e-6 m.
-s, t, z, d = omega_surf(
-    S,
-    T,
-    Z,
-    grid,
-    ref=(None, None),
-    vert_dim="Depth_c",
-    pin_cast=(i0, j0),
-    pin_p=z0,
-    eos=(eos, eos_s_t),
-    interp="pchip",
-    p_ml={"bottle_index": 1, "ref_p": 0.0},
-    ITER_MAX=20,
-    TOL_P_CHANGE_RMS=1e-6,
-    TOL_LRPD_MAV=0.0,  # deactivate this exit tolerance
-    TOL_P_SOLVER=1e-7,
-)
-z_omega_converged = z  # save for next
+# than 1e-7 m.
+args["ref"] = (None, None)  # init surface is locally referenced anomaly_surf
+args["p_ml"] = {"bottle_index": 1, "ref_p": 0.0}
+args["ITER_MAX"] = 20
+args["TOL_P_CHANGE_RMS"] = 1e-6
+args["TOL_LRPD_MAV"] = 0.0  # deactivate this exit threshold
+args["TOL_P_SOLVER"] = 1e-7
+s, t, z, d = omega_surf(S, T, Z, **args)
+s_omega, t_omega, z_omega = s, t, z  # save for later
+args_omega = args.copy()  # save for later
 print(
     f" ** The omega-surface"
     f" initialized from an in-situ density anomaly surface (referenced locally to cast {(i0,j0)} at {z0}m)"
@@ -221,22 +177,12 @@ print(
 # this omega surface should basically match the above one. Indeed, it will
 # do one iteration and find it is below the RMS depth change tolerance, and exit.
 i1, j1 = 315, 110  # North Atlantic
-s, t, z, d = omega_surf(
-    S,
-    T,
-    Z,
-    grid,
-    vert_dim="Depth_c",
-    pin_cast=(i1, j1),
-    p_init=z_omega_converged,
-    eos=(eos, eos_s_t),
-    interp="pchip",
-    ITER_MAX=10,
-    ITER_START_WETTING=99,  # greater than ITER_MAX, so no wetting
-    TOL_P_CHANGE_RMS=1e-6,
-    TOL_LRPD_MAV=0.0,  # deactivate this exit tolerance
-    TOL_P_SOLVER=1e-7,
-)
+args.pop("pin_p", None)
+args.pop("ref", None)
+args["pin_cast"] = (i1, j1)
+args["p_init"] = z_omega  # set init surface from above
+args["ITER_START_WETTING"] = 99  # greater than ITER_MAX, so no wetting
+s, t, z, d = omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
     f" initialized from an omega surface and pinned to the cast {(i1,j1)} at {z0}m)"
@@ -251,7 +197,7 @@ import numba as nb
 from neutralocean.mixed_layer import mixed_layer
 from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.label import veronis_density
-from neutralocean.lib import _process_casts
+from neutralocean.lib import _process_casts, xr_to_np
 from neutralocean.ppinterp import make_pp
 from neutralocean.eos import make_eos_p, vectorize_eos
 from neutralocean.traj import ntp_bottle_to_cast, neutral_trajectory
@@ -266,7 +212,7 @@ from neutralocean.traj import ntp_bottle_to_cast, neutral_trajectory
 # There will be two numpy arrays of dependent data (S, T), sharing the same
 # independent data Z (num_dep_vars=2).
 interp_two = make_pp(
-    "linear", kind="u", out="interp", nans=True, num_dep_vars=2
+    interp_name, kind="u", out="interp", nans=True, num_dep_vars=2
 )
 
 # Apply interpolation function to interpolate salinity and temperature onto the
@@ -285,6 +231,89 @@ if not (s_check and t_check):
         "temperature on surface by interpolating to surface's depth"
     )
 
+
+# In[Approximate b, the integrating factor, from a pair of omega surfaces]
+
+
+def calc_lrpd_z(z):
+    """
+    Calculate ∂(Locally Referenced Potential Density)/dz on the surface `z`,
+    lrpd_z = (ρ_S ∂S/∂z + ρ_Θ ∂Θ/∂z).
+    """
+    z, Snp, Tnp, Znp = (xr_to_np(x) for x in (z, S, T, Z))
+    s, t = interp_two(z, Znp, Snp, Tnp, 0)
+    ds, dt = interp_two(z, Znp, Snp, Tnp, 1)
+    rs, rt = eos_s_t(s, t, z)
+    lrpd_z = rs * ds + rt * dt
+    return lrpd_z
+
+
+def calc_b(z, z2, I0):
+    """
+    Estimate the integrating factor, b, from a pair of surfaces.
+
+    This estimates b from the vertical component of the neutral relation
+    ∇γ = b N, which is approximately true for highly accurate approximately
+    neutral surfaces such as omega surfaces, where N = ρ_S ∇S + ρ_Θ ∇Θ is the
+    dianeutral vector.
+    Thus, we calculate b as
+      b = (∂γ/∂z) / Nz,
+    where Nz = (ρ_S ∂S/∂z + ρ_Θ ∂Θ/∂z)
+    and with the approximation
+      (∂γ/∂z) = Δγ / Δz = Δγ / (z2 - z),
+    where Δγ is the γ density label on the `z2` surface minus that on the `z` surface.
+    We determine Δγ by imposing b = 1 at the reference cast indexed by `I0`, so
+      b = (z2[I0] - z[I0]) * Nz[I0] / ((z2 - z) * Nz)
+    """
+
+    dz = z2 - z
+    lrpd_z = calc_lrpd_z(z)
+    b = (lrpd_z[I0] * dz[I0]) / (lrpd_z * dz)
+    return b
+
+
+def same_valid_casts(z, z2):
+    z, z2 = (xr_to_np(x) for x in (z, z2))
+    return np.all(np.isnan(z) == np.isnan(z2))
+
+
+# Calculate 2nd omega surface that's `ztiny` below the previous one at `pin_cast`.
+# Use the same options as for the previous omega surface, but turn off wetting
+# to help ensure the two omega surfaces will have exactly the same wet casts.
+# Also, using highly converged omega surfaces (eg small TOL_P_CHANGE_RMS) helps
+# the b estimate be smooth.
+ztiny = 1e-2
+if True:
+    # Heave the omega surface rigidly down by an amount `ztiny`
+    z_init = z_omega + ztiny
+else:
+    # Heave the omega surface rigidly if LRPD were the vertical coordinate, so
+    # as to land at a depth `ztiny` deeper at the reference cast.
+    # This is slightly better than the above, but either way, omega_surf will
+    # converge to the same surface
+    lrpd_z = calc_lrpd_z(z_omega)
+    z_init = z_omega + (ztiny * lrpd_z[i0, j0]) / lrpd_z
+
+args = args_omega.copy()
+args.pop("pin_p", None)
+args["p_init"] = z_init
+args["ITER_START_WETTING"] = 99  # greater than ITER_MAX, so no wetting
+s, t, z, d = omega_surf(S, T, Z, **args)
+z_omega_pair = z
+
+if not same_valid_casts(z_omega, z_omega_pair):
+    print(
+        "Warning: pair of surfaces has different valid casts, "
+        "so the estimate of b cannot be trusted. "
+        "Make sure wetting is turned off for the second surface, and try "
+        "reducing the depth difference between the pair of surfaces."
+    )
+
+b = calc_b(z_omega, z_omega_pair, (i0, j0))
+print(
+    "The integrating factor b for the omega surface varies between "
+    f"{np.nanmin(b.values)} and {np.nanmax(b.values)}."
+)
 
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
@@ -385,22 +414,15 @@ def mixedlayer2nan(S, T, Z, z_ml):
 
 mixedlayer2nan(S.values, T.values, Z, z_ml)
 
-
-s, t, z, d = omega_surf(
-    S,
-    T,
-    Z,
-    grid,
-    ref=(None, None),
-    vert_dim="Depth_c",
-    pin_cast=(i0, j0),
-    pin_p=z0,
-    eos=(eos, eos_s_t),
-    interp="pchip",
-    ITER_MAX=10,
-    ITER_START_WETTING=1,
-    TOL_P_SOLVER=1e-5,
-)
+args = opts.copy()
+args["ref"] = (None, None)
+args["pin_cast"] = (i0, j0)
+args["pin_p"] = z0
+args["interp"] = "pchip"
+args["ITER_MAX"] = 10
+args["ITER_START_WETTING"] = 1
+args["TOL_P_SOLVER"] = 1e-5
+s, t, z, d = omega_surf(S, T, Z, **args)
 
 # potential and anomaly surfaces don't take `p_ml` as an argument, since they
 # aren't iterative algorithms, so we can just remove it manually, e.g.
