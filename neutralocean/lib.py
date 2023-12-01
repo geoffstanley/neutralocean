@@ -197,8 +197,10 @@ def _xrs_in(S, T, P, vert_dim):
         pxr = sxr.copy()
         try:
             pxr.attrs.update(P.attrs)
+            pxr.name = P.name
         except:
             pxr.attrs.clear()
+            pxr.name = None
 
     return sxr, txr, pxr
 
