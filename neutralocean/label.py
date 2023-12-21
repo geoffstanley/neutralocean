@@ -3,11 +3,7 @@ import numpy as np
 from .ppinterp import make_pp, ppval_1_two, pval
 from .lib import _process_eos
 
-# CHECK VALUE from MATLAB, with densjmd95 (non-Boussinesq) as the eos:
-# >> S = linspace(34, 35.5, 20)';
-# >> T = linspace(18, 0, 20)';
-# >> P = linspace(0, 4000, 20)';
-# >> veronis_density(0, S, T, P, 0, 2000) % 1027.098197160422
+
 def veronis_density(
     S,
     T,
@@ -25,15 +21,25 @@ def veronis_density(
     Referenced Potential Density
 
     Determines the Veronis density [1]_ [2]_ at vertical position `p1` on a
-    cast with hydrographic properties `(S, T, P)`.  The Veronis density is
+    cast with hydrographic properties `(S, T, P)`. The Veronis density is
     the potential density (referenced to `p_ref`) evaluated at `p0` on the
-    cast, plus the integral (dP) of the vertical (d/dP) derivative of Locally
-    Referenced Potential Density (LRPD) from `P = p0` to `P = p1`.  The
-    vertical (d/dP) derivative of LRPD is `rho_S dS/dP + rho_T dT/dP` where
+    cast, plus the integral (obtained numerically by trapezoidal integration
+    with step sizes of `dP` or less) of the vertical (d/dP) derivative of
+    Locally Referenced Potential Density (LRPD) from `P = p0` to `P = p1`.
+    The vertical (d/dP) derivative of LRPD is `rho_S dS/dP + rho_T dT/dP` where
     `rho_S` and `rho_T` are the partial derivatives of density with respect
     to `S` and `T`, and `dS/dP` and `dT/dP` are the derivatives of `S` and
     `T` with respect to `P` in the water column.  If `p0` or `p1` are outside
     the range of `P`, NaN is returned.
+
+    In common oceanographic mathematical notation, the above is written
+    as (see Equation (A2) in [2]_)
+        ρᵥ(p₁) = ρ(S(p₀), Θ(p₀), p_ref) + ∫ [a dS/dp + b dΘ/dp] dp
+    where the integral goes from p₀ to p₁, and where
+    a(p) = (∂ρ/∂S)(S(p),Θ(p),p) and b(p) = (∂ρ/∂Θ)(S(p),Θ(p),p) are
+    the partial derivatives of the equation of state ρ.
+    Note the Conservative (or potential) Temperature Θ is denoted `T` in the code.
+
 
     Parameters
     ----------
@@ -75,32 +81,47 @@ def veronis_density(
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
-    eos : function
+    eos : str or function, Default 'gsw'
 
-        Equation of state for the density or specific volume as a function of
-        `S`, `T`, and pressure (if non-Boussinesq) or depth (if Boussinesq).
+        The equation of state for the density or specific volume as a function
+        of `S`, `T`, and pressure (if non-Boussinesq) or depth(if Boussinesq).
 
-    eos_s_t : function
+        If a str, can be any of the strings accepted by
+        `neutralocean.eos.tools.make_eos`, 
+        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
 
-        Equation of state for the partial derivatives of density or specific
-        volume with respect to `S` and `T`.  The inputs are `S`, `T`, and
-        pressure (if non-Boussinesq) or depth (if Boussinesq).
+    grav : float, Default None
+        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
+
+    rho_c : float, Default None
+        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
 
     Notes
-    -----
-    The result of this function can serve as a density label for an
-    approximately neutral surface. However, this is NOT the same as a value
-    of the Jackett and McDougall (1997) Neutral Density variable. This is
-    true even if you were to provide this function with the same cast that
-    Jackett and McDougall (1997) used to initially label their Neutral
-    Density variable, namely the cast at 188 deg E, 4 deg S, from the Levitus
-    (1982) ocean atlas. Some difference would remain, because of differences
-    in numerics, and because of a subsequent smoothing step in the Jackett
-    and McDougall (1997) algorithm. This function merely allows one to label
-    an approximately neutral surface with a density value that is INTERNALLY
-    consistent within the dataset where one's surface lives. This function is
-    NOT to compare density values against those from any other dataset, such
-    as 1997 Neutral Density.
+    -----    
+    The Veronis density at a particular pressure / depth on a reference cast can
+    serve as a neutral density label for an approximately neutral surface
+    (such as an omega surface) intersecting that point, and for temporal
+    neutral trajectories through that point, and for other approximately
+    neutral surfaces (such as omega surfaces) intersecting that temporal
+    neutral trajectory. The Veronis density serves as a useful neutral density
+    label in this way because it perfectly represents the stratification in a
+    single vertical cast, but its horizontal variations are not meaningful.
+
+    However, the neutral density label obtained by this Veronis density is NOT
+    the same as a value of the Jackett and McDougall (1997) [3]_ Neutral Density
+    variable. These two values are different even if you were to provide this
+    function with the same cast that Jackett and McDougall (1997) used to
+    initially label their Neutral Density variable, namely the cast at 188
+    deg E, 4 deg S, from the Levitus (1982) ocean atlas. Some difference
+    would remain, because of differences in numerics, and because of a
+    subsequent smoothing step in the Jackett and McDougall (1997) algorithm.
+    This function merely allows one to label an approximately neutral surface
+    with a density value that is INTERNALLY consistent within the dataset
+    where one's surface lives. This function is NOT to compare density values
+    against those from any other dataset, such as 1997 Neutral Density.
+
+    See Appendix A of [2]_ for further information.
+
 
     Examples
     --------
@@ -116,9 +137,13 @@ def veronis_density(
     .. [1] Veronis, G. (1972). On properties of seawater defined by temperature,
        salinity, and pressure. Journal of Marine Research, 30(2), 227.
 
-    .. [2] Stanley, McDougall, Barker 2021, Algorithmic improvements to finding
-       approximately neutral surfaces, Journal of Advances in Earth System
-       Modelling, 13(5).
+    .. [2] Stanley, G. J., McDougall, T. J., & Barker, P. M. (2021). Algorithmic
+       Improvements to Finding Approximately Neutral Surfaces. Journal of
+       Advances in Modeling Earth Systems, 13(5), e2020MS002436.
+
+    .. [3] Jackett, D. R., & McDougall, T. J. (1997). A neutral density variable
+       for the world’s oceans. Journal of Physical Oceanography, 27 (2), 237–263.
+
     """
 
     # assert(all(size(T) == size(S)), 'T must be same size as S')
@@ -209,6 +234,7 @@ def _int_x_k(p, k, dp, P, Sppc, Tppc, eos_s_t):
     return np.trapz(y_, x=p_)
 
 
+# TODO
 # def veronis_label(p_ref, t_ref, S, T, P, p, pin, eos, eos_s_t, dp=1, interpfn=linear_coeffs):
 # 1. Do a temporal neutral_trajectory from (t,i0,j0,p[i0,j0]) to (t_ref,i0,j0,p0)
 # 2. Evaluate veronis density at (t_ref, i0, j0, p0)

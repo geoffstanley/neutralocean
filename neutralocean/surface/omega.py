@@ -232,12 +232,13 @@ def omega_surf(S, T, P, grid, **kwargs):
     -----
     See `potential_surf` Notes.
 
-    .. [1] Stanley, McDougall, Barker 2021, Algorithmic improvements to finding
-       approximately neutral surfaces, Journal of Advances in Earth System
-       Modelling, 13(5).
+    .. [1] Stanley, G. J., McDougall, T. J., & Barker, P. M. (2021). Algorithmic
+       Improvements to Finding Approximately Neutral Surfaces. Journal of
+       Advances in Modeling Earth Systems, 13(5), e2020MS002436.
 
-    .. [2] Klocker, McDougall, Jackett 2009, A new method of forming approximately
-       neutral surfaces, Ocean Science, 5, 155-172.
+    .. [2] Klocker, A., McDougall, T. J., & Jackett, D. R. (2009). A new method
+       for forming approximately neutral surfaces. Ocean Science, 5 (2), 155-172.
+
     """
 
     ref = kwargs.get("ref")
