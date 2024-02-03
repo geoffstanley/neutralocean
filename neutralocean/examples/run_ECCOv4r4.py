@@ -36,22 +36,20 @@ file_ST = (
 )
 
 # Load horizontal grid information
-ds = xr.open_dataset(file_grid)
-XC, YC, dxC, dyC, dyG, dxG = (
-    ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dyG", "dxG")
-)
-ds.close()
+with xr.open_dataset(file_grid) as ds:
+    XC, YC, dxC, dyC, dyG, dxG = (
+        ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dyG", "dxG")
+    )
 
 # Load hydrographic data
-ds = xr.open_dataset(file_ST)
-S, T = (ds[x].squeeze().load() for x in ("SALT", "THETA"))
-
-# Create depth xarray.
-Z = -ds.Z.load()  # Make Z > 0 and increasing down
-Z.attrs.update({"positive": "down"})  # Update attrs to match.
-
-n = len(ds.i)  # size of each horizontal dimension in each square tile
-ds.close()
+with xr.open_dataset(file_ST) as ds:
+    S, T = (ds[x].squeeze().load() for x in ("SALT", "THETA"))
+    
+    # Create depth xarray.
+    Z = -ds.Z.load()  # Make Z > 0 and increasing down
+    Z.attrs.update({"positive": "down"})  # Update attrs to match.
+    
+    n = len(ds.i)  # size of each horizontal dimension in each square tile
 
 # Get order of non-vertical dimensions
 dims = tuple(x for x in S.dims if x != "k")
