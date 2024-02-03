@@ -23,7 +23,7 @@ from neutralocean.lib import (
 from neutralocean.mixed_layer import mixed_layer
 
 
-def omega_surf(S, T, P, grid, **kwargs):
+def omega_surf(S, T, P, grid, **kw):
     """Calculate an omega surface from structured ocean data.
 
     Given 3D salinity, temperature, and pressure or depth data arranged on a
@@ -241,26 +241,26 @@ def omega_surf(S, T, P, grid, **kwargs):
 
     """
 
-    ref = kwargs.get("ref")
-    pin_p = kwargs.get("pin_p")
-    pin_cast = kwargs.get("pin_cast")
-    p_init = kwargs.get("p_init")
-    vert_dim = kwargs.get("vert_dim", -1)
-    p_ml = kwargs.get("p_ml")
-    diags = kwargs.get("diags", True)
-    output = kwargs.get("output", True)
-    eos = kwargs.get("eos", "gsw")
-    rho_c = kwargs.get("rho_c")
-    grav = kwargs.get("grav")
-    ITER_MIN = kwargs.get("ITER_MIN", 1)
-    ITER_MAX = kwargs.get("ITER_MAX", 10)
-    ITER_START_WETTING = kwargs.get("ITER_START_WETTING", 1)
-    ITER_STOP_WETTING = kwargs.get("ITER_STOP_WETTING", 5)
-    TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
-    TOL_LRPD_MAV = kwargs.get("TOL_LRPD_MAV", 1e-7)
-    TOL_P_CHANGE_RMS = kwargs.get("TOL_P_CHANGE_RMS", 0.0)
-    OMEGA_FORMULATION = kwargs.get("OMEGA_FORMULATION", "poisson")
-    interp = kwargs.get("interp", "linear")
+    ref = kw.get("ref")
+    pin_p = kw.get("pin_p")
+    pin_cast = kw.get("pin_cast")
+    p_init = kw.get("p_init")
+    vert_dim = kw.get("vert_dim", -1)
+    p_ml = kw.get("p_ml")
+    diags = kw.get("diags", True)
+    output = kw.get("output", True)
+    eos = kw.get("eos", "gsw")
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    ITER_MIN = kw.get("ITER_MIN", 1)
+    ITER_MAX = kw.get("ITER_MAX", 10)
+    ITER_START_WETTING = kw.get("ITER_START_WETTING", 1)
+    ITER_STOP_WETTING = kw.get("ITER_STOP_WETTING", 5)
+    TOL_P_SOLVER = kw.get("TOL_P_SOLVER", 1e-4)
+    TOL_LRPD_MAV = kw.get("TOL_LRPD_MAV", 1e-7)
+    TOL_P_CHANGE_RMS = kw.get("TOL_P_CHANGE_RMS", 0.0)
+    OMEGA_FORMULATION = kw.get("OMEGA_FORMULATION", "poisson")
+    interp = kw.get("interp", "linear")
 
     # Build function that calculates coefficients of a piecewise polynomial
     # interpolant, doing 1 problem at a time, and knowing there will be no nans
@@ -334,11 +334,11 @@ def omega_surf(S, T, P, grid, **kwargs):
             ans_type = "potential"
 
         # Update arguments with pre-processed values
-        kwargs["vert_dim"] = -1  # Since S, T, P already reordered
-        kwargs["diags"] = False  # Will make our own diags next
-        kwargs["eos"] = eos
-        kwargs["pin_cast"] = pin_cast  # update with the 1D value
-        s, t, p, _ = _isopycnal(ans_type, S, T, P, **kwargs)
+        kw["vert_dim"] = -1  # Since S, T, P already reordered
+        kw["diags"] = False  # Will make our own diags next
+        kw["eos"] = eos
+        kw["pin_cast"] = pin_cast  # update with the 1D value
+        s, t, p, _ = _isopycnal(ans_type, S, T, P, **kw)
 
     else:
         # Handling and error checking on p_init
@@ -365,7 +365,7 @@ def omega_surf(S, T, P, grid, **kwargs):
 
     pin_p = p[pin_cast]
 
-    if np.isnan(p[pin_cast]):
+    if np.isnan(s[pin_cast]):
         raise RuntimeError("The initial surface is NaN at the reference cast.")
 
     if ITER_MAX > 1 and isinstance(p_ml, dict):
