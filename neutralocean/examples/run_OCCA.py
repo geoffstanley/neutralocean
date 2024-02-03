@@ -196,7 +196,7 @@ import numpy as np
 import numba as nb
 from neutralocean.mixed_layer import mixed_layer
 from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
-from neutralocean.label import veronis_density
+from neutralocean.label import veronis
 from neutralocean.lib import _process_casts, xr_to_np
 from neutralocean.ppinterp import make_pp
 from neutralocean.eos import make_eos_p, vectorize_eos
@@ -318,7 +318,7 @@ print(
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
-rho_v = veronis_density(S_ref_cast, T_ref_cast, Z, z0, eos="jmd95")
+rho_v = veronis(z0, S_ref_cast, T_ref_cast, Z, eos="jmd95")
 print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
     f" has Veronis density {rho_v} kg m-3"
