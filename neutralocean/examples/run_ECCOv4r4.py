@@ -16,16 +16,24 @@ from neutralocean.ntp import ntp_epsilon_errors
 # In[Load data]
 
 print(
-    "To get started, download the ECCOv4r4 grid information at\n"
-    "  https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/ECCO_L4_GEOMETRY_LLC0090GRID_V4R4/GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
-    "\nand one day of Salinity and Temperature 3D data at\n"
-    "  https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4/OCEAN_TEMPERATURE_SALINITY_day_mean_2002-12-23_ECCO_V4r4_native_llc0090.nc"
-    "\nYou will have to create an Earthdata Login first.  "
-    "Then edit the below variable, `folder_ecco4`, to point to the directory"
-    " where you saved these two files."
+    """To get started, we need some ECCOv4r4 data. 
+Make an Earthdata Login at
+    https://urs.earthdata.nasa.gov/
+and install "podaac data downloader" following the instructions at
+    https://github.com/podaac/data-subscriber'.
+Run the following commands to download the ECCOv4r4 grid information and
+one day of data:
+    podaac-data-downloader -c ECCO_L4_GEOMETRY_LLC0090GRID_V4R4 -d ./data --start-date 1992-01-01T00:00:00Z --end-date 1992-01-08T00:00:00Z -e ""
+    podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 2002-12-23T00:00:01Z --end-date 2002-12-23T23:59:59Z -e ""
+Finally, edit the variable `folder_ecco4` below to point to the directory where
+you saved these `*.nc` files.
+"""
 )
+# To get the first and last day of data, also run the following 2 lines:
+# podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 1992-01-01T00:00:01Z --end-date 1992-01-01T23:59:59Z -e ""
+# podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 2017-12-31T00:00:01Z --end-date 2017-12-31T23:59:59Z -e ""
 
-folder_ecco4 = expanduser("~/work/data/ECCOv4r4/")  # << EDIT AS NEEDED >>
+folder_ecco4 = expanduser("~/work/data/ECCOv4r4/data")  # << EDIT AS NEEDED >>
 file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
 date = "2002-12-23"
 file_ST = (
@@ -44,11 +52,11 @@ with xr.open_dataset(file_grid) as ds:
 # Load hydrographic data
 with xr.open_dataset(file_ST) as ds:
     S, T = (ds[x].squeeze().load() for x in ("SALT", "THETA"))
-    
+
     # Create depth xarray.
     Z = -ds.Z.load()  # Make Z > 0 and increasing down
     Z.attrs.update({"positive": "down"})  # Update attrs to match.
-    
+
     n = len(ds.i)  # size of each horizontal dimension in each square tile
 
 # Get order of non-vertical dimensions
@@ -191,7 +199,7 @@ ecco.plot_tiles(
 )
 plt.suptitle("z_omega - z_sigma")
 
-plt.savefig("/home/stanley/Fig.png", bbox_inches="tight")
+plt.savefig("depth omega - depth sigma.png", bbox_inches="tight")
 
 # In[Double check neutralocean's grid differencing]
 from xmitgcm import open_mdsdataset
