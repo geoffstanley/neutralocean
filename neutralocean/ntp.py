@@ -110,24 +110,22 @@ def ntp_epsilon_errors_norms(
 
     area = grid["dist"] * grid["distperp"]  # Area [m^2] centred on edges
 
-    # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
-    # Here, weights are `area`.
-    # But also need to divide epsilon by grid distances `dist`.
-    # Thus, the numerator of L2 norm needs to multiply epsilon^2 by
-    #     area / dist^2 = distperp / dist,
-    e_RMS = np.sqrt(
-        np.nansum(grid["distperp"] / grid["dist"] * e**2)
-        / np.sum(area * np.isfinite(e))
-    )
 
+    # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
     # L1 norm of vector [a_i], weighted by vector [w_i], is sum( w_i * |a_i| ) / sum( w_i )
     # Here, weights are `area`.
-    # But also need to divide epsilon by grid distances `dist`.
-    # Thus, the numerator of L1 norm needs to multiply epsilon by
-    #     area ./ dist = distperp ,
-    e_MAV = np.nansum(grid["distperp"] * abs(e)) / np.sum(
-        area * np.isfinite(e)
-    )
+    denom = np.sum(area * np.isfinite(e))
+    if denom == 0.0:
+        # This happens when a surface is one, isolated grid cell.
+        return 0.0, 0.0
+
+    # Still need to divide epsilon by grid distances `dist`.
+    # Thus, the numerator of L2 norm needs to multiply epsilon^2 by
+    #     area / dist^2 = distperp / dist,
+    # and the numerator of L1 norm needs to multiply epsilon by
+    #     area ./ dist = distperp.
+    e_RMS = np.sqrt(np.nansum(grid["distperp"] / grid["dist"] * e**2) / denom)
+    e_MAV = np.nansum(grid["distperp"] * abs(e)) / denom
 
     return e_RMS, e_MAV
 
