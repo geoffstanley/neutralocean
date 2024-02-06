@@ -201,6 +201,12 @@ def _int_dlrpd_dz(p1, p0, P, Sppc, Tppc, dp, eos_s_t):
     ):
         return np.nan
 
+    if p1 >= p0:
+        sgn = 1
+    else:
+        sgn = -1
+        p1, p0 = p0, p1
+
     # P[k0-1] <= p0 <= P[k0]  when  k0 == 1
     # P[k0-1] <  p0 <= P[k0]  when  k0 > 1
     # Similarly for k1.
@@ -218,7 +224,7 @@ def _int_dlrpd_dz(p1, p0, P, Sppc, Tppc, dp, eos_s_t):
     # Integrate from p1 to P[k1], and subtract this
     d1 -= _int_x_k(p1, k1 - 1, dp, P, Sppc, Tppc, eos_s_t)
 
-    return d1
+    return d1 * sgn
 
 
 @nb.njit
