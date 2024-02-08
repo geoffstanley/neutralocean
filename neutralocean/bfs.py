@@ -89,7 +89,7 @@ def bfs_conncomp1_wet(
     Parameters
     ----------
     indptr, indices, root :
-         As in `bfs_conncomp1`
+          As in `bfs_conncomp1`
 
     s, t, p : ndarray
 
@@ -141,7 +141,6 @@ def bfs_conncomp1_wet(
 
     """
 
-    # N, nk = S.shape
     N = S.shape[0]  # Number of nodes (water columns)
 
     qu = np.empty(N, dtype=np.int_)
@@ -153,23 +152,11 @@ def bfs_conncomp1_wet(
     good = np.isfinite(p)  # Good nodes
     dry = ~good  # nodes to try wetting
 
-    # Flatten lateral dimension of inputs to be 1D.  Use reshape() to get a view.
-    # ... removed this!  Should already have been done.
-    # good = np.reshape(good, N)
-    # dry = np.reshape(dry, N)
-    # s = np.reshape(s, N)
-    # t = np.reshape(t, N)
-    # p = np.reshape(p, N)
-    # S = np.reshape(S, (N, nk))
-    # T = np.reshape(T, (N, nk))
-    # P = np.reshape(P, (N, nk))
-    # p_ml = np.reshape(p_ml, -1)  # flatten
-
     if good[root]:
         # Initialize BFS from root node
-        qt += 1  # Add r to queue
+        qt += 1  # Add root to queue
         qu[qt] = root
-        good[root] = False  # mark r as discovered
+        good[root] = False  # mark root as discovered
 
         while qt > qh:
             qh += 1  # advance head of the queue
@@ -200,18 +187,19 @@ def bfs_conncomp1_wet(
                         dry[n] = False
                         continue
 
-                    # Do NTP link from bottle at m to cast at n.
-                    s[n], t[n], p[n] = _ntp_bottle_to_cast(
+                    # Try NTP link from bottle at m to cast at n.
+                    # TODO: impose p[n] <= p_ml[n] here instead of below?
+                    s_, t_, p_ = _ntp_bottle_to_cast(
                         s[m], t[m], p[m], Sn, Tn, Pn, k, K, tol_p, eos, ppc_fn
                     )
 
-                    if np.isfinite(p[n]) and p[n] > p_ml[n]:
+                    if np.isfinite(p_) and p_ > p_ml[n]:
                         # The NTP connection was successful, and its location
                         # on the neighbouring cast is below the mixed layer.
                         qt += 1  # Add n to queue
                         qu[qt] = n
-                        good[n] = False  # mark n as discovered
-                        dry[n] = False
+                        dry[n] = False  # mark n as wet
                         newly_wet += 1  # augment counter of newly wet casts
+                        s[n], t[n], p[n] = s_, t_, p_
 
     return qu[0 : qt + 1], newly_wet
