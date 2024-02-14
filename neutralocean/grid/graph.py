@@ -13,14 +13,15 @@ def graph_binary_fcn(edges, nodevals, binary_fcn):
 
     Parameters
     ----------
-    edges : 2D array of int of shape `(2, E)`
-    
-        The edges in a graph whose nodes are labelled `0, ..., N-1`. 
+    edges : 2D array of shape `(2, E)`, or length 2 tuple of 1D arrays of length `E`
+
+        The edges in a graph whose nodes are labelled `0, ..., N-1`.
         Denoting `a = edges[0]` and `b = edges[1]`,
+        - `a` and `b` are 1D arrays of type int
         - the nodes labelled `a[i]` and `b[i]` are adjacent, for `0 <= i <= E-1`
         - must have `0 <= a[i], b[i] <= N-1` for `0 <= i <= E-1`, so `edges` is
-        referring to valid nodes. 
-        
+        referring to valid nodes.
+
     nodevals : array-like
         values at the nodes in a graph
 
@@ -29,15 +30,12 @@ def graph_binary_fcn(edges, nodevals, binary_fcn):
 
     Notes
     -----
-    
-    `edges` can instead be a tuple of length 2, with each element
-    a tuple of int of length `E`.
     If `edges` is a 2D array of shape `(E, 2)` or is a tuple of length `E`
     with each element a tuple of int of length 2, then one must convert it
     as follows:
-        
+
     >>> edges = numpy.array(edges).transpose()
-    
+
     Returns
     -------
     ev : 1d array
@@ -55,24 +53,26 @@ def graph_binary_fcn(edges, nodevals, binary_fcn):
     return ev
 
 
-def edges_to_graph(edges, N=None, weights=None):
+def edges_to_graph(edges, N=-1, weights=None):
     """
     Convert list of pairs of adjacent nodes into a sparse matrix graph representation
 
     Parameters
     ----------
-    edges : tuple
-        Each element is an array of int of length E, where E is the number of
-        edges in the grid's graph, i.e. the number of pairs of adjacent water
-        columns (including land) in the grid.
-        If `edges = (a, b)`, the nodes (water columns) whose linear indices are
-        `a[i]` and `b[i]` are adjacent.
+    edges : 2D array of shape `(2, E)`, or length 2 tuple of 1D arrays of length `E`
 
-    N : int, Default None
+        The edges in a graph whose nodes are labelled `0, ..., N-1`.
+        Denoting `a = edges[0]` and `b = edges[1]`,
+        - `a` and `b` are 1D arrays of type int
+        - the nodes labelled `a[i]` and `b[i]` are adjacent, for `0 <= i <= E-1`
+        - must have `0 <= a[i], b[i] <= N-1` for `0 <= i <= E-1`, so `edges` is
+        referring to valid nodes.
+
+    N : int, Default -1
         Number of nodes in the graph.
-        If None, the number of nodes is assumed to be the largest value in
-        `edges`, plus one since elements in `edges` are zero-indexed, i.e. nodes
-        are laballed 0, 1, ..., N-1.
+        If -1, the number of nodes is assumed to be the largest value in
+        `edges`, plus one since elements in `edges` are zero-indexed,
+        i.e. nodes are laballed 0, 1, ..., N-1.
 
     weights : array, Default None
         Weights of the edges in the graph.
@@ -86,13 +86,88 @@ def edges_to_graph(edges, N=None, weights=None):
         `edges[0][i] = m` and `edges[1][i] = n`.
     """
     a, b = edges
-    E = len(a)
-    if N is None:
-        N = np.max((np.max(a), np.max(b))) + 1  # assumes no degree 0 nodes.
+    if N < 0:
+        N = max(np.max(a), np.max(b)) + 1  # assumes no degree 0 nodes.
     if weights is None:
-        weights = np.ones(E, dtype=int)
+        weights = np.ones(len(a), dtype=int)
     G = coo_matrix((weights, edges), shape=(N, N))
     return csr_matrix(G + G.T)
+
+
+@nb.njit
+def edges_to_csr(edges, N=-1):
+    """
+    Convert list of pairs of adjacent nodes into a csr matrix graph
+    representation, maintaining the order given in `edges`.
+
+    Parameters
+    ----------
+    edges, N :
+        See `edges_to_graph`.
+
+    Returns
+    -------
+    indices, indptr : array of int
+        Together, these give a CSR representation of the symmetric, sparse,
+        `N` by `N` matrix of the undirected graph.
+        The neighbour nodes of node `m` are `indices[indptr[m] : indptr[m+1]]`.
+
+    Notes
+    -----
+    The array `indices[indptr[m] : indptr[m+1]]` not necessarily sorted in
+    increasing order, as it is when `indices` and `indptr` are these-named
+    attributes in a CSR graph (such as returned by `edges_to_graph`).
+
+    Suppose, for example, that `a, b = edges` is such that `b[i]` is west of
+    `a[i]` for the first ~half and `b[i]` is south of `a[i]` for the second
+    ~half. Then `indices[indptr[m] : indptr[m+1]]` orders the neighbours of `m`
+    as [west, south, north, east] for most nodes `m`, both when `indices` and
+    `indptr` are from this function or from `edges_to_graph`. However, when `m`
+    is just east of the Prime Meridian so that its western neighbour is just
+    west of the Prime Meridian, then `edges_to_graph` gives the neighbours of
+    `m` in the order [south, north, east, west] so that these nodes are sorted
+    in increasing order. In contrast, this function gives the neighbours of `m`
+    in the order [west, south, north, east], consistent with other nodes.
+    """
+    a, b = edges
+    E = len(a)
+    if N < 0:  # not using `N is None` for njit
+        N = max(np.max(a), np.max(b)) + 1  # assumes no degree 0 nodes.
+
+    # Pre-calculate degree of each node
+    deg = np.zeros(N, dtype=np.int_)
+    for i in range(E):
+        deg[a[i]] += 1
+        deg[b[i]] += 1
+    sum_deg = np.sum(deg)
+
+    indptr = np.empty(N + 1, dtype=np.int_)
+    indices = np.empty(sum_deg, dtype=np.int_)
+
+    # indptr is the cumulative sum of deg, i.e.
+    # # indptr[0:-1] = np.cumsum(deg); indptr[-1] = indptr[-2] + deg[-1]
+    indptr[0] = 0
+    for i in range(N):
+        indptr[i + 1] = indptr[i] + deg[i]
+
+    # `ctr[n]` is the index of `indices` at which we'll insert the next
+    # neighbour of node `n`. That is, `ctr[n] - indptr[n]` is the current
+    # number of nodes we've added as neighbours to node `n`.
+    ctr = indptr.copy()
+
+    # Begin accumulating neighbours of each node.
+    for i in range(E):
+        # Add b[i] as a neighbour to n = a[i]
+        n = a[i]
+        indices[ctr[n]] = b[i]
+        ctr[n] += 1
+
+        # Add a[i] as a neighbour to n = b[i]
+        n = b[i]
+        indices[ctr[n]] = a[i]
+        ctr[n] += 1
+
+    return indptr, indices
 
 
 def build_grid(G):

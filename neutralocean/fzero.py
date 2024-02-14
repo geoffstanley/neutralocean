@@ -161,7 +161,9 @@ def guess_to_bounds(f, x, A, B, args=()):
     Parameters
     ----------
     f : function
-        Continuous function of a single variable
+        Continuous function of a single variable. Note `f(x)` should be real
+        valued (no NaN's) on the entire interval `[A, B]`; unexpected behaviour
+        may result otherwise.
     x : float
         Central point for starting the search
     A, B : float
@@ -176,15 +178,11 @@ def guess_to_bounds(f, x, A, B, args=()):
         Lower and upper bounds within which `f(x)` changes sign.
     """
 
-    nan = np.nan
-
     # Check value of f at bounds
-    fa = f(A, *args)
-    if fa == 0.0:
+    if f(A, *args) == 0.0:
         return (A, A)
 
-    fb = f(B, *args)
-    if fb == 0.0:
+    if f(B, *args) == 0.0:
         return (B, B)
 
     x = min(max(x, A), B)
@@ -229,7 +227,7 @@ def guess_to_bounds(f, x, A, B, args=()):
             if fapos != fbpos:  # one last test for sign change
                 return (a, b)
             else:  # no sign change found
-                return (nan, nan)
+                return (np.nan, np.nan)
 
         if b < B:
             # Move b right, and test for a sign change
@@ -242,4 +240,4 @@ def guess_to_bounds(f, x, A, B, args=()):
             if fapos != fbpos:  # one last test for sign change
                 return (a, b)
             else:  # no sign change found
-                return (nan, nan)
+                return (np.nan, np.nan)

@@ -7,8 +7,12 @@ from scipy.sparse.linalg import spsolve
 
 from neutralocean.surface.isopycnal import _isopycnal
 from neutralocean.surface._vertsolve import _make_vertsolve
-from neutralocean.ppinterp import make_pp
-from neutralocean.bfs import bfs_conncomp1, bfs_conncomp1_wet
+from neutralocean.ppinterp import make_pp, valid_range_1_two, ppval_1_two
+from neutralocean.bfs import (
+    bfs_conncomp1,
+    bfs_conncomp1_wet,
+    bfs_conncomp1_wet_perim,
+)
 from neutralocean.grid.graph import edges_to_graph
 from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.lib import (
@@ -42,7 +46,7 @@ def omega_surf(S, T, P, grid, **kw):
 
         See Examples section.
 
-    ref : float, or tuple of float of length 2
+    ref : float, or tuple of float of length 2 or str
 
         If `p_init` is None, the reference value(s) for the initial potential
         density surface or in-situ density (specific volume) anomaly surface
@@ -53,6 +57,14 @@ def omega_surf(S, T, P, grid, **kw):
         and if `ref` is (None, None), then the reference `S` and `T` values
         are taken local to the pinning location (pressure or depth `pin_p` on
         the pinning cast `pin_cast`).
+        
+        The above options are subject to removal in future versions.
+        
+        If `ref == "wet"`, instead of the above, the initial surface is 
+        obtained by repeatedly wetting (via NTP links) the perimeter of the 
+        surface, beginning with just the pinning cast. 
+        This is likely the best method in all circumstances and will become
+        the default option.
 
         See Examples section.
 
@@ -241,7 +253,7 @@ def omega_surf(S, T, P, grid, **kw):
 
     """
 
-    ref = kw.get("ref")
+    ref = kw.get("ref", None)
     pin_p = kw.get("pin_p")
     pin_cast = kw.get("pin_cast")
     p_init = kw.get("p_init")
@@ -260,6 +272,7 @@ def omega_surf(S, T, P, grid, **kw):
     TOL_LRPD_MAV = kw.get("TOL_LRPD_MAV", 1e-7)
     TOL_P_CHANGE_RMS = kw.get("TOL_P_CHANGE_RMS", 0.0)
     OMEGA_FORMULATION = kw.get("OMEGA_FORMULATION", "poisson")
+    WET_PERIM = kw.get("WET_PERIM", True)
     interp = kw.get("interp", "linear")
 
     # Build function that calculates coefficients of a piecewise polynomial
@@ -287,10 +300,35 @@ def omega_surf(S, T, P, grid, **kw):
 
     # Prepare grid ratios for matrix problem.
     distratio = grid["distperp"] / grid["dist"]
+    
+    # Pre-compute mixed layer
+    if isinstance(p_ml, dict):
+        # Compute the mixed layer from parameter inputs
+        p_ml = mixed_layer(S, T, P, eos, **p_ml)
+    if p_ml is None:
+        # Prepare array as needed for bfs_conncomp1_wet
+        p_ml = np.full(surf_shape, -np.inf)
+        # p_ml = np.broadcast_to(-np.inf, (ni, nj))  # DEV: Doesn't work with @numba.njit
+    # Ensure p_ml is 1D array, in case it was given as a 2D array.
+    p_ml = np.reshape(p_ml, -1)
 
     # Pre-calculate grid adjacency needed for Breadth First Search
     edges = grid["edges"]
     graph = edges_to_graph(edges, N)
+    indptr, indices = graph.indptr, graph.indices
+    n_rep = np.iinfo(int).max
+    bfsargs = (
+        indptr,
+        indices,
+        pin_cast,
+        S,
+        T,
+        P,
+        TOL_P_SOLVER,
+        eos,
+        ppc_fn,
+        p_ml,
+    )
 
     if OMEGA_FORMULATION.lower() == "poisson":
         global_solver = _omega_matsolve_poisson
@@ -326,7 +364,29 @@ def omega_surf(S, T, P, grid, **kw):
         d = dict()
 
     timer = time()
-    if p_init is None:
+        
+    if ref == "wet":
+        p = np.full(N, np.nan)
+        s = np.full(N, np.nan)
+        t = np.full(N, np.nan)
+
+        if pin_p is None:
+            raise ValueError("pin_p cannot be None when ref == 'wet'.")
+        p[pin_cast] = pin_p
+        
+        # Interpolate S and T to pin_p at pin_cast
+        S1, T1, P1 = (X[pin_cast] for X in (S, T, P))
+        k, K = valid_range_1_two(P1, S1)
+        S1, T1, P1 = (X[k:K] for X in (S1, T1, P1))
+        Sppc = ppc_fn(P1, S1)
+        Tppc = ppc_fn(P1, T1)
+        s1, t1 = ppval_1_two(pin_p, P1, Sppc, Tppc, 0)
+        s[pin_cast], t[pin_cast] = s1, t1
+
+        # Mutate s, t, p by NTP linking perimeter until convergence.
+        _ = bfs_conncomp1_wet_perim(s, t, p, *bfsargs, n_rep)
+    
+    elif p_init is None:
         # Calculate an initial "potential" or "anomaly" surface
         if isinstance(ref, (tuple, list)) and len(ref) == 2:
             ans_type = "anomaly"
@@ -367,18 +427,6 @@ def omega_surf(S, T, P, grid, **kw):
 
     if np.isnan(s[pin_cast]):
         raise RuntimeError("The initial surface is NaN at the reference cast.")
-
-    if ITER_MAX > 1 and isinstance(p_ml, dict):
-        # Compute the mixed layer from parameter inputs
-        p_ml = mixed_layer(S, T, P, eos, **p_ml)
-
-    if p_ml is None:
-        # Prepare array as needed for bfs_conncomp1_wet
-        p_ml = np.full(p.shape, -np.inf)
-        # p_ml = np.broadcast_to(-np.inf, (ni, nj))  # DEV: Doesn't work with @numba.njit
-    else:
-        # Ensure p_ml is 1D array, in case it was given as a 2D array.
-        p_ml = np.reshape(p_ml, -1)
 
     # ensure same nan structure between s, t, and p. Just in case user gives
     # np.full((ni,nj), 1000) for a 1000dbar isobaric surface, for example
@@ -426,25 +474,15 @@ def omega_surf(S, T, P, grid, **kw):
         # --- Determine the connected component containing the reference cast, via Breadth First Search
         timer_loc = time()
         if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
-            bfsqu, n_newly_wet = bfs_conncomp1_wet(
-                graph.indptr,
-                graph.indices,
-                pin_cast,
-                s,
-                t,
-                p,
-                S,
-                T,
-                P,
-                TOL_P_SOLVER,
-                eos,
-                ppc_fn,
-                p_ml,
-            )
+            if WET_PERIM:
+                n_newly_wet = bfs_conncomp1_wet_perim(s, t, p, *bfsargs, n_rep)
+                qu = np.nonzero(np.isfinite(p))[0]
+            else:
+                qu, n_newly_wet = bfs_conncomp1_wet(s, t, p, *bfsargs)
+                qu = np.sort(qu)
         else:
-            bfsqu = bfs_conncomp1(
-                graph.indptr, graph.indices, pin_cast, np.isfinite(p)
-            )
+            qu = bfs_conncomp1(indptr, indices, pin_cast, np.isfinite(p))
+            qu = np.sort(qu)
             n_newly_wet = 0
         timer_bfs = time() - timer_loc
 
@@ -452,8 +490,7 @@ def omega_surf(S, T, P, grid, **kw):
         timer_loc = time()
         # Pre-sort the BFS queue: tests in both MATLAB and Python on OCCA data
         # show this gives an overall speedup for both Poisson and Gradient formulations.
-        bfsqu = np.sort(bfsqu)
-        ϕ = global_solver(s, t, p, edges, distratio, bfsqu, pin_cast, eos_s_t)
+        ϕ = global_solver(s, t, p, edges, distratio, qu, pin_cast, eos_s_t)
         timer_mat = time() - timer_loc
 
         # --- Update the surface (mutating s, t, p by vertsolve)
@@ -477,7 +514,6 @@ def omega_surf(S, T, P, grid, **kw):
             Δp_RMS = np.sqrt(np.nanmean(Δp**2))
 
         if diags:
-
             d["timer"][iter_] = time() - timer
 
             Δp_MAV = np.nanmean(abs(Δp))

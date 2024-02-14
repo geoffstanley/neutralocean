@@ -56,10 +56,10 @@ def _vertsolve(S, T, P, ref, d0, tol_p, eos, ppc_fn, zero_func):
         if K - k > 1:
 
             Pn = Pn[k:K]
-            Sppcn = ppc_fn(Pn, Sn[k:K])
-            Tppcn = ppc_fn(Pn, Tn[k:K])
+            Sppc = ppc_fn(Pn, Sn[k:K])
+            Tppc = ppc_fn(Pn, Tn[k:K])
 
-            args = (Sppcn, Tppcn, Pn, ref, d0, eos)
+            args = (Pn, Sppc, Tppc, ref, d0, eos)
 
             # Use mid-pressure as initial guess
             pn = (Pn[0] + Pn[-1]) * 0.5
@@ -73,7 +73,7 @@ def _vertsolve(S, T, P, ref, d0, tol_p, eos, ppc_fn, zero_func):
                 p[n] = brent(zero_func, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = ppval_1_nonan_two(p[n], Pn, Sppcn, Tppcn, 0)
+                s[n], t[n] = ppval_1_nonan_two(p[n], Pn, Sppc, Tppc, 0)
 
     return s, t, p
 
@@ -99,8 +99,8 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
             Pn = Pn[k:K]
 
             # Build interpolant's coefficients for this water column
-            Sppcn = ppc_fn(Pn, Sn[k:K])
-            Tppcn = ppc_fn(Pn, Tn[k:K])
+            Sppc = ppc_fn(Pn, Sn[k:K])
+            Tppc = ppc_fn(Pn, Tn[k:K])
 
             # Evaluate difference between
             # (a) eos at location on the cast where the pressure or depth is p, and
@@ -109,7 +109,7 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
             # Part (b) is precomputed.  Here, eos always evaluated at the
             # pressure or depth of the original position, pn, i.e. we calculate
             # locally referenced potential density.
-            args = (Sppcn, Tppcn, Pn, pn, eos(s[n], t[n], pn) + ϕn, eos)
+            args = (Pn, Sppc, Tppc, pn, eos(s[n], t[n], pn) + ϕn, eos)
 
             # Search for a sign-change, expanding outward from an initial guess
             lb, ub = guess_to_bounds(_zero_potential, pn, Pn[0], Pn[-1], args)
@@ -120,7 +120,7 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
                 p[n] = brent(_zero_potential, lb, ub, tol_p, args)
 
                 # Interpolate S and T onto the updated surface
-                s[n], t[n] = ppval_1_nonan_two(p[n], Pn, Sppcn, Tppcn)
+                s[n], t[n] = ppval_1_nonan_two(p[n], Pn, Sppc, Tppc)
 
             else:
                 # Ensure s,t,p all have the same nan structure
@@ -135,14 +135,14 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
 
 
 @nb.njit
-def _zero_potential(p, Sppc, Tppc, P, ref_p, isoval, eos):
+def _zero_potential(p, P, Sppc, Tppc, ref_p, isoval, eos):
     # Evaluate the potential density in a given cast, minus a given isovalue
     s, t = ppval_1_nonan_two(p, P, Sppc, Tppc, 0)
     return eos(s, t, ref_p) - isoval
 
 
 @nb.njit
-def _zero_anomaly(p, Sppc, Tppc, P, ref, isoval, eos):
+def _zero_anomaly(p, P, Sppc, Tppc, ref, isoval, eos):
     # Evaluate the specific volume (or in-situ density) anomaly in a given cast,
     # minus a given isovalue
     s, t = ppval_1_nonan_two(p, P, Sppc, Tppc)

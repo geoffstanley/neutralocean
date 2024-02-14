@@ -131,26 +131,6 @@ def ntp_epsilon_errors_norms(
 
 
 @nb.njit
-def avg1(a, b):
-    return (a + b) * 0.5
-
-
-@nb.njit
-def dif1(a, b):
-    return b - a
-
-
-@nb.njit
-def arg1(a, b):
-    return a
-
-
-@nb.njit
-def arg2(a, b):
-    return b
-
-
-@nb.njit
 def _ntp_epsilon_error1(s, t, p, a, b, eos_s_t):
     e = np.empty(len(a), dtype=s.dtype)
     for i in range(len(a)):

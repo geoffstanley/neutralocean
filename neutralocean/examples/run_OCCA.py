@@ -142,6 +142,7 @@ print(
 args = opts.copy()
 args["pin_cast"] = (i0, j0)
 args["pin_p"] = z0
+args["ref"] = None
 s, t, z, d = omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"

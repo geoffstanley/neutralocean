@@ -11,11 +11,11 @@ from neutralocean.lib import _process_casts
 
 
 @nb.njit
-def _func(p, sB, tB, pB, Sppc, Tppc, P, eos):
+def _pot_dens_diff(p, sB, tB, pB, P, Sppc, Tppc, eos):
     # Evaluate difference between (a) eos at location on the cast (S, T, P)
-    # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB)
-    # here, eos is always evaluated at the average pressure or depth, (p +
-    # pB)/2.
+    # where the pressure or depth is p, and (b) eos of the bottle (sB, tB, pB).
+    # Here, eos is always evaluated at the average pressure or depth,
+    # (p + pB)/2.
     s, t = ppval_1_nonan_two(p, P, Sppc, Tppc)
     p_avg = (pB + p) * 0.5
     return eos(sB, tB, p_avg) - eos(s, t, p_avg)
@@ -85,7 +85,7 @@ def ntp_bottle_to_cast(
         of `S`, `T`, and pressure (if non-Boussinesq) or depth(if Boussinesq).
 
         If a str, can be any of the strings accepted by
-        `neutralocean.eos.tools.make_eos`, 
+        `neutralocean.eos.tools.make_eos`,
         e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
 
         If a function, this should be `@numba.njit` decorated and need not be
@@ -114,7 +114,7 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
     Parameters
     ----------
     sB, tB, pB, S, T, P, tol_p : float
-        See `ntp_bottle_to_cast`
+        See `ntp_bottle_to_cast`. Note that `S`, `T`, `P` should have no NaNs.
 
     k, K : int
         `k` is the index to the first finite value in `S + P`.
@@ -137,36 +137,63 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
     Returns
     -------
     s, t, p : float
-        See ntp_bottle_to_cast
+        See `ntp_bottle_to_cast`
     """
 
     if K - k > 1:
-
-        # Trim data to valid range and build interpolant
+        # Trim data to valid range and build interpolants
         P = P[k:K]
         Sppc = ppc_fn(P, S[k:K])
         Tppc = ppc_fn(P, T[k:K])
 
-        args = (sB, tB, pB, Sppc, Tppc, P, eos)
-
-        # Search for a sign-change, expanding outward from an initial guess
-        lb, ub = guess_to_bounds(_func, pB, P[0], P[-1], args)
-
-        if np.isfinite(lb):
-            # A sign change was discovered, so a root exists in the interval.
-            # Solve the nonlinear root-finding problem using Brent's method
-            p = brent(_func, lb, ub, tol_p, args)
-
-            # Interpolate S and T onto the updated surface
+        # return _ntp_bottle_to_cast_ppc(tol_p, sB, tB, pB, P, Sppc, Tppc, eos)
+        p = _ntp_bottle_to_cast_ppc(tol_p, sB, tB, pB, P, Sppc, Tppc, eos)
+        if np.isfinite(p):
             s, t = ppval_1_nonan_two(p, P, Sppc, Tppc)
-
         else:
-            s, t, p = np.nan, np.nan, np.nan
+            s, t = np.nan, np.nan
 
     else:  # K - k <= 1, so at most one valid data site. Can't interpolate that.
         s, t, p = np.nan, np.nan, np.nan
 
     return s, t, p
+
+
+@nb.njit
+def _ntp_bottle_to_cast_ppc(tol_p, sB, tB, pB, P, Sppc, Tppc, eos):
+    """Fast version of `ntp_bottle_to_cast`, with pre-built interpolants.
+
+    Parameters
+    ----------
+    sB, tB, pB, P, tol_p, eos :
+        See `_ntp_bottle_to_cast`
+    Sppc, Tppc : ndarray
+        Piecewise Polynomial Coefficients for `S` and `T` of `_ntp_bottle_to_cast`.
+
+    Returns
+    -------
+    p : float
+        See `ntp_bottle_to_cast`
+    """
+
+    args = (sB, tB, pB, P, Sppc, Tppc, eos)
+
+    # Search for a sign-change, expanding outward from an initial guess
+    lb, ub = guess_to_bounds(_pot_dens_diff, pB, P[0], P[-1], args)
+
+    if np.isfinite(lb):
+        # A sign change was discovered, so a root exists in the interval.
+        # Solve the nonlinear root-finding problem using Brent's method
+        return brent(_pot_dens_diff, lb, ub, tol_p, args)
+
+        # Interpolate S and T onto the updated surface
+        # s, t = ppval_1_nonan_two(p, P, Sppc, Tppc)
+
+    else:
+        # s, t, p = np.nan, np.nan, np.nan
+        return np.nan
+
+    # return s, t, p
 
 
 def neutral_trajectory(
@@ -223,7 +250,7 @@ def neutral_trajectory(
 
         Ideally, `vert_dim` is -1.  See `Notes` in `potential_surf`.
 
-    tol_p, interp, eos, grav, rho_c : 
+    tol_p, interp, eos, grav, rho_c :
 
         See `ntp_bottle_to_cast`
 
@@ -243,7 +270,6 @@ def neutral_trajectory(
 
     # Loop over casts
     for c in range(0, nc):
-
         Sc = S[c, :]
         Tc = T[c, :]
         Pc = P[c, :]
@@ -256,7 +282,6 @@ def neutral_trajectory(
             s[0], t[0] = ppval_1_nonan_two(p0, Pc[k:K], Sppc, Tppc)
             p[0] = p0
         else:
-
             # Make a neutral connection from previous bottle to the cast (S[c,:], T[c,:], P[c,:])
             s[c], t[c], p[c] = _ntp_bottle_to_cast(
                 s[c - 1],
