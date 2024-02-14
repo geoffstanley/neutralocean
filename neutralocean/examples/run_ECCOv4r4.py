@@ -10,6 +10,7 @@ from neutralocean.eos import make_eos, make_eos_s_t
 # Functions to compute various approximately neutral surfaces
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 
+from neutralocean.stability import stabilize_ST
 from neutralocean.grid.xgcm import build_grid, edgedata_to_maps
 from neutralocean.ntp import ntp_epsilon_errors
 
@@ -33,7 +34,7 @@ you saved these `*.nc` files.
 # podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 1992-01-01T00:00:01Z --end-date 1992-01-01T23:59:59Z -e ""
 # podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 2017-12-31T00:00:01Z --end-date 2017-12-31T23:59:59Z -e ""
 
-folder_ecco4 = expanduser("~/work/data/ECCOv4r4/data")  # << EDIT AS NEEDED >>
+folder_ecco4 = expanduser("~/work/data/ECCOv4r4/data/")  # << EDIT AS NEEDED >>
 file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
 date = "2002-12-23"
 file_ST = (
@@ -111,6 +112,10 @@ grav, rho_c = 9.81, 1027.5
 eos = make_eos("jmd95", grav, rho_c)
 eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
 
+
+# Stabilize hydrographic casts
+stabilize_ST(S, T, Z, eos, verbose=False)  # about 1 min
+
 # Select pinning cast, picking the cast closest to (x0,y0)
 x0, y0 = (-172, -4)  # longitude, latitude -- Pacific equatorial ocean
 pin_cast = np.unravel_index(
@@ -120,12 +125,12 @@ z0 = 1500.0  # pinning depth
 
 # In[Build approximately neutral surfaces]
 
-# Build potential density surface, with given reference pressure (actually depth,
-# for Boussinesq) and given isovalue.  No diagnostics requested, so info about
-# the grid is not needed (no `edges` and `geoemtry` provided), and also eos_s_t
-# is not needed.
+# Build potential density surface, through depth z0 at cast pin_cast; the
+# reference depth is z0 also.
+# No diagnostics requested, so info about the grid is not needed (no `edges`
+# and `geoemtry` provided), and also eos_s_t is not needed.
 s, t, z, _ = potential_surf(
-    S, T, Z, eos=eos, vert_dim="k", ref=0.0, isoval=1027.5, diags=False
+    S, T, Z, eos=eos, vert_dim="k", pin_p=z0, pin_cast=pin_cast, diags=False
 )
 z_sigma = z
 
@@ -145,21 +150,18 @@ s, t, z, d = anomaly_surf(
     isoval=0.0,
 )
 
-# Build an omega surface that is initialized from the above potential density
-# surface and is pinned at the cast `pin_cast` (i.e. the omega surface will have
-# the same depth as the initializing potential density surface at this cast).
+# Build an omega surface that is initialized by iteratively making Neutral
+# Tangent Plane links outwards from the pinning cast.
 s, t, z, d = omega_surf(
     S,
     T,
     Z,
     grid=grid,
-    vert_dim="k",
-    p_init=z_sigma,
     pin_cast=pin_cast,
+    p_init=z0,
+    vert_dim="k",
     eos=(eos, eos_s_t),
     interp="pchip",
-    ITER_MAX=10,
-    ITER_START_WETTING=1,
 )
 z_omega = z
 
@@ -199,7 +201,7 @@ ecco.plot_tiles(
 )
 plt.suptitle("z_omega - z_sigma")
 
-plt.savefig("depth omega - depth sigma.png", bbox_inches="tight")
+# plt.savefig("depth omega - depth sigma.png", bbox_inches="tight")
 
 # In[Double check neutralocean's grid differencing]
 from xmitgcm import open_mdsdataset

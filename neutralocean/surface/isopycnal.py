@@ -47,7 +47,7 @@ def potential_surf(S, T, P, **kwargs):
 
     ref : float
 
-        The reference pressure or depth, in the same units as P.
+        The reference pressure or depth, in the same units as `P`.
 
         If `ref` is None, the reference value is taken as `pin_p`.
 

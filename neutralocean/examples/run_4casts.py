@@ -111,9 +111,9 @@ print(
 )
 
 
-# omega-surface, initialized by a potential density surface, pinning the surface
-# to be 1500dbar on cast 0.
-s, t, p, d = omega_surf(S, T, P, grid, pin_cast=0, pin_p=1500.0, eos="gsw")
+# omega-surface, pinned to be 1500dbar on cast 0, initialized by iteratively 
+# making Neutral Tangent Plane links from cast 0.
+s, t, p, d = omega_surf(S, T, P, grid, pin_cast=0, p_init=1500.0, eos="gsw")
 print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to 1500 dbar)"
