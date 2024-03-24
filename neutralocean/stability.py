@@ -89,9 +89,8 @@ def stabilize_ST(S, T, P, eos, **kw):
         Equation of state for density (not specific volume).
 
         Takes three inputs corresponding to `S`, `T`, and `P`, and outputs the
-        density or specific volume. It should be `@numba.njit` decorated and
-        need not be vectorized -- it will be called many times with scalar
-        inputs.
+        density. It should be `@numba.njit` decorated and need not be 
+        vectorized -- it will be called many times with scalar inputs.
 
     min_dLRPDdp : float or 1D array of float, Default 1e-6
 
@@ -104,8 +103,9 @@ def stabilize_ST(S, T, P, eos, **kw):
     weight : float, Default 10.0
 
         Multiplicative weighting factor applied to `S` perturbations, but not
-        to `T` perturbations. When `weight > 1`, `T` perturbations are favoured 
-        over `S` perturbations.
+        to `T` perturbations. 
+        When `weight > 1`, `T` perturbations are favoured.
+        When `weight < 1`, `S` perturbations are favoured.
 
     vert_dim : int or str
 
@@ -129,6 +129,10 @@ def stabilize_ST(S, T, P, eos, **kw):
 
         Minimization method, passed to scipy's `minimize`.
         
+    options : dict, Default {"maxiter" : 1000}
+    
+        Options passed to the `options` argument of `minimize`.
+        
     verbose : bool, Default True
     
         Whether to print information any time a cast is mutated.
@@ -145,12 +149,13 @@ def stabilize_ST(S, T, P, eos, **kw):
 
     """
 
-    min_dLRPDdp = kw.get("min_dLRPDdp", 1e-6)  # or N^2 >= 1e-8, roughly
-    weight = kw.get("weight", 10.0)  # crude approximation of |dρ/dS / dρ/dΘ|
-    vert_dim = kw.get("vert_dim", -1)
-    tol = kw.get("tol", 1e-10)
-    method = kw.get("method", "SLSQP")
-    verbose = kw.get("verbose", True)
+    min_dLRPDdp = kw.pop("min_dLRPDdp", 1e-6)  # or N^2 >= 1e-8, roughly
+    weight = kw.pop("weight", 10.0)  # crude approximation of |dρ/dS / dρ/dΘ|
+    vert_dim = kw.pop("vert_dim", -1)
+    tol = kw.pop("tol", 1e-10)
+    method = kw.pop("method", "SLSQP")
+    verbose = kw.pop("verbose", True)
+    options = kw.pop("options", {"maxiter" : 1000})
 
     S, T, P = _process_casts(S, T, P, vert_dim)
 
@@ -164,9 +169,9 @@ def stabilize_ST(S, T, P, eos, **kw):
         # Sum of squares of Δx, weighting the first half.
         # Expects len(Δx) is an even int
         n = len(Δx) // 2
-        Δs = Δx[0:n]
-        Δt = Δx[n:]
-        return np.sum(w * Δs * Δs + Δt * Δt)
+        ΔS = Δx[0:n]
+        ΔT = Δx[n:]
+        return np.sum(w * ΔS * ΔS + ΔT * ΔT)
 
     def jac(Δx, w):
         # Jacobian of f
@@ -213,18 +218,19 @@ def stabilize_ST(S, T, P, eos, **kw):
                 constraints=con,
                 method=method,
                 tol=tol,
+                options=options,
             )
             if res.success:
-                Δs = res.x[0:n]
-                Δt = res.x[n:]
-                S[c][k:K] += Δs
-                T[c][k:K] += Δt
+                ΔS = res.x[0:n]
+                ΔT = res.x[n:]
+                S[c][k:K] += ΔS
+                T[c][k:K] += ΔT
             else:
                 raise RuntimeError(f"Cast {c} stabilization failed.")
 
             if verbose:
                 print(
-                    f"Perturbed cast {c} by weighted RMS amount f(Δx, weight) = {f(res.x, weight)}"
+                    f"Perturbed cast {c} by weighted RMS amount {f(res.x, weight)}"
                 )
 
 
