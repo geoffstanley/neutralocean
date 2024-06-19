@@ -386,17 +386,17 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
         timer_loc = time()
         if iter_ >= ITER_START_WETTING and iter_ <= ITER_STOP_WETTING:
             n_newly_wet = bfs_conncomp1_wet_perim(s, t, p, *bfsargs)
-            qu = np.nonzero(np.isfinite(p))[0]
+            qu = np.nonzero(np.isfinite(p))[0]  # sorted
         else:
             qu = bfs_conncomp1(indptr, indices, pin_c, np.isfinite(p))
+            # Pre-sort the BFS queue: tests in both MATLAB and Python on OCCA data
+            # show this gives an overall speedup for both Poisson and Gradient formulations.
             qu = np.sort(qu)
             n_newly_wet = 0
         timer_bfs = time() - timer_loc
 
         # --- Solve global matrix problem for the exactly determined Poisson equation
         timer_loc = time()
-        # Pre-sort the BFS queue: tests in both MATLAB and Python on OCCA data
-        # show this gives an overall speedup for both Poisson and Gradient formulations.
         ϕ = global_solver(s, t, p, edges, distratio, qu, pin_c, eos_s_t)
         timer_mat = time() - timer_loc
 
