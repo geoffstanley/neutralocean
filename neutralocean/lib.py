@@ -4,7 +4,7 @@ import numpy as np
 import numba as nb
 import xarray as xr
 
-from .eos import make_eos, make_eos_s_t
+from .eos import load_eos
 
 
 @nb.njit
@@ -341,8 +341,8 @@ def _process_eos(eos, grav=None, rho_c=None, need_s_t=False):
     eos_s_t = None
     if isinstance(eos, str):
         if need_s_t:
-            eos_s_t = make_eos_s_t(eos, grav, rho_c)
-        eos = make_eos(eos, grav, rho_c)
+            eos_s_t = load_eos(eos, "_s_t", grav, rho_c)
+        eos = load_eos(eos, grav, rho_c)
     else:
         if need_s_t:
             if isinstance(eos, (tuple, list)) and len(eos) == 2:

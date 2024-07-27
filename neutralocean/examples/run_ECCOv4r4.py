@@ -5,7 +5,7 @@ import xarray as xr
 from os.path import expanduser
 
 # Functions to make the Equation of State
-from neutralocean.eos import make_eos, make_eos_s_t
+from neutralocean.eos import load_eos
 
 # Functions to compute various approximately neutral surfaces
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
@@ -109,8 +109,8 @@ grid = build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dyG, dxG)
 #  and its partial derivatives.
 # TODO: is this what ECCOv4r4 used?
 grav, rho_c = 9.81, 1027.5
-eos = make_eos("jmd95", grav, rho_c)
-eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
+eos = load_eos("jmd95", "", grav, rho_c)
+eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 
 
 # Stabilize hydrographic casts

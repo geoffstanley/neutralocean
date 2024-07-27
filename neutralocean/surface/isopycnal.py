@@ -171,9 +171,9 @@ def potential_surf(S, T, P, **kwargs):
         If a function, must take three inputs corresponding to `S`, `T`, and
         `P`, and output the density (or specific volume).  This form is not
         allowed when `diags` is `True`.  This can be made as, e.g.,
-        `eos = neutralocean.eos.make_eos('gsw')`
+        `eos = neutralocean.eos.load_eos('gsw')`
         for a non-Boussinesq ocean, or as
-        `eos = neutralocean.eos.make_eos('gsw', grav, rho_c)`
+        `eos = neutralocean.eos.load_eos('gsw', grav, rho_c)`
         for a Boussinesq ocean with `grav` and `rho_c` (see inputs below).
 
         If a tuple of functions, the first element must be a function for the
@@ -181,7 +181,7 @@ def potential_surf(S, T, P, **kwargs):
         taking the same three inputs as above and returning two outputs, namely
         the partial derivatives of the equation of state with respect to `S`
         and `T`.  The second element can be made as, e.g.,
-        `eos_s_t = neutralocean.eos.make_eos_s_t('gsw', grav, rho_c)`
+        `eos_s_t = neutralocean.eos.load_eos('gsw', '_s_t', grav, rho_c)`
 
         The function (or the first element of the tuple of functions) should be
         `@numba.njit` decorated and need not be vectorized -- it will be called

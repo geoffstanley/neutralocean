@@ -69,7 +69,7 @@ epsln = 1.0e-40
 
 
 @nb.njit
-def rho(s, t, p):
+def rho(s, t, p, pfac=1.0):
     """
     Parameters
     ----------
@@ -87,6 +87,7 @@ def rho(s, t, p):
     """
 
     # Precompute some commonly used terms
+    p *= pfac
     t2 = t * t
 
     # Rational function for density
@@ -109,7 +110,7 @@ def rho(s, t, p):
 
 
 @nb.njit
-def rho_s_t(s, t, p):
+def rho_s_t(s, t, p, pfac=1.0):
     """
     Parameters
     ----------
@@ -130,6 +131,7 @@ def rho_s_t(s, t, p):
     """
 
     # Precompute some commonly used terms
+    p *= pfac
     t2 = t * t
     sp5 = np.sqrt(s)
     pt = p * t
@@ -180,8 +182,8 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
-@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
-def rho_p(s, t, p):
+@nb.njit
+def rho_p(s, t, p, pfac=1.0):
     """
     Parameters
     ----------
@@ -199,6 +201,7 @@ def rho_p(s, t, p):
     """
 
     # Precompute some commonly used terms
+    p *= pfac
     t2 = t * t
 
     # Rational function for density

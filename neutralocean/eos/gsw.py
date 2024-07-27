@@ -1,5 +1,5 @@
 """
-Density of Sea Water using TEOS-10 Gibbs Sea Water [1]_ in pure Python
+Specific Volume using 75-term polyTEOS10-75t [1]_ approximation to the TEOS-10 Gibbs Sea Water standard [2]_
 
 Functions:
 
@@ -26,8 +26,15 @@ specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp :: compute variou
 
 
 Notes:
-To make Boussinesq versions of these functions, see 
-`neutralocean.eos.tools.make_eos_bsq`.
+In the Boussinesq approximation, the third argument is not pressure but depth,
+and a fourth argument `pfac` is required with the value
+`1e-8 * grav * rho_c`
+where `grav` is the gravitational acceleration [m.s-2] and `rho_c` is the 
+Boussinesq reference density [kg.m-3]. Note the factor `1e-8` here is the 
+product of `1e-4` which is the multiplicative scaling applied to pressure
+in the non-Boussinesq version of this function (the default value of `pfac`)
+and another `1e-4` [dbar . Pa-1] to convert the hydrostatic pressure from Pa
+to dbar.
 
 To make vectorized versions of these functions, see
 `neutralocean.eos.tools.vectorize_eos`.
@@ -91,7 +98,11 @@ All functions here are derived from `gsw_specvol`, documented below.
     # 
     #==========================================================================
 
-.. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
+.. [1] Roquet, F., G. Madec, T.J. McDougall, P.M. Barker, 2015: Accurate
+       polynomial expressions for the density and specifc volume of seawater
+       using the TEOS-10 standard. Ocean Modelling., 90, pp. 29-43.
+
+.. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
        the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
        ISBN 978-0-646-55621-5. 
 """
@@ -129,9 +140,8 @@ import numpy as np
 import numba as nb
 
 tfac = 0.025
-pfac = 1e-4
 
-# sfac = 1/(40*(35.16504/35))
+# sfac is very nearly 1/(40*(35.16504/35))
 sfac = 0.0248826675584615
 
 # deltaSA = 24 g/kg, offset = deltaSA*sfac
@@ -221,7 +231,7 @@ v600 =  3.1932457305e-5
 # for scalars is about twice as fast as a signatureless njit'ed function
 # applied to ndarrays.
 @nb.njit
-def specvol(SA, CT, p):
+def specvol(SA, CT, p, pfac=1e-4):
     """
     GSW specific volume.
 
@@ -239,12 +249,12 @@ def specvol(SA, CT, p):
     specvol : float
         Specific volume [m3 kg-1]
     """
-    (x, y, z, _) = _process(SA, CT, p)
+    (x, y, z, _) = _process(SA, CT, p, pfac)
     return _specvol(x, y, z)
 
 
 @nb.njit
-def specvol_first_derivs(SA, CT, p):
+def specvol_first_derivs(SA, CT, p, pfac=1e-4):
     """
     Calculate all first order partial derivatives of GSW specific volume
 
@@ -263,16 +273,16 @@ def specvol_first_derivs(SA, CT, p):
         Partial derivatives of specific volume.
     """
 
-    (x, y, z, _) = _process(SA, CT, p)
+    (x, y, z, _) = _process(SA, CT, p, pfac)
     s = _s(x, y, z)
     t = _t(x, y, z)
-    p = _p(x, y, z)
+    p = _p(x, y, z, pfac)
 
     return (s, t, p)
 
 
 @nb.njit
-def specvol_second_derivs(SA, CT, p):
+def specvol_second_derivs(SA, CT, p, pfac=1e-4):
     """
     Calculate all second order partial derivatives of GSW specific volume
 
@@ -291,20 +301,20 @@ def specvol_second_derivs(SA, CT, p):
         Partial derivatives of specific volume.
     """
 
-    (x, y, z, x2) = _process(SA, CT, p)
+    (x, y, z, x2) = _process(SA, CT, p, pfac)
 
     ss = _ss(x, y, z, x2)
     st = _st(x, y, z)
     tt = _tt(x, y, z)
-    sp = _sp(x, y, z)
-    tp = _tp(x, y, z)
-    pp = _pp(x, y, z)
+    sp = _sp(x, y, z, pfac)
+    tp = _tp(x, y, z, pfac)
+    pp = _pp(x, y, z, pfac)
 
     return (ss, st, tt, sp, tp, pp)
 
 
 @nb.njit
-def specvol_third_derivs(SA, CT, p):
+def specvol_third_derivs(SA, CT, p, pfac=1e-4):
     """
     Calculate all third order partial derivatives of GSW specific volume
 
@@ -323,24 +333,24 @@ def specvol_third_derivs(SA, CT, p):
         Partial derivatives of specific volume.
     """
 
-    (x, y, z, x2) = _process(SA, CT, p)
+    (x, y, z, x2) = _process(SA, CT, p, pfac)
 
     sss = _sss(x, y, z, x2)
     sst = _sst(x, y, z, x2)
     stt = _stt(x, y, z)
     ttt = _ttt(x, y, z)
-    ssp = _ssp(x, y, z, x2)
-    stp = _stp(x, y, z)
-    ttp = _ttp(x, y, z)
-    spp = _spp(x, y, z)
-    tpp = _tpp(x, y, z)
-    ppp = _ppp(x, y, z)
+    ssp = _ssp(x, y, z, x2, pfac)
+    stp = _stp(x, y, z, pfac)
+    ttp = _ttp(x, y, z, pfac)
+    spp = _spp(x, y, z, pfac)
+    tpp = _tpp(x, y, z, pfac)
+    ppp = _ppp(x, y, z, pfac)
 
     return (sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp, ppp)
 
 
 @nb.njit
-def specvol_s_t(SA, CT, p):
+def specvol_s_t(SA, CT, p, pfac=1e-4):
     """
     Partial derivatives of GSW specific volume with respect to salinity & temperature
 
@@ -361,7 +371,7 @@ def specvol_s_t(SA, CT, p):
     t : float
         Partial deriv of specific volume w.r.t. CT [m3 kg-1 / (deg C)]
     """
-    (x, y, z, _) = _process(SA, CT, p)
+    (x, y, z, _) = _process(SA, CT, p, pfac)
     s = _s(x, y, z)
     t = _t(x, y, z)
 
@@ -369,7 +379,7 @@ def specvol_s_t(SA, CT, p):
 
 
 @nb.njit
-def specvol_p(SA, CT, p):
+def specvol_p(SA, CT, p, pfac=1e-4):
     """
     Partial derivative of GSW specific volume with respect to pressure
 
@@ -387,12 +397,12 @@ def specvol_p(SA, CT, p):
     p : float
         Partial deriv of specific volume w.r.t. p [m3 kg-1 / (dbar)]
     """
-    (x, y, z, _) = _process(SA, CT, p)
-    return _p(x, y, z)
+    (x, y, z, _) = _process(SA, CT, p, pfac)
+    return _p(x, y, z, pfac)
 
 
 @nb.njit
-def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p):
+def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p, pfac=1e-4):
     """
     Select partial derivatives of GSW specific volume up to second order
 
@@ -411,20 +421,20 @@ def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p):
         Partial derivatives of specific volume w.r.t. `SA`, `CT`, `SA*SA`, `SA*CT`, `CT*CT`,
         `SA*p`, `CT*p`.
     """
-    (x, y, z, x2) = _process(SA, CT, p)
+    (x, y, z, x2) = _process(SA, CT, p, pfac)
     s = _s(x, y, z)
     t = _t(x, y, z)
     ss = _ss(x, y, z, x2)
     st = _st(x, y, z)
     tt = _tt(x, y, z)
-    sp = _sp(x, y, z)
-    tp = _tp(x, y, z)
+    sp = _sp(x, y, z, pfac)
+    tp = _tp(x, y, z, pfac)
 
     return (s, t, ss, st, tt, sp, tp)
 
 
 @nb.njit
-def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p):
+def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p, pfac=1e-4):
     """
     Select partial derivatives of GSW specific volume up to third order
 
@@ -442,24 +452,24 @@ def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p):
     s, t, ss, st, tt, sp, tp, sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp : float
         Partial derivatives of specific volume.
     """
-    (x, y, z, x2) = _process(SA, CT, p)
+    (x, y, z, x2) = _process(SA, CT, p, pfac)
 
     s = _s(x, y, z)
     t = _t(x, y, z)
     ss = _ss(x, y, z, x2)
     st = _st(x, y, z)
     tt = _tt(x, y, z)
-    sp = _sp(x, y, z)
-    tp = _tp(x, y, z)
+    sp = _sp(x, y, z, pfac)
+    tp = _tp(x, y, z, pfac)
     sss = _sss(x, y, z, x2)
     sst = _sst(x, y, z, x2)
     stt = _stt(x, y, z)
     ttt = _ttt(x, y, z)
-    ssp = _ssp(x, y, z, x2)
-    stp = _stp(x, y, z)
-    ttp = _ttp(x, y, z)
-    spp = _spp(x, y, z)
-    tpp = _tpp(x, y, z)
+    ssp = _ssp(x, y, z, x2, pfac)
+    stp = _stp(x, y, z, pfac)
+    ttp = _ttp(x, y, z, pfac)
+    spp = _spp(x, y, z, pfac)
+    tpp = _tpp(x, y, z, pfac)
 
     # fmt: off
     return (s, t, ss, st, tt, sp, tp, sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp)
@@ -467,7 +477,7 @@ def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p):
 
 
 @nb.njit
-def _process(SA, CT, p):
+def _process(SA, CT, p, pfac):
     SA = np.maximum(SA, 0)
     x2 = sfac * SA + offset
     x = np.sqrt(x2)
@@ -553,7 +563,7 @@ def _t(x, y, z):
 
     
 @nb.njit
-def _p(x, y, z):
+def _p(x, y, z, pfac):
     return (   v001 + x*(v101 + x*(v201 + x*(v301 + x*(v401 + x*v501))))
        + y* (  v011 + x*(v111 + x*(v211 + x*(v311 + x*v411)))
        + y* (  v021 + x*(v121 + x*(v221 + x*v321))
@@ -631,7 +641,7 @@ def _tt(x, y, z):
     
 
 @nb.njit
-def _sp(x, y, z):
+def _sp(x, y, z, pfac):
     return (  v101 + x*(2*v201 + x*(3*v301 + x*(4*v401 + x*(5*v501))))
        + y*(  v111 + x*(2*v211 + x*(3*v311 + x*(4*v411)))
        + y*(  v121 + x*(2*v221 + x*(3*v321))
@@ -647,7 +657,7 @@ def _sp(x, y, z):
 
     
 @nb.njit
-def _tp(x, y, z):
+def _tp(x, y, z, pfac):
     return (   v011 + x*(  v111 + x*(  v211 + x*(  v311 + x*  v411)))
        + y* (2*v021 + x*(2*v121 + x*(2*v221 + x*(2*v321)))
        + y* (3*v031 + x*(3*v131 + x*(3*v231))
@@ -663,7 +673,7 @@ def _tp(x, y, z):
 
 
 @nb.njit
-def _pp(x, y, z):
+def _pp(x, y, z, pfac):
     return (
               2*v002 + x*( 2*v102 + x*(2*v202 + x*(2*v302 + x*(2*v402))))
        + y* ( 2*v012 + x*( 2*v112 + x*(2*v212 + x*(2*v312)))
@@ -750,7 +760,7 @@ def _ttt(x, y, z):
 
 
 @nb.njit
-def _ssp(x, y, z, x2):
+def _ssp(x, y, z, x2, pfac):
     return (
             -0.25*v101 + x2*(0.75*v301 + x*(2.0*v401 + x*(3.75*v501)))
         + y*(-0.25*v111 + x2*(0.75*v311 + x*(2.0*v411))
@@ -767,7 +777,7 @@ def _ssp(x, y, z, x2):
     
 
 @nb.njit
-def _stp(x, y, z):
+def _stp(x, y, z, pfac):
     return (  v111 + x*(2*v211 + x*(3*v311 + x*(4*v411)))
        + y*(2*v121 + x*(4*v221 + x*(6*v321))
        + y*(3*v131 + x*(6*v231)
@@ -779,7 +789,7 @@ def _stp(x, y, z):
 
 
 @nb.njit
-def _ttp(x, y, z):    
+def _ttp(x, y, z, pfac):    
     return (  2*v021 + x*( 2*v121 + x*(2*v221 + x*(2*v321)))
        + y* ( 6*v031 + x*( 6*v131 + x*(6*v231))
        + y* (12*v041 + x*(12*v141)
@@ -791,7 +801,7 @@ def _ttp(x, y, z):
 
 
 @nb.njit
-def _spp(x, y, z):
+def _spp(x, y, z, pfac):
     return ( 2*v102 + x*( 4*v202 + x*(6*v302 + x*(8*v402)))
        + y*( 2*v112 + x*( 4*v212 + x*(6*v312))
        + y*( 2*v122 + x*( 4*v222)
@@ -802,7 +812,7 @@ def _spp(x, y, z):
 
 
 @nb.njit
-def _tpp(x, y, z):
+def _tpp(x, y, z, pfac):
     return (( 2*v012 + x*(2*v112 + x*(2*v212 + x*(2*v312)))
        + y* ( 4*v022 + x*(4*v122 + x*(4*v222))
        + y* ( 6*v032 + x*(6*v132)
@@ -813,7 +823,7 @@ def _tpp(x, y, z):
     
 
 @nb.njit
-def _ppp(x, y, z):
+def _ppp(x, y, z, pfac):
     return (   6*v003 + x*( 6*v103 + x*(6*v203))
        + y* (  6*v013 + x*( 6*v113)
        + y* (  6*v023))

@@ -75,8 +75,6 @@ eosJMDCKP10 =   1.394680e-08 # .== original / 10
 eosJMDCKP11 = - 2.040237e-07 # .== original / 10
 eosJMDCKP12 =   6.128773e-09 # .== original / 10
 eosJMDCKP13 =   6.207323e-11 # .== original / 10
-# The above coeffs need to be defined in the function for
-# compatability with @numba.njit
 # fmt: on
 
 # If ndarray inputs are needed, it is best to use @nb.vectorize.  That is,
@@ -84,7 +82,7 @@ eosJMDCKP13 =   6.207323e-11 # .== original / 10
 # for scalars is about twice as fast as a signatureless njit'ed function
 # applied to ndarrays.
 @nb.njit
-def rho(s, t, p):
+def rho(s, t, p, pfac=1.0):
     """Fast JMD95 [1]_ in-situ density.
 
     Parameters
@@ -150,6 +148,7 @@ def rho(s, t, p):
     """
 
     s1o2 = np.sqrt(s)
+    p *= pfac
 
     # fmt: off
     # The secant bulk modulus
@@ -184,7 +183,7 @@ def rho(s, t, p):
 # without a signature specification, and calling the rho_s_t function with ndarray
 # objects.  So, we'll just use @nb.njit with no signature.
 @nb.njit
-def rho_s_t(s, t, p):
+def rho_s_t(s, t, p, pfac=1.0):
     """
     Fast salinity and potential temperature partial derivatives of JMD95 in-situ density
 
@@ -210,6 +209,7 @@ def rho_s_t(s, t, p):
     # INPUT CHECKS REMOVED
 
     s1o2 = np.sqrt(s)
+    p *= pfac
 
     # fmt: off
     # The secant bulk modulus
@@ -316,7 +316,7 @@ def rho_s_t(s, t, p):
 
 
 @nb.njit
-def rho_p(s, t, p):
+def rho_p(s, t, p, pfac=1.0):
     """
     Fast pressure derivative of JMD95 in-situ density.
 
@@ -337,6 +337,7 @@ def rho_p(s, t, p):
     """
 
     s1o2 = np.sqrt(s)
+    p *= pfac
 
     # fmt: off
     K2 = (

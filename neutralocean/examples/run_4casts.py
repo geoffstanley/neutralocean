@@ -3,7 +3,7 @@
 import numpy as np
 
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
-from neutralocean.eos import make_eos_s_t
+from neutralocean.eos import load_eos
 from neutralocean.ntp import ntp_epsilon_errors
 
 # In[Create an ocean of 4 water columns]
@@ -122,7 +122,7 @@ print(
 )
 
 # Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
-eos_s_t = make_eos_s_t("gsw")
+eos_s_t = load_eos("gsw", "_s_t")
 e = ntp_epsilon_errors(s, t, p, grid, eos_s_t)
 print("The ϵ neutrality errors on the ω-surface are as follows:")
 for i in range(len(a)):

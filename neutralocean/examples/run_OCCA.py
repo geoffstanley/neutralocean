@@ -1,7 +1,7 @@
 # In[Imports]
 
 # Functions to make the Equation of State
-from neutralocean.eos import make_eos, make_eos_s_t
+from neutralocean.eos import load_eos
 
 # Functions to compute various approximately neutral surfaces
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
@@ -15,12 +15,13 @@ from neutralocean.grid.rectilinear import build_grid
 
 g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
+grav, rho_c = g["grav"], g["rho_c"]
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
 # make Boussinesq version of the Jackett and McDougall (1995) equation of state
 # --- which is what OCCA used --- and its partial derivatives
-eos = make_eos("jmd95", g["grav"], g["rho_c"])
-eos_s_t = make_eos_s_t("jmd95", g["grav"], g["rho_c"])
+eos = load_eos("jmd95", "", grav, rho_c)
+eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Perturb S, T to ensure static stability everywhere
 stabilize_ST(S, T, Z, eos, min_dLRPDdz=1e-6, verbose=False)  # about 30 sec
@@ -82,8 +83,8 @@ args = opts.copy()
 args["pin_cast"] = {"Longitude_t": 220.5, "Latitude_t": 0.5}
 args["pin_p"] = z0
 args["eos"] = "jmd95"
-args["grav"] = g["grav"]
-args["rho_c"] = g["rho_c"]
+args["grav"] = grav
+args["rho_c"] = rho_c
 s, t, z, d = potential_surf(S, T, Z, **args)
 assert z.values[i0, j0] == z0  # check pin_cast was indeed (i0,j0)
 z_sigma = z  # save for later
@@ -472,7 +473,7 @@ s, t, z, d = anomaly_surf(
 # In[Calculate a large-scale potential vorticity on the above specvol anomaly surface]
 
 # Create function for partial deriv of equation of state with respect to depth z
-eos_z = make_eos_p("jmd95", g["grav"], g["rho_c"])  # for scalar inputs
+eos_z = make_eos_p("jmd95", grav, rho_c)  # for scalar inputs
 eos_z = vectorize_eos(eos_z)  # for nd inputs
 
 # Build linear interpolation function, operating over a whole dataset (kind="u"),

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from neutralocean.eos.tools import vectorize_eos
-from neutralocean.eos import jmd95, jmdfwg06, gsw
+from neutralocean.eos import jmd95, jmdfwg06, gsw, polyTEOS10bsq
 
 checkval_jmd95 = (35.5, 3.0, 3000.0, 1041.83267)
 rho_jmd95_ufunc = vectorize_eos(jmd95.rho)
@@ -17,6 +17,8 @@ rho_jmd95_ufunc = vectorize_eos(jmd95.rho)
         (jmdfwg06.rho, (20.0, 20.0, 1000.0, 1017.72886801964), 11),
         (jmdfwg06.rho, (40.0, 12.0, 8000.0, 1062.95279820631), 11),
         (gsw.specvol, (35.0, 25.0, 2000.0, 9.694293111803510e-04), 18),
+        (polyTEOS10bsq.rho_vert, (1000.0, 4.59763035), 8),
+        (polyTEOS10bsq.rho_horiz, (30.0, 10.0, 1000.0, 1022.85377), 5),
     ],
 )
 def test_checkval(eos, checkval, decimals):
@@ -44,6 +46,7 @@ def test_jmd95_ufunc_array():
         (jmd95.rho, jmd95.rho_s_t, jmd95.rho_p),
         (jmdfwg06.rho, jmdfwg06.rho_s_t, jmdfwg06.rho_p),
         (gsw.specvol, gsw.specvol_s_t, gsw.specvol_p),
+        (polyTEOS10bsq.rho, polyTEOS10bsq.rho_s_t, polyTEOS10bsq.rho_z)
     ],
 )
 def test_rho_derivs(eos, eos_s_t, eos_p):
@@ -70,9 +73,9 @@ def test_rho_derivs(eos, eos_s_t, eos_p):
     Raises
     ------
     AssertionError
-        If the results of `eos_s_t` and `eos_p` at a (hardcoded) checkvalue
-        disagree considerably with an approximation of partial derivatives
-        calculated by evaluating `eos` using centred finite differences.
+        If the results of `eos_s_t` and `eos_p` disagree considerably with
+        an approximation of partial derivatives calculated by evaluating 
+        `eos` using centred finite differences.
 
     """
 
