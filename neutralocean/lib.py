@@ -342,7 +342,7 @@ def _process_eos(eos, grav=None, rho_c=None, need_s_t=False):
     if isinstance(eos, str):
         if need_s_t:
             eos_s_t = load_eos(eos, "_s_t", grav, rho_c)
-        eos = load_eos(eos, grav, rho_c)
+        eos = load_eos(eos, "", grav, rho_c)
     else:
         if need_s_t:
             if isinstance(eos, (tuple, list)) and len(eos) == 2:
