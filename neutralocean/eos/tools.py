@@ -3,10 +3,10 @@ import functools as ft
 import numba as nb
 import importlib
 import inspect
+import warnings
 
-# List of modules in the same directory as this file, each of which must have
-# the following numba.njit'ed functions: x, x_s_t, and either x_p or x_z
-# where x is either "specvol" or "rho"
+# Dictionary mapping names of modules in the same directory as this file to either
+# "specvol" or "rho" depending on which variable they calculate.
 modules = {"gsw": "specvol", "polyTEOS10bsq" : "rho", "jmd95": "rho", "jmdfwg06": "rho"}
 
 
@@ -19,8 +19,8 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
     eos : str
 
         If a str, can be 
-        - `'gsw'` to generate the TEOS-10 specific volume [1]_,
-        - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation
+        - `'gsw'` to generate the 75 term approximation [1]_ of the TEOS-10 [2]_ specific volume,
+        - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation [1]_
         of the TEOS-10 in-situ density [2]_
         - `'jmd95'` to generate the Jackett and McDougall (1995) in-situ density [3]_, or 
         - `'jmdfwg06'` to generate the Jackett et al (2006) in-situ density [4]_.
@@ -31,22 +31,38 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
         Only used when `eos` is a string.
         The actual function loaded is named `eos + derivs`.
         For example, "" loads the EOS itself, 
-        "_p" will load the partial derivative with respect to P,
-        "_s_t" will load the function whose two outputs are the S and T
+        "_p" will load the partial derivative with respect to p,
+        "_s_t" will load the function whose two outputs are the s and t
         partial derivatives, respectively.
+
+    grav, rho_c : float, Default None
+
+        Gravitational acceleration [m s-2] and Boussinesq reference density
+        [kg m-3]. If both are provided, the equation of state is modified as
+        appropriate for the Boussinesq approximation, in which the third
+        argument is depth, not pressure. Specifically, a depth `z` is
+        converted to `1e-4 * grav * rho_c * z`, which is the hydrostatic
+        pressure [dbar] at depth `z` [m] caused by a water column of density
+        `rho_c` under gravity `grav`.
 
     Returns
     -------
+    fn: function
 
-        
-    .. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
-       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
-       SBN 978-0-646-55621-5.
-
-    .. [2] Roquet, F., G. Madec, Trevor J. McDougall, and Paul M. Barker. “Accurate
+        Equation of State function accepting three arguments: 
+        (salinity, temperature, pressure) when `grav` or `rho_c` is None, or 
+        (salinity, temperature, depth) otherwise.
+    
+    Notes
+    -----
+    .. [1] Roquet, F., G. Madec, Trevor J. McDougall, and Paul M. Barker. “Accurate
        Polynomial Expressions for the Density and Specific Volume of Seawater Using
        the TEOS-10 Standard.” Ocean Modelling 90 (June 2015): 29-43.
        https://doi.org/10.1016/j.ocemod.2015.04.002.
+        
+    .. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
+       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
+       SBN 978-0-646-55621-5.
 
     .. [3] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
 
@@ -108,6 +124,8 @@ def make_eos(eos, grav=None, rho_c=None):
         The desired equation of state.
 
     """
+
+    warnings.warn("Replace with `load_eos(eos, '', grav, rho_c)`", DeprecationWarning, 2)
     if callable(eos):
         fn = eos
     else:
@@ -135,6 +153,8 @@ def make_eos_s_t(eos, grav=None, rho_c=None):
         potential / Conservative temperature) of the desired equation of
         state.
     """
+
+    warnings.warn("Replace with `load_eos(eos, '_s_t', grav, rho_c)`", DeprecationWarning, 2)
     if callable(eos):
         fn = eos
     else:
@@ -161,6 +181,7 @@ def make_eos_p(eos, grav=None, rho_c=None):
         argument (pressure) of the desired equation of state.
     """
 
+    warnings.warn("Replace with `load_eos(eos, '_p', grav, rho_c)`", DeprecationWarning, 2)
     if callable(eos):
         fn = eos
     else:

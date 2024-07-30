@@ -1,5 +1,25 @@
 """
-In-situ density using polyTEOS10bsq [1]_ approximation to the TEOS-10 Gibbs Sea Water standard [2]_
+In-situ density using polyTEOS10bsq [1]_ Boussinesq approximation to the
+TEOS-10 Gibbs Sea Water standard [2]_
+
+Functions:
+
+rho :: compute in-situ density from Absolute Salinity, Conservative Temperature and
+    depth
+
+rho_s_t :: compute the partial derivatives of rho with respect to 
+    Absolute Salinity and Conservative Temperature
+
+rho_z :: compute the partial derivative of rho with respect to depth
+
+
+Notes:
+These functions take depth as the third argument, and convert that to pressure
+using a constant conversion factor of 1 m / dbar. 
+
+To make vectorized versions of these functions, see
+`neutralocean.eos.tools.vectorize_eos`.
+
 
 .. [1] Roquet, F., G. Madec, T.J. McDougall, P.M. Barker, 2015: Accurate
        polynomial expressions for the density and specifc volume of seawater
@@ -203,13 +223,13 @@ BPE002 = 1.7269476440e-04
 
 
 @nb.njit
-def rho_horiz(S, T, Z):
+def rho_horiz(s, t, z):
     # Compute the in situ density anomaly from the vertical reference profile of density.
     # Check value from Roquet et al. (2015):
-    #   for S=30, T=10, Z=1000, should get 1022.85377
-    # Code from eosbn2.F90
+    #   for s=30, t=10, z=1000, should get 1022.85377
+    # Code from NEMO eosbn2.F90
 
-    x, y, z = _process(S, T, Z)
+    x, y, z = _process(s, t, z)
 
     # fmt: off
     n3 = EOS013*y + EOS103*x + EOS003
@@ -240,15 +260,15 @@ def rho_horiz(S, T, Z):
 def rho_vert(Z):
     # Calculate the vertical profile of in-situ density.
     # Check value from Roquet et al. (2015):
-    #   for Z=1000, should get 4.59763035
+    #   for z=1000, should get 4.59763035
     z = Z * zfac
     return (((((R05 * z + R04) * z + R03) * z + R02) * z + R01) * z + R00) * z
 
 
 @nb.njit
-def rho(S, T, Z):
+def rho(s, t, z):
     # Calculate the in-situ density.
-    return rho_horiz(S, T, Z) + rho_vert(Z)
+    return rho_horiz(s, t, z) + rho_vert(z)
 
 
 @nb.njit
@@ -259,9 +279,9 @@ def rho_anom(rho, rho0):
 
 
 @nb.njit
-def rho_s_t(S, T, Z):
+def rho_s_t(s, t, z):
     # Calculate S and T derivatives of in-situ density.
-    x, y, z = _process(S, T, Z)
+    x, y, z = _process(s, t, z)
     rho_S = _s(x, y, z)
     rho_T = _t(x, y, z)
 
@@ -269,28 +289,28 @@ def rho_s_t(S, T, Z):
 
 
 @nb.njit
-def rho_z(S, T, Z):
+def rho_z(s, t, z):
     # Calculate Z derivative of in-situ density.
-    x, y, z = _process(S, T, Z)
+    x, y, z = _process(s, t, z)
     return _z(x, y, z)
 
 
 @nb.njit
-def alpha_beta(S, T, Z, rho0):
+def alpha_beta(s, t, z, rho0):
     # Calculate thermal and haline expansion coefficients using analytic derivative of `rho_horiz`.
     # This is negligably more accurate than `alpha_beta_pre` which uses pre-computed coefficients.
-    rho_s, rho_t = rho_s_t(S, T, Z)
+    rho_s, rho_t = rho_s_t(s, t, z)
     alpha = -rho_t / rho0
     beta = rho_s / rho0
     return alpha, beta
 
 
 @nb.njit
-def alpha_beta_pre(S, T, Z, rho0):
+def alpha_beta_pre(s, t, z, rho0):
     # Calculate thermal and haline expansion coefficients, using pre-computed coefficients.
     # Code from NEMO eosbn2.F90
 
-    x, y, z = _process(S, T, Z)
+    x, y, z = _process(s, t, z)
     r1_rho0 = 1.0 / rho0
 
     # fmt: off
@@ -333,10 +353,10 @@ def alpha_beta_pre(S, T, Z, rho0):
 
 
 @nb.njit
-def _process(S, T, Z):
-    z = Z * zfac
-    y = T * tfac
-    x = np.sqrt(np.abs(S + deltaS) * sfac)
+def _process(s, t, z):
+    z = z * zfac
+    y = t * tfac
+    x = np.sqrt(np.abs(s + deltaS) * sfac)
     return x, y, z
 
 

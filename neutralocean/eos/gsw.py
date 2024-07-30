@@ -4,7 +4,7 @@ Specific Volume using 75-term polyTEOS10-75t [1]_ approximation to the TEOS-10 G
 Functions:
 
 specvol :: compute specific volume from Absolute Salinity, Conservative Temperature and
-    pressure
+    pressure (or depth)
 
 specvol_first_derivs :: compute first order partial derivatives of specvol
 
@@ -26,15 +26,8 @@ specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp :: compute variou
 
 
 Notes:
-In the Boussinesq approximation, the third argument is not pressure but depth,
-and a fourth argument `pfac` is required with the value
-`1e-8 * grav * rho_c`
-where `grav` is the gravitational acceleration [m.s-2] and `rho_c` is the 
-Boussinesq reference density [kg.m-3]. Note the factor `1e-8` here is the 
-product of `1e-4` which is the multiplicative scaling applied to pressure
-in the non-Boussinesq version of this function (the default value of `pfac`)
-and another `1e-4` [dbar . Pa-1] to convert the hydrostatic pressure from Pa
-to dbar.
+To make Boussinesq versions of these functions, see 
+`neutralocean.eos.tools.make_bsq`.
 
 To make vectorized versions of these functions, see
 `neutralocean.eos.tools.vectorize_eos`.
@@ -66,9 +59,6 @@ All functions here are derived from `gsw_specvol`, documented below.
     #  CT  =  Conservative Temperature (ITS-90)                       [ deg C ]
     #  p   =  sea pressure                                             [ dbar ]
     #         ( i.e. absolute pressure - 10.1325 dbar )
-    #
-    #  SA & CT need to have the same dimensions.
-    #  p may have dimensions 1x1 or Mx1 or 1xN or MxN, where SA & CT are MxN.
     #
     # OUTPUT:
     #  specvol  =  specific volume                                   [ m^3/kg ]
@@ -240,14 +230,31 @@ def specvol(SA, CT, p, pfac=1e-4):
     SA : float
         Absolute Salinity [g/kg]
     CT : float
-        Conservative Temperature [deg C]
+        Conservative Temperature (ITS-90) [deg C]
     p : float
         sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    pfac : float, Optional
+        Multiplicative scaling factor applied to `p`. 
+        Default value is 1e-4 [dbar-1]. See `Notes`.
 
     Returns
     -------
     specvol : float
         Specific volume [m3 kg-1]
+
+    Notes
+    -----
+    The Boussinesq version of this function is called with third input `p` as
+    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where 
+    `grav` is the gravitational acceleration [m.s-2]
+    `rho_c` is the Boussinesq reference density [kg.m-3],
+    `pfac_default = 1e-4` [dbar-1] is the non-Boussinesq value of `pfac`
+    `Pa2db = 1e-4` [dbar.Pa-1].
+    Thus, `p * Pa2db * grav * rho_c` is the hydrostatic pressure [dbar] at depth
+    `p` assuming the water column's density was `rho_c`. 
+
+    To create a Boussinesq version of this function that accepts 3 arguments
+    (salinity, temperature, depth), use `neutralocean.eos.tools.make_bsq`.
     """
     (x, y, z, _) = _process(SA, CT, p, pfac)
     return _specvol(x, y, z)
@@ -256,146 +263,131 @@ def specvol(SA, CT, p, pfac=1e-4):
 @nb.njit
 def specvol_first_derivs(SA, CT, p, pfac=1e-4):
     """
-    Calculate all first order partial derivatives of GSW specific volume
+    Calculate all first order partial derivatives of specific volume
 
     Parameters
     ----------
-    SA : float
-        Absolute Salinity [g/kg]
-    CT : float
-        Conservative Temperature [deg C]
-    p : float
-        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    SA, CT, p, pfac : float
+        See `specvol`
 
     Returns
     -------
-    ss, st, tt, sp, tp, pp : float
-        Partial derivatives of specific volume.
+    vs : float
+        Partial derivative of specific volume w.r.t. `SA` [m3 kg-1 / (g/kg)]
+    vt : float
+        Partial derivative of specific volume w.r.t. `CT` [m3 kg-1 / (deg C)]
+    vp : float
+        Partial derivative of specific volume w.r.t. `p` [m3 kg-1 / [p]]
     """
 
     (x, y, z, _) = _process(SA, CT, p, pfac)
-    s = _s(x, y, z)
-    t = _t(x, y, z)
-    p = _p(x, y, z, pfac)
+    vs = _s(x, y, z)
+    vt = _t(x, y, z)
+    vp = _p(x, y, z, pfac)
 
-    return (s, t, p)
+    return (vs, vt, vp)
 
 
 @nb.njit
 def specvol_second_derivs(SA, CT, p, pfac=1e-4):
     """
-    Calculate all second order partial derivatives of GSW specific volume
+    Calculate all second order partial derivatives of specific volume
 
     Parameters
     ----------
-    SA : float
-        Absolute Salinity [g/kg]
-    CT : float
-        Conservative Temperature [deg C]
-    p : float
-        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    SA, CT, p, pfac : float
+        See `specvol`
 
     Returns
     -------
-    ss, st, tt, sp, tp, pp : float
-        Partial derivatives of specific volume.
+    vss, vst, vtt, vsp, vtp, vpp : float
+        Second order partial derivatives of specific volume w.r.t. `SA * SA`, 
+        `SA * CT`, `CT * CT`, `SA * p`, `CT * p`, respectively.
     """
 
     (x, y, z, x2) = _process(SA, CT, p, pfac)
 
-    ss = _ss(x, y, z, x2)
-    st = _st(x, y, z)
-    tt = _tt(x, y, z)
-    sp = _sp(x, y, z, pfac)
-    tp = _tp(x, y, z, pfac)
-    pp = _pp(x, y, z, pfac)
+    vss = _ss(x, y, z, x2)
+    vst = _st(x, y, z)
+    vtt = _tt(x, y, z)
+    vsp = _sp(x, y, z, pfac)
+    vtp = _tp(x, y, z, pfac)
+    vpp = _pp(x, y, z, pfac)
 
-    return (ss, st, tt, sp, tp, pp)
+    return (vss, vst, vtt, vsp, vtp, vpp)
 
 
 @nb.njit
 def specvol_third_derivs(SA, CT, p, pfac=1e-4):
     """
-    Calculate all third order partial derivatives of GSW specific volume
+    Calculate all third order partial derivatives of specific volume
 
     Parameters
     ----------
-    SA : float
-        Absolute Salinity [g/kg]
-    CT : float
-        Conservative Temperature [deg C]
-    p : float
-        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    SA, CT, p, pfac : float
+        See `specvol`
 
     Returns
     -------
-    sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp : float
-        Partial derivatives of specific volume.
+    vsss, vsst, vstt, vttt, vssp, vstp, vttp, vspp, vtpp : float
+        Third order partial derivatives of specific volume.
     """
 
     (x, y, z, x2) = _process(SA, CT, p, pfac)
 
-    sss = _sss(x, y, z, x2)
-    sst = _sst(x, y, z, x2)
-    stt = _stt(x, y, z)
-    ttt = _ttt(x, y, z)
-    ssp = _ssp(x, y, z, x2, pfac)
-    stp = _stp(x, y, z, pfac)
-    ttp = _ttp(x, y, z, pfac)
-    spp = _spp(x, y, z, pfac)
-    tpp = _tpp(x, y, z, pfac)
-    ppp = _ppp(x, y, z, pfac)
+    vsss = _sss(x, y, z, x2)
+    vsst = _sst(x, y, z, x2)
+    vstt = _stt(x, y, z)
+    vttt = _ttt(x, y, z)
+    vssp = _ssp(x, y, z, x2, pfac)
+    vstp = _stp(x, y, z, pfac)
+    vttp = _ttp(x, y, z, pfac)
+    vspp = _spp(x, y, z, pfac)
+    vtpp = _tpp(x, y, z, pfac)
+    vppp = _ppp(x, y, z, pfac)
 
-    return (sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp, ppp)
+    return (vsss, vsst, vstt, vttt, vssp, vstp, vttp, vspp, vtpp, vppp)
 
 
 @nb.njit
 def specvol_s_t(SA, CT, p, pfac=1e-4):
     """
-    Partial derivatives of GSW specific volume with respect to salinity & temperature
+    Partial derivatives of specific volume with respect to salinity & temperature
 
     Parameters
     ----------
-    SA : float
-        Absolute Salinity [g/kg]
-    CT : float
-        Conservative Temperature [deg C]
-    p : float
-        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    SA, CT, p, pfac : float
+        See `specvol`
 
     Returns
     -------
-    s : float
-        Partial deriv of specific volume w.r.t. SA [m3 kg-1 / (g/kg)]
+    vs : float
+        Partial derivative of specific volume w.r.t. `SA` [m3 kg-1 / (g/kg)]
 
-    t : float
-        Partial deriv of specific volume w.r.t. CT [m3 kg-1 / (deg C)]
+    vt : float
+        Partial derivative of specific volume w.r.t. `CT` [m3 kg-1 / (deg C)]
     """
     (x, y, z, _) = _process(SA, CT, p, pfac)
-    s = _s(x, y, z)
-    t = _t(x, y, z)
+    vs = _s(x, y, z)
+    vt = _t(x, y, z)
 
-    return (s, t)
+    return (vs, vt)
 
 
 @nb.njit
 def specvol_p(SA, CT, p, pfac=1e-4):
     """
-    Partial derivative of GSW specific volume with respect to pressure
+    Partial derivative of specific volume with respect to pressure
 
     Parameters
     ----------
-    SA : float
-        Absolute Salinity [g/kg]
-    CT : float
-        Conservative Temperature [deg C]
-    p : float
-        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    SA, CT, p, pfac : float
+        See `specvol`
 
     Returns
     -------
-    p : float
-        Partial deriv of specific volume w.r.t. p [m3 kg-1 / (dbar)]
+    vp : float
+        Partial derivative of specific volume w.r.t. `p` [m3 kg-1 / [p]]
     """
     (x, y, z, _) = _process(SA, CT, p, pfac)
     return _p(x, y, z, pfac)
@@ -404,16 +396,12 @@ def specvol_p(SA, CT, p, pfac=1e-4):
 @nb.njit
 def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p, pfac=1e-4):
     """
-    Select partial derivatives of GSW specific volume up to second order
+    Select partial derivatives of specific volume up to second order
 
     Parameters
     ----------
-    SA : float
-        Absolute Salinity [g/kg]
-    CT : float
-        Conservative Temperature [deg C]
-    p : float
-        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    SA, CT, p, pfac : float
+        See `specvol`
 
     Returns
     -------
@@ -436,48 +424,56 @@ def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p, pfac=1e-4):
 @nb.njit
 def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p, pfac=1e-4):
     """
-    Select partial derivatives of GSW specific volume up to third order
+    Select partial derivatives of specific volume up to third order
 
     Parameters
     ----------
-    SA : float
-        Absolute Salinity [g/kg]
-    CT : float
-        Conservative Temperature [deg C]
-    p : float
-        sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
+    SA, CT, p, pfac : float
+        See `specvol`
 
     Returns
     -------
-    s, t, ss, st, tt, sp, tp, sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp : float
+    vs, vt, vss, vst, vtt, vsp, vtp, vsss, vsst, vstt, vttt, vssp, vstp, vttp, vspp, vtpp : float
         Partial derivatives of specific volume.
     """
     (x, y, z, x2) = _process(SA, CT, p, pfac)
 
-    s = _s(x, y, z)
-    t = _t(x, y, z)
-    ss = _ss(x, y, z, x2)
-    st = _st(x, y, z)
-    tt = _tt(x, y, z)
-    sp = _sp(x, y, z, pfac)
-    tp = _tp(x, y, z, pfac)
-    sss = _sss(x, y, z, x2)
-    sst = _sst(x, y, z, x2)
-    stt = _stt(x, y, z)
-    ttt = _ttt(x, y, z)
-    ssp = _ssp(x, y, z, x2, pfac)
-    stp = _stp(x, y, z, pfac)
-    ttp = _ttp(x, y, z, pfac)
-    spp = _spp(x, y, z, pfac)
-    tpp = _tpp(x, y, z, pfac)
+    vs = _s(x, y, z)
+    vt = _t(x, y, z)
+    vss = _ss(x, y, z, x2)
+    vst = _st(x, y, z)
+    vtt = _tt(x, y, z)
+    vsp = _sp(x, y, z, pfac)
+    vtp = _tp(x, y, z, pfac)
+    vsss = _sss(x, y, z, x2)
+    vsst = _sst(x, y, z, x2)
+    vstt = _stt(x, y, z)
+    vttt = _ttt(x, y, z)
+    vssp = _ssp(x, y, z, x2, pfac)
+    vstp = _stp(x, y, z, pfac)
+    vttp = _ttp(x, y, z, pfac)
+    vspp = _spp(x, y, z, pfac)
+    vtpp = _tpp(x, y, z, pfac)
 
     # fmt: off
-    return (s, t, ss, st, tt, sp, tp, sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp)
+    return (vs, vt, vss, vst, vtt, vsp, vtp, vsss, vsst, vstt, vttt, vssp, vstp, vttp, vspp, vtpp)
     # fmt: on
 
 
 @nb.njit
 def _process(SA, CT, p, pfac):
+    """
+    Parameters
+    ----------
+    SA, CT, p, pfac : float
+        See `specvol`
+    Returns
+    -------
+    x, y, z : float
+        Adjusted versions of `SA`, `CT`, `p` [unitless]
+    x2 : float
+        `x^2`
+    """
     SA = np.maximum(SA, 0)
     x2 = sfac * SA + offset
     x = np.sqrt(x2)
