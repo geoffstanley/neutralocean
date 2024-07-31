@@ -16,8 +16,8 @@ from neutralocean.lib import (
     _xr_out,
     _process_pin_cast,
     _process_casts,
-    _process_eos,
 )
+from neutralocean.eos.tools import load_eos
 
 
 def potential_surf(S, T, P, **kwargs):
@@ -160,36 +160,19 @@ def potential_surf(S, T, P, **kwargs):
 
         Ideally, `vert_dim` is -1.  See `Notes`.
 
-    eos : str or function or tuple of functions, Default 'gsw'
+    eos : function, Default `neutralocean.eos.gsw.specvol`
 
-        Specification for the equation of state.
+        Function taking three inputs corresponding to (`S, T, P)`, and
+        outputting the in-situ density or specific volume.
+        Should be `@numba.njit` decorated and need not be vectorized.
 
-        If a str, can be any of the strings accepted by `neutralocean.eos.tools.load_eos`.
+    eos_s_t : function, `neutralocean.eos.gsw.specvol_s_t`
 
-        If a function, must take three inputs corresponding to `S`, `T`, and
-        `P`, and output the density or specific volume.  This form is not
-        allowed when `diags` is `True`.  This can be made as, e.g.,
-        `eos = neutralocean.eos.load_eos('gsw')`
-        for a non-Boussinesq ocean, or as
-        `eos = neutralocean.eos.load_eos('gsw', grav, rho_c)`
-        for a Boussinesq ocean.
-
-        If a tuple of functions, the first element must be a function for the
-        equation of state as above, and the second element must be a function
-        taking the same three inputs as above and returning two outputs, namely
-        the partial derivatives of the equation of state with respect to `S`
-        and `T`.  The second element can be made as, e.g.,
-        `eos_s_t = neutralocean.eos.load_eos('gsw', '_s_t', grav, rho_c)`
-
-        The function (or the first element of the tuple of functions) should be
-        `@numba.njit` decorated and need not be vectorized -- it will be called
-        many times with scalar inputs.
-
-    grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
-
-    rho_c : float, Default None
-        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
+        Function taking three inputs corresponding to (`S, T, P)`, and
+        outputting a tuple containing the partial derivatives of the equation of
+        state with respect to `S` and `T`.
+        Should be `@numba.njit` decorated and need not be vectorized.
+        Note: This is only used when `diags` is `True`.
 
     interp : str, Default 'linear'
 
@@ -343,9 +326,8 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     pin_p = kwargs.get("pin_p")
     vert_dim = kwargs.get("vert_dim", -1)
     TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
-    eos = kwargs.get("eos", "gsw")
-    rho_c = kwargs.get("rho_c")
-    grav = kwargs.get("grav")
+    eos = kwargs.get("eos")
+    eos_s_t = kwargs.get("eos_s_t")
     diags = kwargs.get("diags", True)
     output = kwargs.get("output", True)
     grid = kwargs.get("grid")
@@ -360,7 +342,11 @@ def _isopycnal(ans_type, S, T, P, **kwargs):
     sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
-    eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=diags)
+    if eos is None and eos_s_t is None:
+        eos = load_eos("gsw")
+        eos_s_t = load_eos("gsw", "_s_t")
+    if diags and not callable(eos_s_t):
+        raise ValueError("eos_s_t must be callable when diags is True")
     if diags and not (isinstance(grid, dict) and "edges" in grid):
         raise ValueError("grid['edges'] must be provided when diags is True")
 

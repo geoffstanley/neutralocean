@@ -144,7 +144,8 @@ s, t, z, d = anomaly_surf(
     T,
     Z,
     grid=grid,
-    eos=(eos, eos_s_t),
+    eos=eos,
+    eos_s_t=eos_s_t,
     vert_dim="k",
     ref=(s0, t0),
     isoval=0.0,
@@ -160,7 +161,8 @@ s, t, z, d = omega_surf(
     pin_cast=pin_cast,
     p_init=z0,
     vert_dim="k",
-    eos=(eos, eos_s_t),
+    eos=eos,
+    eos_s_t=eos_s_t,
     interp="pchip",
 )
 z_omega = z

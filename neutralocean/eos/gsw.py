@@ -6,6 +6,8 @@ Functions:
 specvol :: compute specific volume from Absolute Salinity, Conservative Temperature and
     pressure (or depth)
 
+rho :: compute in-situ density as the reciprocol of specific volume
+
 specvol_first_derivs :: compute first order partial derivatives of specvol
 
 specvol_second_derivs :: compute second order partial derivatives of specvol
@@ -101,10 +103,10 @@ All functions here are derived from `gsw_specvol`, documented below.
 #
 # >>> specvol(35, 25, 2000)
 # 0.000969429311180351
-# 
+#
 # >>> specvol_first_derivs(35, 25, 2000)
 # (-6.842441315932168e-07, 3.095166333930331e-07, -3.821664447055098e-09)
-# 
+#
 # >>> specvol_second_derivs(35, 25, 2000)
 # (7.521204828271216e-10,
 #  1.2378264339269954e-09,
@@ -112,7 +114,7 @@ All functions here are derived from `gsw_specvol`, documented below.
 #  1.0954594146512299e-11,
 #  9.280142767497533e-12,
 #  1.1313341817551131e-13)
-# 
+#
 # >>> specvol_third_derivs(35, 25, 2000)
 # (-1.319511372984796e-12,
 #  -6.0928845552165204e-12,
@@ -234,7 +236,7 @@ def specvol(SA, CT, p, pfac=1e-4):
     p : float
         sea pressure (i.e. absolute pressure - 10.1325 dbar)  [dbar]
     pfac : float, Optional
-        Multiplicative scaling factor applied to `p`. 
+        Multiplicative scaling factor applied to `p`.
         Default value is 1e-4 [dbar-1]. See `Notes`.
 
     Returns
@@ -245,19 +247,24 @@ def specvol(SA, CT, p, pfac=1e-4):
     Notes
     -----
     The Boussinesq version of this function is called with third input `p` as
-    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where 
+    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where
     `grav` is the gravitational acceleration [m.s-2]
     `rho_c` is the Boussinesq reference density [kg.m-3],
     `pfac_default = 1e-4` [dbar-1] is the non-Boussinesq value of `pfac`
     `Pa2db = 1e-4` [dbar.Pa-1].
     Thus, `p * Pa2db * grav * rho_c` is the hydrostatic pressure [dbar] at depth
-    `p` assuming the water column's density was `rho_c`. 
+    `p` assuming the water column's density was `rho_c`.
 
     To create a Boussinesq version of this function that accepts 3 arguments
     (salinity, temperature, depth), use `neutralocean.eos.tools.make_bsq`.
     """
     (x, y, z, _) = _process(SA, CT, p, pfac)
     return _specvol(x, y, z)
+
+
+@nb.njit
+def rho(SA, CT, p, pfac=1e-4):
+    return 1.0 / specvol(SA, CT, p, pfac)
 
 
 @nb.njit
@@ -301,7 +308,7 @@ def specvol_second_derivs(SA, CT, p, pfac=1e-4):
     Returns
     -------
     vss, vst, vtt, vsp, vtp, vpp : float
-        Second order partial derivatives of specific volume w.r.t. `SA * SA`, 
+        Second order partial derivatives of specific volume w.r.t. `SA * SA`,
         `SA * CT`, `CT * CT`, `SA * p`, `CT * p`, respectively.
     """
 
@@ -422,7 +429,9 @@ def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p, pfac=1e-4):
 
 
 @nb.njit
-def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p, pfac=1e-4):
+def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(
+    SA, CT, p, pfac=1e-4
+):
     """
     Select partial derivatives of specific volume up to third order
 

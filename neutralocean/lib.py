@@ -156,9 +156,7 @@ def val_at(T, k):
         # if k[i,j] == 0, this will index T[i,j,-1] which will be nan, so T_bot[i,j] == nan.
         Tk = np.take_along_axis(T, k[..., None], -1).squeeze()
     else:
-        raise ValueError(
-            "T must be 1 dimensional or have 1 more dimension than k"
-        )
+        raise ValueError("T must be 1 dimensional or have 1 more dimension than k")
 
     # Set to NaN any place where k is negative
     Tk[k < 0] = np.nan
@@ -259,9 +257,7 @@ def _process_casts(S, T, P, vert_dim):
     # Broadcast a 1D vector for P into a ND array like S
     if P.ndim < S.ndim:
         # First make P a 3D array with its non-singleton dimension be `vert_dim`
-        P = np.reshape(
-            P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim))
-        )
+        P = np.reshape(P, tuple(-1 if x == vert_dim else 1 for x in range(S.ndim)))
         P = np.broadcast_to(P, S.shape)
 
     S, T, P = (_contiguous_casts(x, vert_dim) for x in (S, T, P))
@@ -326,36 +322,8 @@ def _process_pin_cast(pin_cast, S):
     # One issue is this always rounds one way, whereas a "nearest" neighbour
     # type behaviour would be preferred, as in xr.DataArray.sel
     if isinstance(pin_cast, dict):
-        return tuple(
-            int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items()
-        )
+        return tuple(int(S.get_index(k).searchsorted(v)) for (k, v) in pin_cast.items())
     elif isinstance(pin_cast, int):
         return (pin_cast,)
     else:
         return pin_cast
-
-
-def _process_eos(eos, grav=None, rho_c=None, need_s_t=False):
-    # Process equation of state argument and make cache functions
-
-    eos_s_t = None
-    if isinstance(eos, str):
-        if need_s_t:
-            eos_s_t = load_eos(eos, "_s_t", grav, rho_c)
-        eos = load_eos(eos, "", grav, rho_c)
-    else:
-        if need_s_t:
-            if isinstance(eos, (tuple, list)) and len(eos) == 2:
-                eos_s_t = eos[1]
-                eos = eos[0]
-            if not callable(eos) or not callable(eos_s_t):
-                raise ValueError(
-                    "If `eos` is not a str, expected a tuple of length two"
-                    " containing an eos function and an eos_s_t function."
-                )
-        else:
-            if isinstance(eos, (tuple, list)) and len(eos) >= 1:
-                eos = eos[0]
-            if not callable(eos):
-                raise ValueError("If `eos` is not a str, expected a function.")
-    return eos, eos_s_t

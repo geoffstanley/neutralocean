@@ -8,7 +8,10 @@ from neutralocean.eos.tools import load_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.ppinterp import valid_range_1_two
 from neutralocean.lib import _process_casts
+from neutralocean.eos.tools import load_eos
 
+eos_ = load_eos('gsw', '')  # default
+eos_s_t_ = load_eos('gsw', '_s_t')  # default
 
 @nb.njit
 def _pot_dens_diff(p, sB, tB, pB, P, Sppc, Tppc, eos):
@@ -30,9 +33,7 @@ def ntp_bottle_to_cast(
     P,
     tol_p=1e-4,
     interp="linear",
-    eos="gsw",
-    grav=None,
-    rho_c=None,
+    eos=eos_,
 ):
     """Find the neutral tangent plane from a bottle to a cast
 
@@ -79,25 +80,12 @@ def ntp_bottle_to_cast(
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
-    eos : str or function, Default 'gsw'
+    eos : function, Default `neutralocean.eos.gsw.specvol`
 
-        The equation of state for the density or specific volume as a function
-        of `S`, `T`, and pressure (if non-Boussinesq) or depth(if Boussinesq).
-
-        If a str, can be any of the strings accepted by `neutralocean.eos.tools.load_eos`.
-
-        If a function, this should be `@numba.njit` decorated and need not be
-        vectorized, as it will be called many times with scalar inputs.
-
-    grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
-
-    rho_c : float, Default None
-        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
-
+        Function taking three inputs corresponding to (`S, T, P)`, and
+        outputting the in-situ density or specific volume.
     """
 
-    eos = load_eos(eos, "", grav, rho_c)
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
     k, K = valid_range_1_two(S, P)  # S and T have same nan-structure
@@ -122,11 +110,9 @@ def _ntp_bottle_to_cast(sB, tB, pB, S, T, P, k, K, tol_p, eos, ppc_fn):
         See `neutralocean.ppinterp.lib.valid_range_1`.
 
     eos : function
-        Equation of state for the density or specific volume as a function of
-        `S`, `T`, and pressure or depth inputs.
 
-        This function should be `@numba.njit` decorated and need not be
-        vectorized, as it will be called many times with scalar inputs.
+        Function taking three inputs corresponding to (`S, T, P)`, and
+        outputting the in-situ density or specific volume.
 
     ppc_fn : function
         Function that calculates piecewise polynomial coefficients, such as
@@ -202,9 +188,7 @@ def neutral_trajectory(
     vert_dim=-1,
     tol_p=1e-4,
     interp="linear",
-    eos="gsw",
-    grav=None,
-    rho_c=None,
+    eos=eos_
 ):
     """Calculate a neutral trajectory through a sequence of casts.
 
@@ -248,13 +232,12 @@ def neutral_trajectory(
 
         Ideally, `vert_dim` is -1.  See `Notes` in `potential_surf`.
 
-    tol_p, interp, eos, grav, rho_c :
+    tol_p, interp, eos :
 
         See `ntp_bottle_to_cast`
 
     """
 
-    eos = load_eos(eos, "", grav, rho_c)
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
     S, T, P = _process_casts(S, T, P, vert_dim)
 

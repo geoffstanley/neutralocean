@@ -9,9 +9,8 @@ from neutralocean.grid import divergence
 
 grav = 9.81
 rho_c = 1027.5
-eos_name = "gsw"
-eos = load_eos(eos_name, "", grav, rho_c)
-eos_s_t = load_eos(eos_name, "_s_t", grav, rho_c)
+eos = load_eos("gsw", "", grav, rho_c)
+eos_s_t = load_eos("gsw", "_s_t", grav, rho_c)
 eos_ufunc = vectorize_eos(eos)
 
 # Make a simple ocean dataset
@@ -127,7 +126,8 @@ def test_omega_surf():
         grid,
         pin_cast=(i0, j0),
         p_init=z,
-        eos=(eos, eos_s_t),
+        eos=eos,
+        eos_s_t=eos_s_t,
         diags=True,
     )
 
