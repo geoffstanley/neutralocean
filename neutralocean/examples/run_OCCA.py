@@ -205,7 +205,7 @@ from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.label import veronis
 from neutralocean.lib import _process_casts, xr_to_np
 from neutralocean.ppinterp import make_pp
-from neutralocean.eos import make_eos_p, vectorize_eos
+from neutralocean.eos import vectorize_eos
 from neutralocean.traj import ntp_bottle_to_cast, neutral_trajectory
 from neutralocean.grid.rectilinear import edgedata_to_maps
 
@@ -473,7 +473,7 @@ s, t, z, d = anomaly_surf(
 # In[Calculate a large-scale potential vorticity on the above specvol anomaly surface]
 
 # Create function for partial deriv of equation of state with respect to depth z
-eos_z = make_eos_p("jmd95", grav, rho_c)  # for scalar inputs
+eos_z = load_eos("jmd95", "_p", grav, rho_c)  # for scalar inputs
 eos_z = vectorize_eos(eos_z)  # for nd inputs
 
 # Build linear interpolation function, operating over a whole dataset (kind="u"),

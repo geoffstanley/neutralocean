@@ -1,7 +1,7 @@
 """ Mixed Layer """
 
 from neutralocean.ppinterp import make_pp
-from neutralocean.eos.tools import make_eos, vectorize_eos
+from neutralocean.eos.tools import load_eos, vectorize_eos
 from neutralocean.lib import _process_casts, _process_vert_dim
 
 
@@ -47,16 +47,13 @@ def mixed_layer(
 
         Specification for the equation of state.
 
-        If a str, can be any of the strings accepted by
-        `neutralocean.eos.tools.make_eos`,
-        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
+        If a str, can be any of the strings accepted by `neutralocean.eos.tools.load_eos`.
 
         If a function, must take three inputs corresponding to `S`, `T`, and
-        `P`, and output the density (or specific volume).  This form is not
-        allowed when `diags` is `True`.  This can be made as, e.g.,
-        `eos = neutralocean.eos.make_eos('gsw')`
+        `P`, and output the density (or specific volume). This can be made as, e.g.,
+        `eos = neutralocean.eos.load_eos('gsw')`
         for a non-Boussinesq ocean, or as
-        `eos = neutralocean.eos.make_eos('gsw', grav, rho_c)`
+        `eos = neutralocean.eos.load_eos('gsw', "", grav, rho_c)`
         for a Boussinesq ocean with `grav` and `rho_c` (see inputs below).
 
         The function should be `@numba.njit` decorated and need not be vectorized
@@ -112,7 +109,7 @@ def mixed_layer(
     """
 
     # Make the equation of state, if given a str
-    eos = make_eos(eos, grav, rho_c)
+    eos = load_eos(eos, "", grav, rho_c)
 
     # Ensure eos is vectorized. It's okay if eos already was.
     eos = vectorize_eos(eos)

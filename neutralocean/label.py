@@ -90,11 +90,9 @@ def veronis(
     eos : str or function, Default 'gsw'
 
         The equation of state for the density or specific volume as a function
-        of `S`, `T`, and pressure (if non-Boussinesq) or depth(if Boussinesq).
+        of `S`, `T`, and pressure (if non-Boussinesq) or depth (if Boussinesq).
 
-        If a str, can be any of the strings accepted by
-        `neutralocean.eos.tools.make_eos`,
-        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
+        If a str, can be any of the strings accepted by `neutralocean.eos.tools.load_eos`.
 
     grav : float, Default None
         Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.

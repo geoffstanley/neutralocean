@@ -164,17 +164,15 @@ def potential_surf(S, T, P, **kwargs):
 
         Specification for the equation of state.
 
-        If a str, can be any of the strings accepted by
-        `neutralocean.eos.tools.make_eos`,
-        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
+        If a str, can be any of the strings accepted by `neutralocean.eos.tools.load_eos`.
 
         If a function, must take three inputs corresponding to `S`, `T`, and
-        `P`, and output the density (or specific volume).  This form is not
+        `P`, and output the density or specific volume.  This form is not
         allowed when `diags` is `True`.  This can be made as, e.g.,
         `eos = neutralocean.eos.load_eos('gsw')`
         for a non-Boussinesq ocean, or as
         `eos = neutralocean.eos.load_eos('gsw', grav, rho_c)`
-        for a Boussinesq ocean with `grav` and `rho_c` (see inputs below).
+        for a Boussinesq ocean.
 
         If a tuple of functions, the first element must be a function for the
         equation of state as above, and the second element must be a function
@@ -459,9 +457,7 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
         raise TypeError('If provided, "pin_p" must be a float')
 
 
-def _choose_ref_isoval(
-    ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
-):
+def _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn):
     # Handle the three valid calls in the following order of precedence:
     # >>> _isopycnal(ans_type, S, T, P, ref, isoval)
     # >>> _isopycnal(ans_type, S, T, P, ref, pin_cast, pin_p)

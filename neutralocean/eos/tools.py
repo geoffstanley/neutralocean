@@ -246,7 +246,8 @@ def vectorize_eos(eos):
     Parameters
     ----------
     eos : function
-        Any function taking three scalar inputs and returning one scalar output,
+        Any function taking three scalar inputs (additional optional arguments
+        are allowed but only take their default value) and returning one scalar output,
         such as the equation of state.  Note this does not work for functions
         returning multiple outputs (i.e. a tuple), such as a function returning
         the partial derivatives of the equation of state.

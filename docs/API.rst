@@ -81,11 +81,9 @@ Equation Of State
 
 Tools 
 -----
-.. autofunction:: neutralocean.eos.tools.make_eos
+.. autofunction:: neutralocean.eos.tools.load_eos
 
-.. autofunction:: neutralocean.eos.tools.make_eos_s_t
-
-.. autofunction:: neutralocean.eos.tools.make_eos_p
+.. autofunction:: neutralocean.eos.tools.make_bsq
 
 .. autofunction:: neutralocean.eos.tools.vectorize_eos
 

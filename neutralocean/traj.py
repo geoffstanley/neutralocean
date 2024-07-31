@@ -4,7 +4,7 @@ import numpy as np
 import numba as nb
 
 from neutralocean.ppinterp import make_pp, ppval_1_nonan_two
-from neutralocean.eos.tools import make_eos
+from neutralocean.eos.tools import load_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.ppinterp import valid_range_1_two
 from neutralocean.lib import _process_casts
@@ -84,9 +84,7 @@ def ntp_bottle_to_cast(
         The equation of state for the density or specific volume as a function
         of `S`, `T`, and pressure (if non-Boussinesq) or depth(if Boussinesq).
 
-        If a str, can be any of the strings accepted by
-        `neutralocean.eos.tools.make_eos`,
-        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
+        If a str, can be any of the strings accepted by `neutralocean.eos.tools.load_eos`.
 
         If a function, this should be `@numba.njit` decorated and need not be
         vectorized, as it will be called many times with scalar inputs.
@@ -99,7 +97,7 @@ def ntp_bottle_to_cast(
 
     """
 
-    eos = make_eos(eos, grav, rho_c)
+    eos = load_eos(eos, "", grav, rho_c)
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
     k, K = valid_range_1_two(S, P)  # S and T have same nan-structure
@@ -256,7 +254,7 @@ def neutral_trajectory(
 
     """
 
-    eos = make_eos(eos, grav, rho_c)
+    eos = load_eos(eos, "", grav, rho_c)
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
     S, T, P = _process_casts(S, T, P, vert_dim)
 

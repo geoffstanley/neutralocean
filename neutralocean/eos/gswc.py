@@ -14,7 +14,7 @@ rho_p :: compute the partial derivative of in-situ density with
 
 Notes:
 To make Boussinesq versions of these functions, see 
-`neutralocean.eos.tools.make_eos_bsq`.
+`neutralocean.eos.tools.make_bsq`.
 
 To make vectorized versions of these functions, see
 `neutralocean.eos.tools.vectorize_eos`.

@@ -1,5 +1,5 @@
 import numpy as np
-from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
+from neutralocean.eos.tools import load_eos, vectorize_eos
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.synthocean import synthocean
 from neutralocean.lib import find_first_nan, val_at
@@ -9,8 +9,8 @@ from neutralocean.grid import divergence
 
 grav = 9.81
 rho_c = 1027.5
-eos = make_eos("jmd95", grav, rho_c)
-eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
+eos = load_eos("jmd95", "", grav, rho_c)
+eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 eos_ufunc = vectorize_eos(eos)
 
 # Make a simple ocean dataset
