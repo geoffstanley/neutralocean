@@ -9,8 +9,9 @@ from neutralocean.grid import divergence
 
 grav = 9.81
 rho_c = 1027.5
-eos = load_eos("jmd95", "", grav, rho_c)
-eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
+eos_name = "gsw"
+eos = load_eos(eos_name, "", grav, rho_c)
+eos_s_t = load_eos(eos_name, "_s_t", grav, rho_c)
 eos_ufunc = vectorize_eos(eos)
 
 # Make a simple ocean dataset
@@ -85,9 +86,7 @@ def test_anomaly_surf():
     assert np.ma.allclose(δ, isoval)
 
     # Calculate surface potential density
-    δ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], Z[0]) - eos_ufunc(
-        s_ref, t_ref, Z[0]
-    )
+    δ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], Z[0]) - eos_ufunc(s_ref, t_ref, Z[0])
 
     # Calculate seafloor potential density
     n_good = find_first_nan(S)

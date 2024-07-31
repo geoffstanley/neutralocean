@@ -132,8 +132,8 @@ def veronis(
     >>> S = np.linspace(34, 35.5, 20)
     >>> T = np.linspace(18, 0, 20)
     >>> P = np.linspace(0, 4000, 20)
-    >>> veronis(2000, S, T, P, eos="jmd95")
-    1027.098197160422
+    >>> veronis(2000, S, T, P, eos="gsw")
+    0.0009737571001312298
 
     Calculate the Veronis density at 2000 dbar on a water column of linearly
     varying salinity and potential temperature.

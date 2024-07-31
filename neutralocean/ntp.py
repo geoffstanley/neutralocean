@@ -7,7 +7,7 @@ from neutralocean.lib import xr_to_np
 from neutralocean.eos.tools import load_eos
 
 
-def ntp_epsilon_errors(s, t, p, grid, eos="gsw", grav=None, rho_c=None):
+def ntp_epsilon_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
     """
     Calculate epsilon neutrality errors on an approximately neutral surface
 
@@ -23,7 +23,7 @@ def ntp_epsilon_errors(s, t, p, grid, eos="gsw", grav=None, rho_c=None):
         Can alternatively pass a 2 element tuple that is just `grid['edges']`,
         in which case `dist` will be taken as 1.0.
 
-    eos, grav, rho_c : 
+    eos_s_t, grav, rho_c : 
         See `ntp_epsilon_errors_norms`.
 
     Returns
@@ -41,7 +41,8 @@ def ntp_epsilon_errors(s, t, p, grid, eos="gsw", grav=None, rho_c=None):
         edges = grid["edges"]
         dist = grid.get("dist", 1.0)
 
-    eos_s_t = load_eos(eos, "_s_t", grav, rho_c)
+    if isinstance(eos_s_t, str):
+        eos_s_t = load_eos(eos_s_t, "_s_t", grav, rho_c)
 
     s, t, p = (np.reshape(xr_to_np(x), -1) for x in (s, t, p))
     e = _ntp_epsilon_error1(s, t, p, edges[0], edges[1], eos_s_t)
@@ -119,7 +120,8 @@ def ntp_epsilon_errors_norms(
 
     """
 
-    eos_s_t = load_eos(eos_s_t, "_s_t", grav, rho_c)
+    if isinstance(eos_s_t, str):
+        eos_s_t = load_eos(eos_s_t, "_s_t", grav, rho_c)
 
     # Calculate epsilon neutrality errors.  Here, treat all distances = 1.
     # The actual distances will be handled in computing the norms
