@@ -279,7 +279,7 @@ def anomaly_surf(S, T, P, **kwargs):
 
     Other Parameters
     ----------------
-    grid, vert_dim, eos, grav, rho_c, interp, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, eos, interp, diags, output, TOL_P_SOLVER :
         See `potential_surf`
 
     Examples

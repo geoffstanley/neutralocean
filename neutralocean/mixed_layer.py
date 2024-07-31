@@ -12,8 +12,6 @@ def mixed_layer(
     T,
     P,
     eos=eos_,
-    grav=None,
-    rho_c=None,
     pot_dens_diff=0.03,
     ref_p=100.0,
     bottle_index=1,
