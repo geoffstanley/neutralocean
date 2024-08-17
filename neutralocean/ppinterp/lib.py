@@ -51,7 +51,7 @@ def valid_range_1(X):
             break
 
     # Find K, such that K-1 = index to last valid data site
-    for i in range(k, K):
+    for i in range(k + 1, K):
         if np.isnan(X[i]):
             K = i
             break
@@ -125,7 +125,7 @@ def valid_range_1_two(X, Y):
             break
 
     # Find K, such that K-1 = index to last valid data site
-    for i in range(k, K):
+    for i in range(k + 1, K):
         if np.isnan(X[i]) or np.isnan(Y[i]):
             K = i
             break
