@@ -70,7 +70,7 @@ Neutral Trajectory
 
 Veronis Density
 ===============
-.. autofunction:: neutralocean.label.veronis_density
+.. autofunction:: neutralocean.label.veronis
 
 Mixed Layer
 ===========

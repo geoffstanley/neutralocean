@@ -1,4 +1,4 @@
-"""Library of simple functions for neutral_surfaces"""
+"""Library of simple functions for neutralocean"""
 
 import numpy as np
 import numba as nb
@@ -7,33 +7,68 @@ import xarray as xr
 from .eos import load_eos
 
 
-@nb.njit
-def find_first_nan(a):
-    """The index to the first NaN along the last axis
+def find_first_nan(a, axis=-1):
+    """The index to the first NaN along a given axis
 
     Parameters
     ----------
     a : ndarray
         Input array possibly containing some NaN elements
 
+    axis : int, Default -1
+        Axis along which to find the first NaN
+
     Returns
     -------
     k : ndarray of int
-        The index to the first NaN along each 1D array making up `a`, as in the
-        following example with `a` being 3D.
+        For each 1D array `a1` of `a` in the dimension `axis`, `k` gives:
+        the index to the first NaN of `a1`, or
+        0 if `a1` has no NaNs, or
+        `a.shape[axis]` if `a1` is all NaN.
+
+        For example, with `a` being 3D and `axis` = -1:
         If all `a[i,j,:]` are NaN, then `k[i,j] = 0`.
         If all `a[i,j,:]` are not NaN, then `k[i,j] = a.shape[-1]`.
         Otherwise, `K = k[i,j]` is the smallest int such that `a[i,j,K-1]`
-        is not NaN, but `a[i,j,K]` is NaN.
+        is not NaN and `a[i,j,K]` is NaN.
+
+    Notes
+    -----
+    This is similar to (and faster than) `numpy.argmax(numpy.isnan(a), axis)`,
+    but differs for indices along which `a` is all NaN: this output contains
+    `a.shape[axis]` whereas the `argmax` approach contains 0.
     """
-    nk = a.shape[-1]
-    k = np.full(a.shape[:-1], nk, dtype=np.int_)
-    for n in np.ndindex(a.shape[0:-1]):
-        for i in range(nk):
-            if np.isnan(a[n][i]):
-                k[n] = i
-                break
-    return k
+    axis = axis % a.ndim  # handle when axis < 0
+
+    # Shapes of a before and after axis
+    shape1 = a.shape[0:axis]
+    shape3 = a.shape[axis + 1 :]
+
+    # Number of elements before, at, and after axis
+    n1 = np.prod(shape1, dtype=int)
+    n2 = a.shape[axis]
+    n3 = np.prod(shape3, dtype=int)
+
+    # Reshape a to 3D, use helper function, then reshape output back
+    a = np.reshape(a, (n1, n2, n3))
+    out = _find_first_nan(a)
+    return np.reshape(out, (*shape1, *shape3))
+
+
+@nb.njit
+def _find_first_nan(a):
+    """The index to the first NaN along the middle axis of a 3D array"""
+    I, J, K = a.shape
+
+    out = np.full((I, K), J, dtype=np.int64)
+    for i in range(I):
+        for k in range(K):
+            a1 = a[i, :, k]
+            for j in range(J):
+                if np.isnan(a1[j]):
+                    out[i][k] = j
+                    break
+    return out
 
 
 @nb.njit

@@ -122,7 +122,8 @@ def _build_edgedata(dims, data):
 
         With `dims == (nj, ni)`, each element of `data` should be a 2D array of
         shape `(nj, ni)` --- but if they are of shape `(nj+1, ni+2)` they will
-        be trimmed to remove the last row and the first and last columns.
+        be trimmed to remove the last row (duplication of the north fold) and 
+        the first and last columns (duplication for zonal periodicity).
 
         - `data[0][j, i]` lives between nodes [i, j] and [i, j+1], for `0 <= j <= nj-1`.
 
@@ -144,6 +145,8 @@ def _build_edgedata(dims, data):
 
     nj, ni = dims
     v, u = data
+    v = np.broadcast_to(v, dims)
+    u = np.broadcast_to(u, dims)
     if v.shape == (nj + 1, ni + 2):
         v = v[:-1, 1:-1]
     if u.shape == (nj + 1, ni + 2):
