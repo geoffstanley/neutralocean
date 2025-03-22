@@ -8,7 +8,6 @@ from neutralocean.eos.tools import load_eos
 from neutralocean.fzero import guess_to_bounds, brent
 from neutralocean.ppinterp import valid_range_1_two
 from neutralocean.lib import _process_casts
-from neutralocean.eos.tools import load_eos
 
 eos_ = load_eos('gsw', '')  # default
 eos_s_t_ = load_eos('gsw', '_s_t')  # default
