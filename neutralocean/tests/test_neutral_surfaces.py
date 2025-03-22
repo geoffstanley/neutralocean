@@ -1,5 +1,5 @@
 import numpy as np
-from neutralocean.eos.tools import make_eos, make_eos_s_t, vectorize_eos
+from neutralocean.eos.tools import load_eos, vectorize_eos
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
 from neutralocean.synthocean import synthocean
 from neutralocean.lib import find_first_nan, val_at
@@ -9,8 +9,8 @@ from neutralocean.grid import divergence
 
 grav = 9.81
 rho_c = 1027.5
-eos = make_eos("gsw", grav, rho_c)
-eos_s_t = make_eos_s_t("gsw", grav, rho_c)
+eos = load_eos("gsw", "", grav, rho_c)
+eos_s_t = load_eos("gsw", "_s_t", grav, rho_c)
 eos_ufunc = vectorize_eos(eos)
 
 # Make a simple ocean dataset
@@ -85,9 +85,7 @@ def test_anomaly_surf():
     assert np.ma.allclose(δ, isoval)
 
     # Calculate surface potential density
-    δ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], Z[0]) - eos_ufunc(
-        s_ref, t_ref, Z[0]
-    )
+    δ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], Z[0]) - eos_ufunc(s_ref, t_ref, Z[0])
 
     # Calculate seafloor potential density
     n_good = find_first_nan(S)
@@ -128,7 +126,8 @@ def test_omega_surf():
         grid,
         pin_cast=(i0, j0),
         p_init=z,
-        eos=(eos, eos_s_t),
+        eos=eos,
+        eos_s_t=eos_s_t,
         diags=True,
     )
 

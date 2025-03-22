@@ -1,4 +1,5 @@
 """Omega surfaces"""
+
 import numpy as np
 from time import time
 from scipy.sparse import csc_matrix
@@ -15,10 +16,10 @@ from neutralocean.lib import (
     _xr_out,
     _process_pin_cast,
     _process_casts,
-    _process_eos,
     aggsum,
 )
 from neutralocean.mixed_layer import mixed_layer
+from neutralocean.eos.tools import load_eos
 
 
 def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
@@ -118,16 +119,10 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
 
     Other Parameters
     ----------------
-    grid, vert_dim, grav, rho_c, interp, diags, output, TOL_P_SOLVER :
+    grid, vert_dim, interp, eos, eos_s_t, diags, output, TOL_P_SOLVER :
 
         See `potential_surf`
-
-    eos : str or tuple of functions, Default 'gsw'
-
-        As in `potential_surf`, excluding the option to pass a single function.
-        The omega surface algorithm relies on knowing the partial derivatives
-        of the equation of state with respect to salinity and temperature, so
-        the `eos_s_t` function is also required if given as a tuple of functions.
+        Note: `eos_s_t` is required.
 
     ITER_MIN : int, Default 1
 
@@ -203,9 +198,9 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
     p_ml = kw.get("p_ml")
     diags = kw.get("diags", True)
     output = kw.get("output", True)
-    eos = kw.get("eos", "gsw")
-    rho_c = kw.get("rho_c")
-    grav = kw.get("grav")
+    eos = kw.get("eos")
+    eos_s_t = kw.get("eos_s_t")
+    interp = kw.get("interp", "linear")
     ITER_MIN = kw.get("ITER_MIN", 1)
     ITER_MAX = kw.get("ITER_MAX", 10)
     ITER_START_WETTING = kw.get("ITER_START_WETTING", 1)
@@ -215,7 +210,6 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
     TOL_P_CHANGE_RMS = kw.get("TOL_P_CHANGE_RMS", 0.0)
     OMEGA_FORMULATION = kw.get("OMEGA_FORMULATION", "poisson")
     ITER_WET_PERIM = kw.get("ITER_WET_PERIM", np.iinfo(int).max)
-    interp = kw.get("interp", "linear")
 
     # Build function that calculates coefficients of a piecewise polynomial
     # interpolant, doing 1 problem at a time, and knowing there will be no nans
@@ -229,7 +223,9 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
     sxr, txr, pxr = _xrs_in(S, T, P, vert_dim)  # before _process_casts
     pin_c = _process_pin_cast(pin_c, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
-    eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
+    if eos is None and eos_s_t is None:
+        eos = load_eos("gsw")
+        eos_s_t = load_eos("gsw", "_s_t")
 
     # Save shape of horizontal dimensions, then flatten horiz dims to 1D.
     surf_shape = S.shape[0:-1]
@@ -277,9 +273,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
         global_solver = _omega_matsolve_gradient
         distratio = np.sqrt(distratio)
     else:
-        raise ValueError(
-            f"Unknown OMEGA_FORMULATION. Given {OMEGA_FORMULATION}"
-        )
+        raise ValueError(f"Unknown OMEGA_FORMULATION. Given {OMEGA_FORMULATION}")
 
     if eos(34.5, 3.0, 1000.0) < 1.0:
         # Convert from a density tolerance [kg m^-3] to a specific volume tolerance [m^3 kg^-1]
@@ -455,9 +449,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
                 )
 
         # --- Check for convergence
-        if (
-            ϕ_MAV < TOL_LRPD_MAV or Δp_RMS < TOL_P_CHANGE_RMS
-        ) and iter_ >= ITER_MIN:
+        if (ϕ_MAV < TOL_LRPD_MAV or Δp_RMS < TOL_P_CHANGE_RMS) and iter_ >= ITER_MIN:
             break
 
     if diags:

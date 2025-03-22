@@ -4,36 +4,91 @@ import functools as ft
 import numpy as np
 import numba as nb
 import importlib
+import inspect
+import warnings
 
-# List of modules in the same directory as this file, each of which must have
-# the following numba.njit'ed functions:  rho, rho_s_t, rho_p.
-modules = {"gsw": "specvol", "jmd95": "rho", "jmdfwg06": "rho"}
+# Dictionary mapping names of modules in the same directory as this file to either
+# "specvol" or "rho" depending on which variable they calculate.
+modules = {"gsw": "specvol", "polyTEOS10bsq" : "rho", "jmd95": "rho", "jmdfwg06": "rho"}
 
 
 @ft.lru_cache(maxsize=10)
-def _make_eos(eos, derivs, num_p_derivs=0, grav=None, rho_c=None):
-    if isinstance(eos, str):
-        if eos in modules:
-            fcn_name = modules[eos] + derivs
-            fn = importlib.import_module("neutralocean.eos." + eos).__getattribute__(
-                fcn_name
-            )
-        else:
-            raise ValueError(
-                f"Equation of state {eos} not (yet) implemented."
-                " Currently, eos must be one of " + modules.__str__()
-            )
+def load_eos(eos, derivs="", grav=None, rho_c=None):
+    """Load EOS function from library.
 
-    elif callable(eos):
-        fn = eos
+    Parameters
+    ----------
+    eos : str
 
+        If a str, can be 
+        - `'gsw'` to generate the 75 term approximation [1]_ of the TEOS-10 [2]_ specific volume,
+        - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation [1]_
+        of the TEOS-10 in-situ density [2]_
+        - `'jmd95'` to generate the Jackett and McDougall (1995) in-situ density [3]_, or 
+        - `'jmdfwg06'` to generate the Jackett et al (2006) in-situ density [4]_.
+
+    derivs : str, Default ""
+
+        String specifying which partial derivatives of the EOS are desired.
+        Only used when `eos` is a string.
+        The actual function loaded is named `eos + derivs`.
+        For example, "" loads the EOS itself, 
+        "_p" will load the partial derivative with respect to p,
+        "_s_t" will load the function whose two outputs are the s and t
+        partial derivatives, respectively.
+
+    grav, rho_c : float, Default None
+
+        Gravitational acceleration [m s-2] and Boussinesq reference density
+        [kg m-3]. If both are provided, the equation of state is modified as
+        appropriate for the Boussinesq approximation, in which the third
+        argument is depth, not pressure. Specifically, a depth `z` is
+        converted to `1e-4 * grav * rho_c * z`, which is the hydrostatic
+        pressure [dbar] at depth `z` [m] caused by a water column of density
+        `rho_c` under gravity `grav`.
+
+    Returns
+    -------
+    fn: function
+
+        Equation of State function accepting three arguments: 
+        (salinity, temperature, pressure) when `grav` or `rho_c` is None, or 
+        (salinity, temperature, depth) otherwise.
+    
+    Notes
+    -----
+    .. [1] Roquet, F., G. Madec, Trevor J. McDougall, and Paul M. Barker. “Accurate
+       Polynomial Expressions for the Density and Specific Volume of Seawater Using
+       the TEOS-10 Standard.” Ocean Modelling 90 (June 2015): 29-43.
+       https://doi.org/10.1016/j.ocemod.2015.04.002.
+        
+    .. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
+       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
+       SBN 978-0-646-55621-5.
+
+    .. [3] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
+
+    .. [4] Jackett, D. R., McDougall, T. J., Feistel, R., Wright, D. G., &
+       Griffies, S. M. (2006). Algorithms for Density, Potential Temperature,
+       Conservative Temperature, and the Freezing Temperature of Seawater.
+       Journal of Atmospheric and Oceanic Technology, 23(12), 1709-1728.
+       https://doi.org/10.1175/JTECH1946.1
+
+    """
+    
+    if eos in modules:
+        fcn_name = modules[eos] + derivs
+        fn = importlib.import_module(
+            "neutralocean.eos." + eos
+        ).__getattribute__(fcn_name)
     else:
-        raise TypeError(
-            f"Since eos was not a string, eos must be a callalbe function; found {eos}"
+        raise ValueError(
+            f"Equation of state {eos} not (yet) implemented."
+            " Currently, eos must be one of " + modules.__str__()
         )
 
     if grav != None and rho_c != None:
-        fn = make_bsq(fn, grav, rho_c, num_p_derivs)
+        fn = make_bsq(fn, grav, rho_c)
 
     return fn
 
@@ -70,20 +125,17 @@ def make_eos(eos, grav=None, rho_c=None):
 
         The desired equation of state.
 
-    .. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
-       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
-       SBN 978-0-646-55621-5.
-
-    .. [2] Jackett and McDougall, 1995, JAOT 12(4), pp. 381-388
-
-    .. [3] Jackett, D. R., McDougall, T. J., Feistel, R., Wright, D. G., &
-       Griffies, S. M. (2006). Algorithms for Density, Potential Temperature,
-       Conservative Temperature, and the Freezing Temperature of Seawater.
-       Journal of Atmospheric and Oceanic Technology, 23(12), 1709–1728.
-       https://doi.org/10.1175/JTECH1946.1
     """
 
-    return _make_eos(eos, "", 0, grav, rho_c)
+    warnings.warn("Replace with `load_eos(eos, '', grav, rho_c)`", DeprecationWarning, 2)
+    if callable(eos):
+        fn = eos
+    else:
+        fn = load_eos(eos, "")
+    if grav is not None and rho_c is not None:
+        fn = make_bsq(fn, grav, rho_c)
+
+    return fn
 
 
 def make_eos_s_t(eos, grav=None, rho_c=None):
@@ -104,7 +156,15 @@ def make_eos_s_t(eos, grav=None, rho_c=None):
         state.
     """
 
-    return _make_eos(eos, "_s_t", 0, grav, rho_c)
+    warnings.warn("Replace with `load_eos(eos, '_s_t', grav, rho_c)`", DeprecationWarning, 2)
+    if callable(eos):
+        fn = eos
+    else:
+        fn = load_eos(eos, "_s_t")
+    if grav is not None and rho_c is not None:
+        fn = make_bsq(fn, grav, rho_c)
+
+    return fn
 
 
 def make_eos_p(eos, grav=None, rho_c=None):
@@ -123,37 +183,37 @@ def make_eos_p(eos, grav=None, rho_c=None):
         argument (pressure) of the desired equation of state.
     """
 
-    return _make_eos(eos, "_p", 1, grav, rho_c)
+    warnings.warn("Replace with `load_eos(eos, '_p', grav, rho_c)`", DeprecationWarning, 2)
+    if callable(eos):
+        fn = eos
+    else:
+        fn = load_eos(eos, "_p")
+    if grav is not None and rho_c is not None:
+        fn = make_bsq(fn, grav, rho_c)
+
+    return fn
 
 
 @ft.lru_cache(maxsize=10)
-def make_bsq(fn, grav, rho_c, num_p_derivs=0):
+def make_bsq(fn, grav, rho_c):
     """Make a Boussinesq version of a given equation of state (or its partial derivative(s))
 
     Parameters
     ----------
     fn : function
-        Function with (salinity, temperature, pressure) as inputs.  Typically
+        Function with (salinity, temperature, pressure, pfac) as inputs.  Typically
         this is the equation of state, returning the density or specific volume.
         However, it can also be a function for partial derivative(s) of the
         equation of state with respect to salinity, temperature, or pressure.
+        The 4th argument, `pfac`, pre-multiplies `pressure` before the main calculation,
+        and also post-multiplies the output as many times as there are pressure 
+        partial derivatives. 
 
     grav : float
         Gravitational acceleration [m s-2]
 
     rho_c : float
         Boussinesq reference density [kg m-3]
-
-    num_p_derivs : int, Default 0
-        Number of `p` partial derivatives that relate `fn` to the equation of
-        state.  For example,
-
-        - if `fn` is the equation of state, or its partial derivative (of
-          any order, with respect to salinity or temperature, pass 0.
-        - if `fn` is the partial derivative of the equation of state with
-          respect to pressure, pass 1.
-        - if `fn` is the second partial derivative of the equation of state
-          with respect to salinity and pressure (i.e. ∂²ρ/∂S∂p), pass 1.
 
     Returns
     -------
@@ -165,18 +225,18 @@ def make_bsq(fn, grav, rho_c, num_p_derivs=0):
     # Hydrostatic conversion from depth [m] to pressure [dbar]
     z_to_p = 1e-4 * grav * rho_c
 
-    if num_p_derivs == 0:
-        # Slight optimization for later: don't multiply by factor when factor == 1
-        @nb.njit
-        def fn_bsq(s, t, z):
-            return fn(s, t, z * z_to_p)
+    # Get parameters to fn
+    params = inspect.signature(fn).parameters
 
-    else:
-        factor = z_to_p**num_p_derivs
+    if len(params) != 4:
+        raise ValueError("Expected `fn` to accept 4 arguments.")
 
-        @nb.njit
-        def fn_bsq(s, t, z):
-            return fn(s, t, z * z_to_p) * factor
+    # Get default value of last (4th) parameter, then multiply by z_to_p
+    pfac = next(reversed(params.values())).default * z_to_p
+
+    @nb.njit
+    def fn_bsq(s, t, z):
+        return fn(s, t, z, pfac)
 
     return fn_bsq
 
@@ -188,7 +248,8 @@ def vectorize_eos(eos):
     Parameters
     ----------
     eos : function
-        Any function taking three scalar inputs and returning one scalar output,
+        Any function taking three scalar inputs (additional optional arguments
+        are allowed but only take their default value) and returning one scalar output,
         such as the equation of state.  Note this does not work for functions
         returning multiple outputs (i.e. a tuple), such as a function returning
         the partial derivatives of the equation of state.

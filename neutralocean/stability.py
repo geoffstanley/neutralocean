@@ -3,6 +3,11 @@ from scipy.optimize import minimize
 
 from neutralocean.lib import _process_casts
 from neutralocean.ppinterp import valid_range_1
+from neutralocean.eos.tools import load_eos
+from neutralocean.eos.gsw import rho as gsw_rho
+
+eos_ = load_eos("gsw", "")  # default
+eos_s_t_ = load_eos("gsw", "_s_t")  # default
 
 
 def count_unstable(S, T, P, **kw):
@@ -25,13 +30,12 @@ def count_unstable(S, T, P, **kw):
         with the partial derivatives of the equation of state with respect to
         `S` and `T` at the local `P`.
 
-    eos : function
-        Equation of State for density (not specific volume);
-        used when `interp_two` is None.
+    eos : function, Default `neutralocean.eos.gsw.specvol`
+        Equation of State; used when `interp_two` is None.
 
-    eos_s_t : function, Optional
+    eos_s_t : function, Default `neutralocean.eos.gsw.specvol_s_t`
 
-        Partial derivatives of the Equation of State (eos above) with respect 
+        Partial derivatives of the Equation of State (`eos` above) with respect
         to `S` and `T`; used when `interp_two` is given.
 
     """
@@ -43,9 +47,11 @@ def count_unstable(S, T, P, **kw):
     nk = S.shape[-1]
 
     if interp_two is None:
-        eos = kw.get("eos")
+        eos = kw.get("eos", eos_)
     else:
-        eos_s_t = kw.get("eos_s_t")
+        eos_s_t = kw.get("eos_s_t", eos_s_t_)
+
+    isd = eos(34.5, 3.0, 1000.0) > 1.0
 
     num_unstab = 0
     for k in range(0, nk - 1):
@@ -53,18 +59,24 @@ def count_unstable(S, T, P, **kw):
             p_avg = (P[..., k] + P[..., k + 1]) / 2
             σ1 = eos(S[..., k], T[..., k], p_avg)
             σ2 = eos(S[..., k + 1], T[..., k + 1], p_avg)
-            num_unstab += np.sum(σ1 >= σ2)
+            if isd:
+                num_unstab += np.sum(σ1 >= σ2)  # in-situ density
+            else:
+                num_unstab += np.sum(σ1 <= σ2)  # specific volume
         else:
             s, t = S[..., k], T[..., k]
             ds, dt = interp_two(P[..., k], P, S, T, 1)
             rs, rt = eos_s_t(s, t, P[..., k])
             lrpd_z = rs * ds + rt * dt
-            num_unstab += np.sum(lrpd_z < 0)
+            if isd:
+                num_unstab += np.sum(lrpd_z < 0)  # in-situ density
+            else:
+                num_unstab += np.sum(lrpd_z > 0)  # specific volume
 
     return num_unstab
 
 
-def stabilize_ST(S, T, P, eos, **kw):
+def stabilize_ST(S, T, P, **kw):
     """
     Mutate S, T to ensure the vertical gradient of Locally Referenced Potential
     Density (LRPD) is greater than a given threshold everywhere.
@@ -85,12 +97,10 @@ def stabilize_ST(S, T, P, eos, **kw):
         as `S` and `T`, or can be 1D with as many elements as there
         are in the vertical dimension of `S` and `T`.
 
-    eos : function
+    eos : function, Default `neutralocean.eos.gsw.rho`
         Equation of state for density (not specific volume).
-
-        Takes three inputs corresponding to `S`, `T`, and `P`, and outputs the
-        density. It should be `@numba.njit` decorated and need not be 
-        vectorized -- it will be called many times with scalar inputs.
+        Takes three inputs corresponding to (`S`, `T`, `P`), and outputs density.
+        Should be `@numba.njit` decorated and need not be vectorized.
 
     min_dLRPDdp : float or 1D array of float, Default 1e-6
 
@@ -103,7 +113,7 @@ def stabilize_ST(S, T, P, eos, **kw):
     weight : float, Default 10.0
 
         Multiplicative weighting factor applied to `S` perturbations, but not
-        to `T` perturbations. 
+        to `T` perturbations.
         When `weight > 1`, `T` perturbations are favoured.
         When `weight < 1`, `S` perturbations are favoured.
 
@@ -122,19 +132,19 @@ def stabilize_ST(S, T, P, eos, **kw):
 
     tol : float, Default 1e-10
 
-        Tolerance for (weighted) `S` and (unweighted) `T` perturbations; 
+        Tolerance for (weighted) `S` and (unweighted) `T` perturbations;
         passed to scipy's `minimize`.
 
     method : str, Default "SLSQP"
 
         Minimization method, passed to scipy's `minimize`.
-        
+
     options : dict, Default {"maxiter" : 1000}
-    
+
         Options passed to the `options` argument of `minimize`.
-        
+
     verbose : bool, Default True
-    
+
         Whether to print information any time a cast is mutated.
 
     Notes
@@ -149,13 +159,15 @@ def stabilize_ST(S, T, P, eos, **kw):
 
     """
 
+    # TODO: allow eos to be specific volume
+    eos = kw.pop("eos", gsw_rho)
     min_dLRPDdp = kw.pop("min_dLRPDdp", 1e-6)  # or N^2 >= 1e-8, roughly
     weight = kw.pop("weight", 10.0)  # crude approximation of |dρ/dS / dρ/dΘ|
     vert_dim = kw.pop("vert_dim", -1)
     tol = kw.pop("tol", 1e-10)
     method = kw.pop("method", "SLSQP")
     verbose = kw.pop("verbose", True)
-    options = kw.pop("options", {"maxiter" : 1000})
+    options = kw.pop("options", {"maxiter": 1000})
 
     S, T, P = _process_casts(S, T, P, vert_dim)
 
@@ -229,9 +241,7 @@ def stabilize_ST(S, T, P, eos, **kw):
                 raise RuntimeError(f"Cast {c} stabilization failed.")
 
             if verbose:
-                print(
-                    f"Perturbed cast {c} by weighted RMS amount {f(res.x, weight)}"
-                )
+                print(f"Perturbed cast {c} by weighted RMS amount {f(res.x, weight)}")
 
 
 def calc_dLRPDdp_fd_1(S, T, P, eos):

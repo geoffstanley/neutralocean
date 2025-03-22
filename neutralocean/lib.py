@@ -4,8 +4,6 @@ import numpy as np
 import numba as nb
 import xarray as xr
 
-from .eos import make_eos, make_eos_s_t
-
 
 def find_first_nan(a, axis=-1):
     """The index to the first NaN along a given axis
@@ -362,29 +360,3 @@ def _process_pin_cast(pin_cast, S):
         return (pin_cast,)
     else:
         return pin_cast
-
-
-def _process_eos(eos, grav=None, rho_c=None, need_s_t=False):
-    # Process equation of state argument and make cache functions
-
-    eos_s_t = None
-    if isinstance(eos, str):
-        if need_s_t:
-            eos_s_t = make_eos_s_t(eos, grav, rho_c)
-        eos = make_eos(eos, grav, rho_c)
-    else:
-        if need_s_t:
-            if isinstance(eos, (tuple, list)) and len(eos) == 2:
-                eos_s_t = eos[1]
-                eos = eos[0]
-            if not callable(eos) or not callable(eos_s_t):
-                raise ValueError(
-                    "If `eos` is not a str, expected a tuple of length two"
-                    " containing an eos function and an eos_s_t function."
-                )
-        else:
-            if isinstance(eos, (tuple, list)) and len(eos) >= 1:
-                eos = eos[0]
-            if not callable(eos):
-                raise ValueError("If `eos` is not a str, expected a function.")
-    return eos, eos_s_t

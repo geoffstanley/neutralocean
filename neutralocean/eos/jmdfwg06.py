@@ -4,17 +4,17 @@ Density of Sea Water using the Jackett et al. (2006) [1]_ function
 Functions:
 
 rho :: computes in-situ density from salinity, potential temperature and
-    pressure
+    pressure (or depth)
 
 rho_s_t :: compute the partial derivatives of in-situ density with
     respect to salinity and potential temperature
 
 rho_p :: compute the partial derivative of in-situ density with
-    respect to pressure
+    respect to pressure (or depth)
 
 Notes:
 To make Boussinesq versions of these functions, see 
-`neutralocean.eos.tools.make_eos_bsq`.
+`neutralocean.eos.tools.make_bsq`.
 
 To make vectorized versions of these functions, see
 `neutralocean.eos.tools.vectorize_eos`.
@@ -69,7 +69,7 @@ epsln = 1.0e-40
 
 
 @nb.njit
-def rho(s, t, p):
+def rho(s, t, p, pfac=1.0):
     """
     Parameters
     ----------
@@ -79,14 +79,32 @@ def rho(s, t, p):
         Potential temperature [ITS-90]
     p : float
         Pressure [dbar]
+    pfac : float, Optional
+        Multiplicative scaling factor applied to `p`. 
+        Default value is 1.0 [dbar-1]. See `Notes`.
 
     Returns
     -------
     rho : float
         In-situ density [kg m-3]
+
+    Notes
+    -----
+    The Boussinesq version of this function is called with third input `p` as
+    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where 
+    `grav` is the gravitational acceleration [m.s-2]
+    `rho_c` is the Boussinesq reference density [kg.m-3],
+    `pfac_default = 1.0` [dbar-1] is the non-Boussinesq value of `pfac`
+    `Pa2db = 1e-4` [dbar.Pa-1].
+    Thus, `p * Pa2db * grav * rho_c` is the hydrostatic pressure [dbar] at depth
+    `p` assuming the water column's density was `rho_c`. 
+
+    To create a Boussinesq version of this function that accepts 3 arguments
+    (salinity, temperature, depth), use `neutralocean.eos.tools.make_bsq`.
     """
 
     # Precompute some commonly used terms
+    z = p * pfac
     t2 = t * t
 
     # Rational function for density
@@ -94,14 +112,14 @@ def rho(s, t, p):
         a0
         + t * (a1 + t * (a2 + a3 * t))
         + s * (a4 + a5 * t + a6 * s)
-        + p * (a7 + a8 * t2 + a9 * s + p * (a10 + a11 * t2))
+        + z * (a7 + a8 * t2 + a9 * s + z * (a10 + a11 * t2))
     )
 
     inv_den = 1.0 / (
         b0
         + t * (b1 + t * (b2 + t * (b3 + t * b4)))
         + s * (b5 + t * (b6 + b7 * t2) + np.sqrt(s) * (b8 + b9 * t2))
-        + p * (b10 + p * t * (b11 * t2 + b12 * p))
+        + z * (b10 + z * t * (b11 * t2 + b12 * z))
         + epsln
     )
 
@@ -109,16 +127,12 @@ def rho(s, t, p):
 
 
 @nb.njit
-def rho_s_t(s, t, p):
+def rho_s_t(s, t, p, pfac=1.0):
     """
     Parameters
     ----------
-    s : float
-        Practical salinity [PSS-78]
-    t : float
-        Potential temperature [ITS-90]
-    p : float
-        Pressure [dbar]
+    s, t, p, pfac : float
+        See `rho`
 
     Returns
     -------
@@ -126,27 +140,28 @@ def rho_s_t(s, t, p):
         Partial derivative of in-situ density with respect to salinity [kg m-3 psu-1]
 
     rho_t : float
-        Partial derivative of in-situ density with respect to temperature [kg m-3 degc-1]
+        Partial derivative of in-situ density with respect to temperature [kg m-3 degC-1]
     """
 
     # Precompute some commonly used terms
+    z = p * pfac
     t2 = t * t
     sp5 = np.sqrt(s)
-    pt = p * t
+    zt = z * t
 
     # Rational function for density
     num = (
         a0
         + t * (a1 + t * (a2 + a3 * t))
         + s * (a4 + a5 * t + a6 * s)
-        + p * (a7 + a8 * t2 + a9 * s + p * (a10 + a11 * t2))
+        + z * (a7 + a8 * t2 + a9 * s + z * (a10 + a11 * t2))
     )
 
     inv_den = 1.0 / (
         b0
         + t * (b1 + t * (b2 + t * (b3 + t * b4)))
         + s * (b5 + t * (b6 + b7 * t2) + sp5 * (b8 + b9 * t2))
-        + p * (b10 + pt * (b11 * t2 + b12 * p))
+        + z * (b10 + zt * (b11 * t2 + b12 * z))
         + epsln
     )
 
@@ -156,13 +171,13 @@ def rho_s_t(s, t, p):
     #   rho_s = (num_s - num * den_s / den ) / den
     # and similarly for rho_t
 
-    num_s = a4 + a5 * t + 2.0 * a6 * s + p * a9
+    num_s = a4 + a5 * t + 2.0 * a6 * s + z * a9
     num_t = (
         a1
         + t * (2.0 * a2 + 3.0 * a3 * t)
         + a5 * s
-        + 2.0 * a8 * pt
-        + 2.0 * a11 * p * pt
+        + 2.0 * a8 * zt
+        + 2.0 * a11 * z * zt
     )
 
     den_s = b5 + t * (b6 + b7 * t2) + sp5 * (1.5 * b8 + 1.5 * b9 * t2)
@@ -170,8 +185,8 @@ def rho_s_t(s, t, p):
         b1
         + t * (2.0 * b2 + t * (3.0 * b3 + 4.0 * b4 * t))
         + s * (b6 + 3.0 * b7 * t2 + 2.0 * b9 * sp5 * t)
-        + 3.0 * b11 * pt * pt
-        + b12 * p**3
+        + 3.0 * b11 * zt * zt
+        + b12 * z**3
     )
 
     rho_s = (num_s - num * den_s * inv_den) * inv_den
@@ -180,25 +195,22 @@ def rho_s_t(s, t, p):
     return rho_s, rho_t
 
 
-@nb.njit(nb.f8(nb.f8, nb.f8, nb.f8))
-def rho_p(s, t, p):
+@nb.njit
+def rho_p(s, t, p, pfac=1.0):
     """
     Parameters
     ----------
-    s : float
-        Practical salinity [PSS-78]
-    t : float
-        Potential temperature [ITS-90]
-    p : float
-        Pressure [dbar]
+    s, t, p, pfac : float
+        See `rho`
 
     Returns
     -------
     rho_p : float
-        Partial derivative of in-situ density with respect to pressure [kg m-3 dbar-1]
+        Partial derivative of in-situ density with respect to `p` [kg m-3 / [p]]
     """
 
     # Precompute some commonly used terms
+    z = p * pfac
     t2 = t * t
 
     # Rational function for density
@@ -206,14 +218,14 @@ def rho_p(s, t, p):
         a0
         + t * (a1 + t * (a2 + a3 * t))
         + s * (a4 + a5 * t + a6 * s)
-        + p * (a7 + a8 * t2 + a9 * s + p * (a10 + a11 * t2))
+        + z * (a7 + a8 * t2 + a9 * s + z * (a10 + a11 * t2))
     )
 
     inv_den = 1.0 / (
         b0
         + t * (b1 + t * (b2 + t * (b3 + t * b4)))
         + s * (b5 + t * (b6 + b7 * t2) + np.sqrt(s) * (b8 + b9 * t2))
-        + p * (b10 + p * t * (b11 * t2 + b12 * p))
+        + z * (b10 + z * t * (b11 * t2 + b12 * z))
         + epsln
     )
 
@@ -222,8 +234,8 @@ def rho_p(s, t, p):
     # Taking the partial derivative w.r.t. p gives
     #   rho_p = (num_p - num * den_p / den ) / den
 
-    num_p = a7 + a8 * t2 + a9 * s + p * (2.0 * a10 + 2.0 * a11 * t2)
+    num_p = a7 + a8 * t2 + a9 * s + z * (2.0 * a10 + 2.0 * a11 * t2)
 
-    den_p = b10 + p * t * (2.0 * b11 * t2 + 3.0 * b12 * p)
+    den_p = b10 + z * t * (2.0 * b11 * t2 + 3.0 * b12 * z)
 
     return (num_p - num * den_p * inv_den) * inv_den

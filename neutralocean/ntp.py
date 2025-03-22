@@ -4,16 +4,18 @@ import numpy as np
 import numba as nb
 
 from neutralocean.lib import xr_to_np
-from neutralocean.eos.tools import make_eos_s_t
+from neutralocean.eos.tools import load_eos
+
+eos_s_t_ = load_eos("gsw", "_s_t")  # default
 
 
-def ntp_epsilon_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
+def ntp_epsilon_errors(s, t, p, grid, eos_s_t=eos_s_t_):
     """
     Calculate epsilon neutrality errors on an approximately neutral surface
 
     Parameters
     ----------
-    s, t, p, eos_s_t, grav, rho_c :
+    s, t, p, eos_s_t :
         See `ntp_epsilon_errors_norms`.
 
     grid : dict
@@ -22,7 +24,6 @@ def ntp_epsilon_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
         If the `dist` element is missing, a value of 1.0 will be used.
         Can alternatively pass a 2 element tuple that is just `grid['edges']`,
         in which case `dist` will be taken as 1.0.
-
 
     Returns
     -------
@@ -39,8 +40,6 @@ def ntp_epsilon_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
         edges = grid["edges"]
         dist = grid.get("dist", 1.0)
 
-    eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
-
     s, t, p = (np.reshape(xr_to_np(x), -1) for x in (s, t, p))
     e = _ntp_epsilon_error1(s, t, p, edges[0], edges[1], eos_s_t)
 
@@ -49,9 +48,7 @@ def ntp_epsilon_errors(s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None):
     return e
 
 
-def ntp_epsilon_errors_norms(
-    s, t, p, grid, eos_s_t="gsw", grav=None, rho_c=None
-):
+def ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t=eos_s_t_):
     """
     Calculate norms of the epsilon neutrality errors on an approximately neutral surface
 
@@ -81,16 +78,14 @@ def ntp_epsilon_errors_norms(
             `distperp[i]` is the distance of the interface between nodes whose
             linear indices are `edges[0][i]` and `edges[1][i]`.
 
-    eos_s_t : function
-        Equation of state for the partial derivatives of density or specific
-        volume with respect to `S` and `T` as a function of `S`, `T`, and `P`
-        inputs.
+    eos_s_t : function, Default `neutralocean.eos.gsw.specvol_s_t`
 
-    grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
+        Function taking three inputs corresponding to (`s, t, p)`, and
+        outputting a tuple containing the partial derivatives of the equation of
+        state with respect to `s` and `t`.
 
-    rho_c : float, Default None
-        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
+        The function should be `@numba.njit` decorated and need not be vectorized
+        -- it will be called many times with scalar inputs.
 
     Returns
     -------
@@ -102,14 +97,11 @@ def ntp_epsilon_errors_norms(
 
     """
 
-    eos_s_t = make_eos_s_t(eos_s_t, grav, rho_c)
-
     # Calculate epsilon neutrality errors.  Here, treat all distances = 1.
     # The actual distances will be handled in computing the norms
     e = ntp_epsilon_errors(s, t, p, {"edges": grid["edges"]}, eos_s_t)
 
     area = grid["dist"] * grid["distperp"]  # Area [m^2] centred on edges
-
 
     # L2 norm of vector [a_i], weighted by vector [w_i], is sqrt( sum( w_i * a_i^2 ) / sum( w_i ) )
     # L1 norm of vector [a_i], weighted by vector [w_i], is sum( w_i * |a_i| ) / sum( w_i )

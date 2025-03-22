@@ -3,7 +3,6 @@
 import numpy as np
 
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
-from neutralocean.eos import make_eos_s_t
 from neutralocean.ntp import ntp_epsilon_errors
 
 # In[Create an ocean of 4 water columns]
@@ -81,7 +80,6 @@ s, t, p, d = potential_surf(
     T,
     P,
     grid=grid,
-    eos="gsw",
     ref=0.0,
     isoval=1 / 1027.5,
 )
@@ -100,7 +98,6 @@ s, t, p, d = anomaly_surf(
     T,
     P,
     grid=grid,
-    eos="gsw",
     ref=(s0, t0),
     isoval=0.0,
 )
@@ -113,7 +110,7 @@ print(
 
 # omega-surface, pinned to be 1500dbar on cast 0, initialized by iteratively 
 # making Neutral Tangent Plane links from cast 0.
-s, t, p, d = omega_surf(S, T, P, grid, pin_cast=0, p_init=1500.0, eos="gsw")
+s, t, p, d = omega_surf(S, T, P, grid, pin_cast=0, p_init=1500.0)
 print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to 1500 dbar)"
@@ -122,8 +119,7 @@ print(
 )
 
 # Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
-eos_s_t = make_eos_s_t("gsw")
-e = ntp_epsilon_errors(s, t, p, grid, eos_s_t)
+e = ntp_epsilon_errors(s, t, p, grid)
 print("The ϵ neutrality errors on the ω-surface are as follows:")
 for i in range(len(a)):
     print(f"  From cast {a[i]} to cast {b[i]}, ϵ = {e[i]} m2 kg-1")

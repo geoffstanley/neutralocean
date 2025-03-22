@@ -5,7 +5,7 @@ import xarray as xr
 from os.path import expanduser
 
 # Functions to make the Equation of State
-from neutralocean.eos import make_eos, make_eos_s_t
+from neutralocean.eos import load_eos
 
 # Functions to compute various approximately neutral surfaces
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
@@ -109,15 +109,15 @@ grid = build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dyG, dxG)
 #  and its partial derivatives.
 # TODO: is this what ECCOv4r4 used?
 grav, rho_c = 9.81, 1027.5
-eos = make_eos("jmd95", grav, rho_c)
-eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
+eos = load_eos("jmd95", "", grav, rho_c)
+eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 
 
 # Stabilize hydrographic casts
 print("Begin stabilization of hydrographic casts ...")
 from time import time
 tic = time()
-stabilize_ST(S, T, Z, eos, verbose=False)  # about 140 sec
+stabilize_ST(S, T, Z, eos=eos, verbose=False)  # about 140 sec
 print(f"... done in {time() - tic:.2f} sec")
 
 # Select pinning cast, picking the cast closest to (x0,y0)
@@ -148,7 +148,8 @@ s, t, z, d = anomaly_surf(
     T,
     Z,
     grid=grid,
-    eos=(eos, eos_s_t),
+    eos=eos,
+    eos_s_t=eos_s_t,
     vert_dim="k",
     ref=(s0, t0),
     isoval=0.0,
@@ -164,7 +165,8 @@ s, t, z, d = omega_surf(
     pin_cast=pin_cast,
     p_init=z0,
     vert_dim="k",
-    eos=(eos, eos_s_t),
+    eos=eos,
+    eos_s_t=eos_s_t,
     interp="pchip",
 )
 z_omega = z

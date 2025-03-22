@@ -4,17 +4,17 @@ Density of Sea Water using the Jackett and McDougall 1995 [1]_ function
 Functions:
 
 rho :: computes in-situ density from salinity, potential temperature and
-    pressure
+    pressure (or depth)
 
 rho_s_t :: compute the partial derivatives of in-situ density with
     respect to salinity and potential temperature
 
 rho_p :: compute the partial derivative of in-situ density with
-    respect to pressure
+    respect to pressure (or depth)
 
 Notes:
 To make Boussinesq versions of these functions, see 
-`neutralocean.eos.tools.make_eos_bsq`.
+`neutralocean.eos.tools.make_bsq`.
 
 To make vectorized versions of these functions, see
 `neutralocean.eos.tools.vectorize_eos`.
@@ -75,8 +75,6 @@ eosJMDCKP10 =   1.394680e-08 # .== original / 10
 eosJMDCKP11 = - 2.040237e-07 # .== original / 10
 eosJMDCKP12 =   6.128773e-09 # .== original / 10
 eosJMDCKP13 =   6.207323e-11 # .== original / 10
-# The above coeffs need to be defined in the function for
-# compatability with @numba.njit
 # fmt: on
 
 # If ndarray inputs are needed, it is best to use @nb.vectorize.  That is,
@@ -84,7 +82,7 @@ eosJMDCKP13 =   6.207323e-11 # .== original / 10
 # for scalars is about twice as fast as a signatureless njit'ed function
 # applied to ndarrays.
 @nb.njit
-def rho(s, t, p):
+def rho(s, t, p, pfac=1.0):
     """Fast JMD95 [1]_ in-situ density.
 
     Parameters
@@ -95,6 +93,9 @@ def rho(s, t, p):
         Potential temperature [IPTS-68]
     p : float
         Pressure [dbar]
+    pfac : float, Optional
+        Multiplicative scaling factor applied to `p`. 
+        Default value is 1.0 [dbar-1]. See `Notes`.
 
     Returns
     -------
@@ -103,6 +104,18 @@ def rho(s, t, p):
 
     Notes
     -----
+    The Boussinesq version of this function is called with third input `p` as
+    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where 
+    `grav` is the gravitational acceleration [m.s-2]
+    `rho_c` is the Boussinesq reference density [kg.m-3],
+    `pfac_default = 1.0` [dbar-1] is the non-Boussinesq value of `pfac`
+    `Pa2db = 1e-4` [dbar.Pa-1].
+    Thus, `p * Pa2db * grav * rho_c` is the hydrostatic pressure [dbar] at depth
+    `p` assuming the water column's density was `rho_c`. 
+
+    To create a Boussinesq version of this function that accepts 3 arguments
+    (salinity, temperature, depth), use `neutralocean.eos.tools.make_bsq`.
+
     This function is derived from `densjmd95.m`, documented below. Input
     checks and expansion of variables have been removed. That code used
     arrays to store coefficients, and also began by multiplying the
@@ -150,15 +163,16 @@ def rho(s, t, p):
     """
 
     s1o2 = np.sqrt(s)
+    z = p * pfac
 
     # fmt: off
     # The secant bulk modulus
     K = (           1.965933e+05 + t*( 1.444304e+03 + t*(-1.706103e+01 + t*(9.648704e-02 + t*-4.190253e-04)))
         +   s *    (5.284855e+02 + t*(-3.101089e+00 + t*( 6.283263e-02 + t*-5.084188e-04))
         +   s1o2 * (3.886640e+00 + t*( 9.085835e-02 + t* -4.619924e-03) ))
-        + p * (     3.186519e+00 + t*( 2.212276e-02 + t*(-2.984642e-04 + t* 1.956415e-06))
+        + z * (     3.186519e+00 + t*( 2.212276e-02 + t*(-2.984642e-04 + t* 1.956415e-06))
         +   s *    (6.704388e-03 + t*(-1.847318e-04 + t*  2.059331e-07) + s1o2*1.480266e-04)
-        + p * (     2.102898e-05 + t*(-1.202016e-06 + t*  1.394680e-08)
+        + z * (     2.102898e-05 + t*(-1.202016e-06 + t*  1.394680e-08)
         +   s *   (-2.040237e-07 + t*( 6.128773e-09 + t*  6.207323e-11)) )) )
 
     # The in-situ density
@@ -167,7 +181,7 @@ def rho(s, t, p):
         + s * (    8.244930e-01 + t*(-4.089900e-03 + t*( 7.643800e-05 + t*(-8.246700e-07 + t*  5.387500e-09)))
         + s1o2 * (-5.724660e-03 + t*( 1.022700e-04 + t* -1.654600e-06))
         + s    *   4.831400e-04
-        )) / (1.0 - p / K )
+        )) / (1.0 - z / K )
     # fmt: on
     return rho
 
@@ -184,13 +198,13 @@ def rho(s, t, p):
 # without a signature specification, and calling the rho_s_t function with ndarray
 # objects.  So, we'll just use @nb.njit with no signature.
 @nb.njit
-def rho_s_t(s, t, p):
+def rho_s_t(s, t, p, pfac=1.0):
     """
     Fast salinity and potential temperature partial derivatives of JMD95 in-situ density
 
     Parameters
     ----------
-    s, t, p : float
+    s, t, p, pfac : float
         See `rho`
 
     Returns
@@ -210,63 +224,64 @@ def rho_s_t(s, t, p):
     # INPUT CHECKS REMOVED
 
     s1o2 = np.sqrt(s)
+    z = p * pfac
 
     # fmt: off
     # The secant bulk modulus
     K =    (        eosJMDCKFw0 + t*(eosJMDCKFw1 + t*(eosJMDCKFw2 + t*(eosJMDCKFw3 + t*eosJMDCKFw4)))
         +   s *    (eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t* eosJMDCKSw3))
         +   s1o2 * (eosJMDCKSw4 + t*(eosJMDCKSw5 + t* eosJMDCKSw6) ))
-        + p * (     eosJMDCKP0 + t*(eosJMDCKP1 + t*(eosJMDCKP2 + t*eosJMDCKP3))
+        + z * (     eosJMDCKP0 + t*(eosJMDCKP1 + t*(eosJMDCKP2 + t*eosJMDCKP3))
         +   s *    (eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*eosJMDCKP7)
-        + p * (     eosJMDCKP8 + t*(eosJMDCKP9 + t* eosJMDCKP10)
+        + z * (     eosJMDCKP8 + t*(eosJMDCKP9 + t* eosJMDCKP10)
         +   s *    (eosJMDCKP11 + t*(eosJMDCKP12 + t* eosJMDCKP13)) )) )
 
 
     # The partial derivative of K with respect to s
     # K_s =      ( eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t* eosJMDCKSw3))
     #     + s1o2 * (1.5*eosJMDCKSw4 + t*(1.5*eosJMDCKSw5 + t* (1.5*eosJMDCKSw6)) )
-    #     + p * ( eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*(1.5*eosJMDCKP7)
-    #     + p * ( eosJMDCKP11 + t*(eosJMDCKP12 + t* (eosJMDCKP13)) )) )
+    #     + z * ( eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*(1.5*eosJMDCKP7)
+    #     + z * ( eosJMDCKP11 + t*(eosJMDCKP12 + t* (eosJMDCKP13)) )) )
 
     # The partial derivative of K with respect to t
     # K_t =    (     (eosJMDCKFw1 + t*(2.0*eosJMDCKFw2 + t*(3.0*eosJMDCKFw3 + t*(4.0*eosJMDCKFw4))))
     #     +   s *    (eosJMDCKSw1 + t*(2.0*eosJMDCKSw2 + t*(3.0*eosJMDCKSw3))
     #     +   s1o2 * (eosJMDCKSw5 + t*(2.0*eosJMDCKSw6) ))
-    #     + p * (     eosJMDCKP1 + t*(2.0*eosJMDCKP2 + t*(3.0*eosJMDCKP3))
+    #     + z * (     eosJMDCKP1 + t*(2.0*eosJMDCKP2 + t*(3.0*eosJMDCKP3))
     #     +   s *    (eosJMDCKP5 + t*(2.0*eosJMDCKP6))
-    #     + p * (     eosJMDCKP9 + t*(2.0*eosJMDCKP10)
+    #     + z * (     eosJMDCKP9 + t*(2.0*eosJMDCKP10)
     #     +   s *    (eosJMDCKP12 + t*(2.0*eosJMDCKP13)) )) )
 
     # work =    (    eosJMDCFw0 + t*(eosJMDCFw1 + t*(eosJMDCFw2 + t*(eosJMDCFw3 + t*(eosJMDCFw4 + t*eosJMDCFw5))))
     #     + s *    ( eosJMDCSw0 + t*(eosJMDCSw1 + t*(eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
     #     + s1o2 * ( eosJMDCSw5 + t*(eosJMDCSw6 + t*eosJMDCSw7))
-    #     + s    *   eosJMDCSw8   # from here up is the density of sea water at p = 0
-    #     )) * p / (K - p) # this prepares for the final rho_s and rho_t computations.
+    #     + s    *   eosJMDCSw8   # from here up is the density of sea water at z = 0
+    #     )) * z / (K - z) # this prepares for the final rho_s and rho_t computations.
 
-    # The partial derivative of sea water at p = 0, with respect to s
+    # The partial derivative of sea water at z = 0, with respect to s
     # rho_0_S =    (     eosJMDCSw0 + t*(    eosJMDCSw1 + t*(    eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
     #     + s1o2 * ( 1.5*eosJMDCSw5 + t*(1.5*eosJMDCSw6 + t*(1.5*eosJMDCSw7)))
     #     + s    * ( 2.0*eosJMDCSw8))
 
-    # The partial derivative of sea water at p = 0, with respect to t
+    # The partial derivative of sea water at z = 0, with respect to t
     # rho_0_T =    ( eosJMDCFw1 + t*(2.0*eosJMDCFw2 + t*(3.0*eosJMDCFw3 + t*(4.0*eosJMDCFw4 + t*(5.0*eosJMDCFw5))))
     #     + s *    ( eosJMDCSw1 + t*(2.0*eosJMDCSw2 + t*(3.0*eosJMDCSw3 + t*(4.0*eosJMDCSw4)))
     #     + s1o2 * ( eosJMDCSw6 + t*(2.0*eosJMDCSw7))))
 
     # The in-situ density is defined as
-    #  rho = rho_0 / (1 - p / K)
+    #  rho = rho_0 / (1 - z / K)
     # Taking the partial derivative w.r.t S gives
-    #           /            rho_0 * p * K_S   \       1
+    #           /            rho_0 * z * K_S   \       1
     #  rho_s = | rho_0_S -  _________________   |  _________
-    #           \            (1 - p/K) * K^2   /   1 - p / K
+    #           \            (1 - z/K) * K^2   /   1 - z / K
     # This is re-written as
-    #           /                rho_0 * p * K_S    \       1
+    #           /                rho_0 * z * K_S    \       1
     #  rho_s = | rho_0_S * K -  __________________   |  _________
-    #           \                     (K - p)       /     K - p
+    #           \                     (K - z)       /     K - z
     # Similarly for rho_t.
 
-    # rho_s = (rho_0_S * K - work * K_s) / (K - p)
-    # rho_t = (rho_0_T * K - work * K_t) / (K - p)
+    # rho_s = (rho_0_S * K - work * K_s) / (K - z)
+    # rho_t = (rho_0_T * K - work * K_t) / (K - z)
 
     # The following expressions are faster and require less memory, though appear more gruesome
     rho_s = (
@@ -278,15 +293,15 @@ def rho_s_t(s, t, p):
               (    eosJMDCFw0 + t*(eosJMDCFw1 + t*(eosJMDCFw2 + t*(eosJMDCFw3 + t*(eosJMDCFw4 + t*eosJMDCFw5))))
         + s *    ( eosJMDCSw0 + t*(eosJMDCSw1 + t*(eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
         + s1o2 * ( eosJMDCSw5 + t*(eosJMDCSw6 + t*eosJMDCSw7))
-        + s    *   eosJMDCSw8   # from here up is the density of sea water at p = 0
+        + s    *   eosJMDCSw8   # from here up is the density of sea water at z = 0
         )) # rho_0
-        * p / (K - p) 
+        * z / (K - z) 
         *
               ( eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t* eosJMDCKSw3))
         + s1o2 * (1.5*eosJMDCKSw4 + t*(1.5*eosJMDCKSw5 + t* (1.5*eosJMDCKSw6)) )
-        + p * ( eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*(1.5*eosJMDCKP7)
-        + p * ( eosJMDCKP11 + t*(eosJMDCKP12 + t* (eosJMDCKP13)) )) )  # K_s
-        ) / (K - p)
+        + z * ( eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*(1.5*eosJMDCKP7)
+        + z * ( eosJMDCKP11 + t*(eosJMDCKP12 + t* (eosJMDCKP13)) )) )  # K_s
+        ) / (K - z)
     
     rho_t = (
                  ( eosJMDCFw1 + t*(2.0*eosJMDCFw2 + t*(3.0*eosJMDCFw3 + t*(4.0*eosJMDCFw4 + t*(5.0*eosJMDCFw5))))
@@ -297,18 +312,18 @@ def rho_s_t(s, t, p):
               (    eosJMDCFw0 + t*(eosJMDCFw1 + t*(eosJMDCFw2 + t*(eosJMDCFw3 + t*(eosJMDCFw4 + t*eosJMDCFw5))))
         + s *    ( eosJMDCSw0 + t*(eosJMDCSw1 + t*(eosJMDCSw2 + t*(eosJMDCSw3 + t*eosJMDCSw4)))
         + s1o2 * ( eosJMDCSw5 + t*(eosJMDCSw6 + t*eosJMDCSw7))
-        + s    *   eosJMDCSw8   # from here up is the density of sea water at p = 0
+        + s    *   eosJMDCSw8   # from here up is the density of sea water at z = 0
         )) # rho_0
-        * p / (K - p) 
+        * z / (K - z) 
         * 
              (     (eosJMDCKFw1 + t*(2.0*eosJMDCKFw2 + t*(3.0*eosJMDCKFw3 + t*(4.0*eosJMDCKFw4))))
         +   s *    (eosJMDCKSw1 + t*(2.0*eosJMDCKSw2 + t*(3.0*eosJMDCKSw3))
         +   s1o2 * (eosJMDCKSw5 + t*(2.0*eosJMDCKSw6) ))
-        + p * (     eosJMDCKP1 + t*(2.0*eosJMDCKP2 + t*(3.0*eosJMDCKP3))
+        + z * (     eosJMDCKP1 + t*(2.0*eosJMDCKP2 + t*(3.0*eosJMDCKP3))
         +   s *    (eosJMDCKP5 + t*(2.0*eosJMDCKP6))
-        + p * (     eosJMDCKP9 + t*(2.0*eosJMDCKP10)
+        + z * (     eosJMDCKP9 + t*(2.0*eosJMDCKP10)
         +   s *    (eosJMDCKP12 + t*(2.0*eosJMDCKP13)) )) ) # K_t
-        ) / (K - p)
+        ) / (K - z)
 
     # fmt: on
 
@@ -316,20 +331,19 @@ def rho_s_t(s, t, p):
 
 
 @nb.njit
-def rho_p(s, t, p):
+def rho_p(s, t, p, pfac=1.0):
     """
     Fast pressure derivative of JMD95 in-situ density.
 
     Parameters
     ----------
-    s, t, p : float
+    s, t, p, pfac : float
         See `rho`
 
     Returns
     -------
     rho_p : float
-        Partial derivative of JMD95 in-situ density with respect to
-        pressure `p` [kg m-3 dbar-1]
+        Partial derivative of JMD95 in-situ density with respect to `p` [kg m-3 / [p]]
 
     Notes
     -----
@@ -337,10 +351,11 @@ def rho_p(s, t, p):
     """
 
     s1o2 = np.sqrt(s)
+    z = p * pfac
 
     # fmt: off
     K2 = (
-        p * ( eosJMDCKP8 + t*(eosJMDCKP9 + t*eosJMDCKP10)  
+        z * ( eosJMDCKP8 + t*(eosJMDCKP9 + t*eosJMDCKP10)  
         + s *  (eosJMDCKP11 + t*(eosJMDCKP12 + t*eosJMDCKP13)) ) 
         )
 
@@ -354,7 +369,7 @@ def rho_p(s, t, p):
         + s * (   eosJMDCKSw0 + t*(eosJMDCKSw1 + t*(eosJMDCKSw2 + t*eosJMDCKSw3)) 
             + s1o2 * (eosJMDCKSw4 + t*(eosJMDCKSw5 + t*eosJMDCKSw6) ) 
         )  # secant bulk modulus of sea water at the surface
-        + p * K1plusK2 # secant bulk modulus of sea water at pressure z
+        + z * K1plusK2 # secant bulk modulus of sea water at pressure z
         )
 
     rho = (
@@ -365,8 +380,8 @@ def rho_p(s, t, p):
         ) # density of sea water at the surface
         )
     
-    # (K1 + 2 * K2) is K_p, the partial derivative of K w.r.t p
-    rho_p = rho * (K - p * (K1plusK2 + K2)) / (K - p)**2
+    # (K1 + 2 * K2) is K_p, the partial derivative of K w.r.t z
+    rho_p = rho * (K - z * (K1plusK2 + K2)) / (K - z)**2
     # fmt: on
 
     return rho_p

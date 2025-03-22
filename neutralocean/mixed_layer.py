@@ -1,17 +1,17 @@
 """ Mixed Layer """
 
 from neutralocean.ppinterp import make_pp
-from neutralocean.eos.tools import make_eos, vectorize_eos
+from neutralocean.eos.tools import load_eos, vectorize_eos
 from neutralocean.lib import _process_casts, _process_vert_dim
+
+eos_ = load_eos("gsw")  # default
 
 
 def mixed_layer(
     S,
     T,
     P,
-    eos="gsw",
-    grav=None,
-    rho_c=None,
+    eos=eos_,
     pot_dens_diff=0.03,
     ref_p=100.0,
     bottle_index=1,
@@ -43,30 +43,10 @@ def mixed_layer(
 
         Must increase monotonically along the first dimension (i.e. downwards).
 
-    eos : str or function, Default 'gsw'
+    eos : function, Default `neutralocean.eos.gsw.specvol`
 
-        Specification for the equation of state.
-
-        If a str, can be any of the strings accepted by
-        `neutralocean.eos.tools.make_eos`,
-        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
-
-        If a function, must take three inputs corresponding to `S`, `T`, and
-        `P`, and output the density (or specific volume).  This form is not
-        allowed when `diags` is `True`.  This can be made as, e.g.,
-        `eos = neutralocean.eos.make_eos('gsw')`
-        for a non-Boussinesq ocean, or as
-        `eos = neutralocean.eos.make_eos('gsw', grav, rho_c)`
-        for a Boussinesq ocean with `grav` and `rho_c` (see inputs below).
-
-        The function should be `@numba.njit` decorated and need not be vectorized
-        -- it will be called many times with scalar inputs.
-
-    grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
-
-    rho_c : float, Default None
-        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
+        Function taking three inputs corresponding to (`S, T, P)`, and
+        outputting a the in-situ density or specific volume.
 
     pot_dens_diff : float, Default 0.03
 
@@ -110,9 +90,6 @@ def mixed_layer(
 
         A 2D array giving the pressure [dbar] or depth [m, positive] of the mixed layer
     """
-
-    # Make the equation of state, if given a str
-    eos = make_eos(eos, grav, rho_c)
 
     # Ensure eos is vectorized. It's okay if eos already was.
     eos = vectorize_eos(eos)

@@ -1,7 +1,7 @@
 # In[Imports]
 
 # Functions to make the Equation of State
-from neutralocean.eos import make_eos, make_eos_s_t
+from neutralocean.eos import load_eos
 
 # Functions to compute various approximately neutral surfaces
 from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
@@ -15,18 +15,19 @@ from neutralocean.grid.rectilinear import build_grid
 
 g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
+grav, rho_c = g["grav"], g["rho_c"]
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
 # make Boussinesq version of the Jackett and McDougall (1995) equation of state
 # --- which is what OCCA used --- and its partial derivatives
-eos = make_eos("jmd95", g["grav"], g["rho_c"])
-eos_s_t = make_eos_s_t("jmd95", g["grav"], g["rho_c"])
+eos = load_eos("jmd95", "", grav, rho_c)
+eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Perturb S, T to ensure static stability everywhere
 print("Begin stabilization of hydrographic casts ...")
 from time import time
 tic = time()
-stabilize_ST(S, T, Z, eos, min_dLRPDdz=1e-6, verbose=False)  # about 90 sec
+stabilize_ST(S, T, Z, eos=eos, min_dLRPDdz=1e-6, verbose=False)  # about 90 sec
 print(f"... done in {time() - tic:.2f} sec")
 
 # Select pinning cast in the equatorial Pacific.
@@ -39,16 +40,15 @@ z0 = 1500.0
 interp_name = "linear"
 
 # Build grid adjacency and distance information for neutralocean functions
-grid = build_grid(
-    (ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
-)
+grid = build_grid((ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"])
 
 # Prepare some default options for potential_surf, anomaly_surf, and omega_surf
 opts = {}
 opts["grid"] = grid
 opts["interp"] = interp_name
 opts["vert_dim"] = "Depth_c"
-opts["eos"] = (eos, eos_s_t)
+opts["eos"] = eos
+opts["eos_s_t"] = eos_s_t
 
 # In[Potential Density surfaces]
 
@@ -79,14 +79,9 @@ print(
 # Provide just the location to intersect `(pin_cast, pin_p)`.
 # This takes the reference depth `ref` to match `pin_p`.
 # Also illustrate using xarray coordinates for pin_cast.
-# Also show how to just give the EOS name and the necessary parameters (g and rho_c)
-# for its Boussinesq version, rather than using the pre-made EOS's as above.
 args = opts.copy()
 args["pin_cast"] = {"Longitude_t": 220.5, "Latitude_t": 0.5}
 args["pin_p"] = z0
-args["eos"] = "jmd95"
-args["grav"] = g["grav"]
-args["rho_c"] = g["rho_c"]
 s, t, z, d = potential_surf(S, T, Z, **args)
 assert z.values[i0, j0] == z0  # check pin_cast was indeed (i0,j0)
 z_sigma = z  # save for later
@@ -207,7 +202,7 @@ from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
 from neutralocean.label import veronis
 from neutralocean.lib import _process_casts, xr_to_np
 from neutralocean.ppinterp import make_pp
-from neutralocean.eos import make_eos_p, vectorize_eos
+from neutralocean.eos import vectorize_eos
 from neutralocean.traj import ntp_bottle_to_cast, neutral_trajectory
 from neutralocean.grid.rectilinear import edgedata_to_maps
 
@@ -220,9 +215,7 @@ from neutralocean.grid.rectilinear import edgedata_to_maps
 # Allow that there could be NaNs in the data (nans=True).
 # There will be two numpy arrays of dependent data (S, T), sharing the same
 # independent data Z (num_dep_vars=2).
-interp_two = make_pp(
-    interp_name, kind="u", out="interp", nans=True, num_dep_vars=2
-)
+interp_two = make_pp(interp_name, kind="u", out="interp", nans=True, num_dep_vars=2)
 
 # Apply interpolation function to interpolate salinity and temperature onto the
 # depth of the surface.  This requires working with numpy arrays, not xarrays.
@@ -326,7 +319,7 @@ print(
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
-rho_v = veronis(z0, S_ref_cast, T_ref_cast, Z, eos="jmd95")
+rho_v = veronis(z0, S_ref_cast, T_ref_cast, Z, eos=eos, eos_s_t=eos_s_t)
 print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
     f" has Veronis density {rho_v} kg m-3"
@@ -370,9 +363,7 @@ print(
     f"In-situ density anomaly surface ends at {zda[j_south]:8.4f}m depth."
 )
 
-print(
-    "Uncomment below to plot neutral trajectory and ANSs along meridional section"
-)
+print("Uncomment below to plot neutral trajectory and ANSs along meridional section")
 # import matplotlib.pyplot as plt
 # lat = g["YCvec"]  # latitudes
 # fig, ax = plt.subplots()
@@ -465,7 +456,8 @@ s, t, z, d = anomaly_surf(
     Tnp,
     Znp,
     grid=grid,
-    eos=(eos, eos_s_t),
+    eos=eos,
+    eos_s_t=eos_s_t,
     vert_dim=-1,
     ref=(s0, t0),
     isoval=0.0,
@@ -475,7 +467,7 @@ s, t, z, d = anomaly_surf(
 # In[Calculate a large-scale potential vorticity on the above specvol anomaly surface]
 
 # Create function for partial deriv of equation of state with respect to depth z
-eos_z = make_eos_p("jmd95", g["grav"], g["rho_c"])  # for scalar inputs
+eos_z = load_eos("jmd95", "_p", grav, rho_c)  # for scalar inputs
 eos_z = vectorize_eos(eos_z)  # for nd inputs
 
 # Build linear interpolation function, operating over a whole dataset (kind="u"),

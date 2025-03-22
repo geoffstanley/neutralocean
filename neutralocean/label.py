@@ -2,7 +2,7 @@ import numpy as np
 import numba as nb
 
 from .ppinterp import make_pp, ppval_1_two, pval
-from .lib import _process_eos
+from neutralocean.eos.tools import load_eos
 
 
 def veronis(
@@ -15,9 +15,8 @@ def veronis(
     b=1.0,
     dp=1.0,
     interp="linear",
-    eos="gsw",
-    grav=None,
-    rho_c=None,
+    eos=None,
+    eos_s_t=None
 ):
     """The surface density plus the integrated vertical gradient of Locally
     Referenced Potential Density
@@ -87,20 +86,19 @@ def veronis(
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
-    eos : str or function, Default 'gsw'
+    eos : function, Default `neutralocean.eos.gsw.specvol`
 
-        The equation of state for the density or specific volume as a function
-        of `S`, `T`, and pressure (if non-Boussinesq) or depth(if Boussinesq).
+        Function taking three inputs corresponding to (`S, T, P)`, and
+        outputting the in-situ density or specific volume.
 
-        If a str, can be any of the strings accepted by
-        `neutralocean.eos.tools.make_eos`,
-        e.g. `'jmd95'`, `'jmdfwg06'`, `'gsw'`.
+    eos_s_t : function, `neutralocean.eos.gsw.specvol_s_t`
 
-    grav : float, Default None
-        Gravitational acceleration [m s-2].  When non-Boussinesq, pass `None`.
+        Function taking three inputs corresponding to (`S, T, P)`, and
+        outputting a tuple containing the partial derivatives of the equation of
+        state with respect to `S` and `T`.
 
-    rho_c : float, Default None
-        Boussinesq reference density [kg m-3].  When non-Boussinesq, pass `None`.
+        The function(s) should be `@numba.njit` decorated and need not be vectorized
+        -- they will be called many times with scalar inputs.
 
     Notes
     -----
@@ -134,8 +132,8 @@ def veronis(
     >>> S = np.linspace(34, 35.5, 20)
     >>> T = np.linspace(18, 0, 20)
     >>> P = np.linspace(0, 4000, 20)
-    >>> veronis(2000, S, T, P, eos="jmd95")
-    1027.098197160422
+    >>> veronis(2000, S, T, P)
+    0.0009737571001312298
 
     Calculate the Veronis density at 2000 dbar on a water column of linearly
     varying salinity and potential temperature.
@@ -158,7 +156,10 @@ def veronis(
     # assert(isscalar(p0), 'p0 must be a scalar')
     # assert(isscalar(p1), 'p1 must be a scalar')
 
-    eos, eos_s_t = _process_eos(eos, grav, rho_c, need_s_t=True)
+    if eos is None and eos_s_t is None:
+        eos = load_eos("gsw")
+        eos_s_t = load_eos("gsw", "_s_t")
+
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=True)
     Sppc = ppc_fn(P, S)
     Tppc = ppc_fn(P, T)

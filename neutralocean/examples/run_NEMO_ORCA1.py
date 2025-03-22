@@ -10,6 +10,7 @@ import pooch
 
 from neutralocean.grid.tripolar import build_grid, edgedata_to_maps
 from neutralocean.surface import potential_surf, omega_surf
+from neutralocean.eos.tools import load_eos
 
 # In[Load data]
 
@@ -65,7 +66,8 @@ grid = build_grid((nj, ni), e1u, e2v, e2u, e1v)
 # In[Approximately Neutral Surfaces]
 
 grav = 9.80665  # gravitational acceleration [m s-2]
-rau0 = 1035.0  # Boussinesq reference density [kg m-3]
+rho_c = 1035.0  # Boussinesq reference density [kg m-3]
+eos = load_eos("jmd95", "", grav, rho_c)
 
 # Provide reference pressure (actually depth, in Boussinesq) and isovalue
 s, t, z, d = potential_surf(
@@ -73,9 +75,7 @@ s, t, z, d = potential_surf(
     T,
     Z,
     grid=grid,
-    eos="jmd95",
-    grav=grav,
-    rho_c=rau0,
+    eos=eos,
     vert_dim="lev",
     ref=0.0,
     isoval=1027.5,
@@ -104,9 +104,7 @@ s, t, z, d = omega_surf(
     pin_cast=(j0, i0),
     p_init=z0,
     vert_dim="lev",
-    eos="jmd95",
-    grav=grav,
-    rho_c=rau0,
+    eos=eos
 )
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
@@ -119,10 +117,9 @@ print(
 
 # In[Neutrality errors on a surface]
 from neutralocean.ntp import ntp_epsilon_errors
-from neutralocean.eos import make_eos_s_t
 
 # Prepare function for S and T derivatives of the equation of state
-eos_s_t = make_eos_s_t("jmd95", grav, rau0)
+eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
 e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
