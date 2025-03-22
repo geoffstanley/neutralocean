@@ -4,8 +4,6 @@ import numpy as np
 import numba as nb
 import xarray as xr
 
-from .eos import load_eos
-
 
 def find_first_nan(a, axis=-1):
     """The index to the first NaN along a given axis

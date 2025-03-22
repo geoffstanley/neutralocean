@@ -159,6 +159,7 @@ def stabilize_ST(S, T, P, **kw):
 
     """
 
+    # TODO: allow eos to be specific volume
     eos = kw.pop("eos", gsw_rho)
     min_dLRPDdp = kw.pop("min_dLRPDdp", 1e-6)  # or N^2 >= 1e-8, roughly
     weight = kw.pop("weight", 10.0)  # crude approximation of |dρ/dS / dρ/dΘ|
