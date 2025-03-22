@@ -1,5 +1,7 @@
 """Tools for handling the Equation of State"""
+
 import functools as ft
+import numpy as np
 import numba as nb
 import importlib
 
@@ -13,9 +15,9 @@ def _make_eos(eos, derivs, num_p_derivs=0, grav=None, rho_c=None):
     if isinstance(eos, str):
         if eos in modules:
             fcn_name = modules[eos] + derivs
-            fn = importlib.import_module(
-                "neutralocean.eos." + eos
-            ).__getattribute__(fcn_name)
+            fn = importlib.import_module("neutralocean.eos." + eos).__getattribute__(
+                fcn_name
+            )
         else:
             raise ValueError(
                 f"Equation of state {eos} not (yet) implemented."
@@ -203,4 +205,10 @@ def vectorize_eos(eos):
     def eos_vec(s, t, p):
         return eos(s, t, p)
 
-    return eos_vec
+    # suppress RuntimeWarning when NaN's present in `s` array.
+    # see https://github.com/numba/numba/issues/4793
+    def eos_vec_nowarning(s, t, p):
+        with np.errstate(invalid="ignore"):
+            return eos_vec(s, t, p)
+
+    return eos_vec_nowarning

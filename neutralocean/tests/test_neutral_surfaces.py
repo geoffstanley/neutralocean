@@ -9,8 +9,8 @@ from neutralocean.grid import divergence
 
 grav = 9.81
 rho_c = 1027.5
-eos = make_eos("jmd95", grav, rho_c)
-eos_s_t = make_eos_s_t("jmd95", grav, rho_c)
+eos = make_eos("gsw", grav, rho_c)
+eos_s_t = make_eos_s_t("gsw", grav, rho_c)
 eos_ufunc = vectorize_eos(eos)
 
 # Make a simple ocean dataset
@@ -31,7 +31,7 @@ grid = build_grid((ni, nj), wrap)
 def test_potential_surf():
     # Test sigma_surf using a prescribed reference depth and isovalue
     z_ref = 0.0
-    isoval = 1027.0
+    isoval = 1.0 / 1027.0
     s, t, z, _ = potential_surf(
         S,
         T,
