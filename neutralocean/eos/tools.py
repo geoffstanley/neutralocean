@@ -1,5 +1,7 @@
 """Tools for handling the Equation of State"""
+
 import functools as ft
+import numpy as np
 import numba as nb
 import importlib
 import inspect
@@ -264,4 +266,10 @@ def vectorize_eos(eos):
     def eos_vec(s, t, p):
         return eos(s, t, p)
 
-    return eos_vec
+    # suppress RuntimeWarning when NaN's present in `s` array.
+    # see https://github.com/numba/numba/issues/4793
+    def eos_vec_nowarning(s, t, p):
+        with np.errstate(invalid="ignore"):
+            return eos_vec(s, t, p)
+
+    return eos_vec_nowarning

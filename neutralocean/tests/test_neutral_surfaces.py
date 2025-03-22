@@ -31,7 +31,7 @@ grid = build_grid((ni, nj), wrap)
 def test_potential_surf():
     # Test sigma_surf using a prescribed reference depth and isovalue
     z_ref = 0.0
-    isoval = 1027.0
+    isoval = 1.0 / 1027.0
     s, t, z, _ = potential_surf(
         S,
         T,

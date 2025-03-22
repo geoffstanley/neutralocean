@@ -114,7 +114,11 @@ eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 
 
 # Stabilize hydrographic casts
-stabilize_ST(S, T, Z, eos, verbose=False)  # about 1 min
+print("Begin stabilization of hydrographic casts ...")
+from time import time
+tic = time()
+stabilize_ST(S, T, Z, eos=eos, verbose=False)  # about 140 sec
+print(f"... done in {time() - tic:.2f} sec")
 
 # Select pinning cast, picking the cast closest to (x0,y0)
 x0, y0 = (-172, -4)  # longitude, latitude -- Pacific equatorial ocean
