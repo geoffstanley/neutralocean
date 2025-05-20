@@ -145,12 +145,12 @@ def _build_edgedata(dims, data):
 
     nj, ni = dims
     v, u = data
+    if hasattr(v, 'shape') and v.shape == (nj + 1, ni + 2):
+        v = v[:-1, 1:-1]
+    if hasattr(u, 'shape') and  u.shape == (nj + 1, ni + 2):
+        u = u[:-1, 1:-1]
     v = np.broadcast_to(v, dims)
     u = np.broadcast_to(u, dims)
-    if v.shape == (nj + 1, ni + 2):
-        v = v[:-1, 1:-1]
-    if u.shape == (nj + 1, ni + 2):
-        u = u[:-1, 1:-1]
 
     return np.concatenate((v.reshape(-1), u.reshape(-1)))
 

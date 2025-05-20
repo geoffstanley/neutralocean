@@ -36,8 +36,8 @@ file_mesh = pooch.retrieve(url=url_mesh, known_hash=hash_mesh)
 # Extract data
 timestep = 0
 ds = xr.open_dataset(file_salt)
-nj = ds.dims["j"]  # number of grid points in the meridional y direction
-ni = ds.dims["i"]  # number of grid points in the zonal x direction
+nj = ds.sizes["j"]  # number of grid points in the meridional y direction
+ni = ds.sizes["i"]  # number of grid points in the zonal x direction
 S = ds["so"].isel({"time": timestep})  # 3D salinity
 Z = ds["lev"]  # 1D depth at center of tracer cells
 
@@ -68,6 +68,7 @@ grid = build_grid((nj, ni), e1u, e2v, e2u, e1v)
 grav = 9.80665  # gravitational acceleration [m s-2]
 rho_c = 1035.0  # Boussinesq reference density [kg m-3]
 eos = load_eos("jmd95", "", grav, rho_c)
+eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Provide reference pressure (actually depth, in Boussinesq) and isovalue
 s, t, z, d = potential_surf(
@@ -76,6 +77,7 @@ s, t, z, d = potential_surf(
     Z,
     grid=grid,
     eos=eos,
+    eos_s_t=eos_s_t,
     vert_dim="lev",
     ref=0.0,
     isoval=1027.5,
@@ -104,7 +106,8 @@ s, t, z, d = omega_surf(
     pin_cast=(j0, i0),
     p_init=z0,
     vert_dim="lev",
-    eos=eos
+    eos=eos,
+    eos_s_t=eos_s_t
 )
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
