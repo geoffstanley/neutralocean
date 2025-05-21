@@ -121,9 +121,6 @@ print(
 # In[Neutrality errors on a surface]
 from neutralocean.ntp import ntp_epsilon_errors
 
-# Prepare function for S and T derivatives of the equation of state
-eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
-
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
 e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 

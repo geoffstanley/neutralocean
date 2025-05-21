@@ -5,5 +5,5 @@
 dist/
 docs/_build/
 dev/
-todo.txt
+todo.md
 upload.sh
