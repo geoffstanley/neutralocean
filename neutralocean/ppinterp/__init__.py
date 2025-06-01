@@ -48,7 +48,8 @@ The `make_pp` factory function will help select the desired variant of the
 `*coeffs*` and `*interp*` functions.
 """
 
-from .ppinterp import (
+import importlib as _importlib
+from .ppval import (
     pval,
     ppval_1,
     ppval_1_two,
@@ -59,3 +60,26 @@ from .ppinterp import (
 )
 from .lib import valid_range_1, valid_range_1_two, valid_range
 from .tools import make_pp
+
+modules = ["linear", "pchip", "pplib", "ppval", "tools"]
+
+__all__ = modules + [
+    k for (k, v) in locals().items() if callable(v) and not k.startswith("_")
+]  # all local, public functions
+
+
+def __dir__():
+    return __all__
+
+
+# Lazy load of submodules
+def __getattr__(name):
+    if name in modules:
+        return _importlib.import_module(f"neutralocean.ppinterp.{name}")
+    else:
+        try:
+            return globals()[name]
+        except KeyError:
+            raise AttributeError(
+                f"Module 'neutralocean.ppinterp' has no attribute '{name}'"
+            )

@@ -1,33 +1,26 @@
 # In[Imports]
 
-# Functions to make the Equation of State
-from neutralocean.eos import load_eos
+import neutralocean as no
 
-# Functions to compute various approximately neutral surfaces
-from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
-
-# Functions to load and work with rectilinear (lat-lon) OCCA data
-from neutralocean.examples.load_OCCA import load_OCCA
-from neutralocean.stability import stabilize_ST
-from neutralocean.grid.rectilinear import build_grid
 
 # In[Load OCCA data]
 
-g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
+g, S, T = no.data.load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 grav, rho_c = g["grav"], g["rho_c"]
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
 
 # make Boussinesq version of the Jackett and McDougall (1995) equation of state
 # --- which is what OCCA used --- and its partial derivatives
-eos = load_eos("jmd95", "", grav, rho_c)
-eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
+eos = no.load_eos("jmd95", "", grav, rho_c)
+eos_s_t = no.load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Perturb S, T to ensure static stability everywhere
 print("Begin stabilization of hydrographic casts ...")
 from time import time
+
 tic = time()
-stabilize_ST(S, T, Z, eos=eos, min_dLRPDdz=1e-6, verbose=False)  # about 90 sec
+no.stabilize_ST(S, T, Z, eos=eos, min_dLRPDdz=1e-6, verbose=False)  # about 90 sec
 print(f"... done in {time() - tic:.2f} sec")
 
 # Select pinning cast in the equatorial Pacific.
@@ -39,8 +32,12 @@ z0 = 1500.0
 # Select vertical interpolation method. Options are "linear" or "pchip"
 interp_name = "linear"
 
-# Build grid adjacency and distance information for neutralocean functions
-grid = build_grid((ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"])
+# Build grid adjacency and distance information for neutralocean functions.
+# Note OCCA uses a latitude by longitude grid, which is rectangular in memory, hence we
+# select the `rectilinear` submodule of the `grid` subpackage.
+grid = no.grid.rectilinear.build_grid(
+    (ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
+)
 
 # Prepare some default options for potential_surf, anomaly_surf, and omega_surf
 opts = {}
@@ -56,7 +53,7 @@ opts["eos_s_t"] = eos_s_t
 args = opts.copy()
 args["ref"] = 0.0
 args["isoval"] = 1027.5
-s, t, z, d = potential_surf(S, T, Z, **args)
+s, t, z, d = no.potential_surf(S, T, Z, **args)
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" with isovalue = {d['isoval']}kg m-3"
@@ -68,7 +65,7 @@ args = opts.copy()
 args["ref"] = 0.0
 args["pin_cast"] = (i0, j0)
 args["pin_p"] = z0
-s, t, z, d = potential_surf(S, T, Z, **args)
+s, t, z, d = no.potential_surf(S, T, Z, **args)
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
@@ -82,7 +79,7 @@ print(
 args = opts.copy()
 args["pin_cast"] = {"Longitude_t": 220.5, "Latitude_t": 0.5}
 args["pin_p"] = z0
-s, t, z, d = potential_surf(S, T, Z, **args)
+s, t, z, d = no.potential_surf(S, T, Z, **args)
 assert z.values[i0, j0] == z0  # check pin_cast was indeed (i0,j0)
 z_sigma = z  # save for later
 print(
@@ -100,7 +97,7 @@ s0, t0 = 34.5, 4.0
 args = opts.copy()
 args["ref"] = (s0, t0)
 args["isoval"] = 0.0
-s, t, z, d = anomaly_surf(S, T, Z, **args)
+s, t, z, d = no.anomaly_surf(S, T, Z, **args)
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" with isovalue = {d['isoval']}kg m-3"
@@ -112,7 +109,7 @@ args = opts.copy()
 args["ref"] = (s0, t0)
 args["pin_cast"] = (i0, j0)
 args["pin_p"] = z0
-s, t, z, d = anomaly_surf(S, T, Z, **args)
+s, t, z, d = no.anomaly_surf(S, T, Z, **args)
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
     f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
@@ -125,7 +122,7 @@ print(
 args = opts.copy()
 args["pin_cast"] = (i0, j0)
 args["pin_p"] = z0
-s, t, z, d = anomaly_surf(S, T, Z, **args)
+s, t, z, d = no.anomaly_surf(S, T, Z, **args)
 z_delta = z  # save for later
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
@@ -144,8 +141,8 @@ print(
 args = opts.copy()
 args["pin_cast"] = (i0, j0)
 args["p_init"] = z_delta
-args["p_ml"] = {"bottle_index": 1, "ref_p": 0.0}  # see `mixed_layer` for info
-s, t, z, d = omega_surf(S, T, Z, **args)
+args["p_ml"] = {"bottle_index": 1, "ref_p": 0.0}  # see `mld` for info
+s, t, z, d = no.omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
     f" initialized from the given in-situ density anomaly surface"
@@ -168,7 +165,7 @@ args["TOL_P_CHANGE_RMS"] = 1e-6
 args["TOL_LRPD_MAV"] = 0.0  # deactivate this exit threshold
 args["TOL_P_SOLVER"] = 1e-7
 args["ITER_STOP_WETTING"] = 99  # > ITER_MAX, so don't stop wetting
-s, t, z, d = omega_surf(S, T, Z, **args)
+s, t, z, d = no.omega_surf(S, T, Z, **args)
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
     f" ** The omega-surface"
@@ -186,7 +183,7 @@ args_omega = args.copy()  # save for later
 i1, j1 = 315, 110  # North Atlantic
 args["pin_cast"] = (i1, j1)
 args["p_init"] = z_omega  # set init surface from above
-s, t, z, d = omega_surf(S, T, Z, **args)
+s, t, z, d = no.omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
     f" initialized from an omega surface and pinned to the cast {(i1,j1)} at {z0}m)"
@@ -197,14 +194,9 @@ print(
 # In[Begin showing more advanced features]
 
 import numpy as np
-from neutralocean.mixed_layer import mixed_layer
-from neutralocean.ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
-from neutralocean.label import veronis
-from neutralocean.lib import _process_casts, xr_to_np
-from neutralocean.ppinterp import make_pp
-from neutralocean.eos import vectorize_eos
-from neutralocean.traj import ntp_bottle_to_cast, neutral_trajectory
-from neutralocean.grid.rectilinear import edgedata_to_maps
+
+# from neutralocean.lib import _process_casts, xr_to_np
+
 
 # In[Show vertical interpolation]
 
@@ -215,7 +207,7 @@ from neutralocean.grid.rectilinear import edgedata_to_maps
 # Allow that there could be NaNs in the data (nans=True).
 # There will be two numpy arrays of dependent data (S, T), sharing the same
 # independent data Z (num_dep_vars=2).
-interp_two = make_pp(interp_name, kind="u", out="interp", nans=True, num_dep_vars=2)
+interp_two = no.make_pp(interp_name, kind="u", out="interp", nans=True, num_dep_vars=2)
 
 # Apply interpolation function to interpolate salinity and temperature onto the
 # depth of the surface.  This requires working with numpy arrays, not xarrays.
@@ -242,7 +234,7 @@ def calc_lrpd_z(z):
     Calculate ∂(Locally Referenced Potential Density)/dz on the surface `z`,
     lrpd_z = (ρ_S ∂S/∂z + ρ_Θ ∂Θ/∂z).
     """
-    z, Snp, Tnp, Znp = (xr_to_np(x) for x in (z, S, T, Z))
+    z, Snp, Tnp, Znp = (no.lib.xr_to_np(x) for x in (z, S, T, Z))
     s, t = interp_two(z, Znp, Snp, Tnp, 0)
     ds, dt = interp_two(z, Znp, Snp, Tnp, 1)
     rs, rt = eos_s_t(s, t, z)
@@ -267,7 +259,7 @@ def calc_b(z, z2, I0):
     We determine Δγ by imposing b = 1 at the reference cast indexed by `I0`, so
       b = (z2[I0] - z[I0]) * Nz[I0] / ((z2 - z) * Nz)
     """
-    z, z2 = (xr_to_np(x) for x in (z, z2))
+    z, z2 = (no.lib.xr_to_np(x) for x in (z, z2))
     dz = z2 - z
     lrpd_z = calc_lrpd_z(z)
     b = (lrpd_z[I0] * dz[I0]) / (lrpd_z * dz)
@@ -275,7 +267,7 @@ def calc_b(z, z2, I0):
 
 
 def same_valid_casts(z, z2):
-    z, z2 = (xr_to_np(x) for x in (z, z2))
+    z, z2 = (no.lib.xr_to_np(x) for x in (z, z2))
     return np.all(np.isnan(z) == np.isnan(z2))
 
 
@@ -299,7 +291,7 @@ else:
 args = args_omega
 
 args["p_init"] = z_init
-s, t, z, d = omega_surf(S, T, Z, **args)
+s, t, z, d = no.omega_surf(S, T, Z, **args)
 z_omega_pair = z
 
 if not same_valid_casts(z_omega, z_omega_pair):
@@ -319,7 +311,7 @@ print(
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
-rho_v = veronis(z0, S_ref_cast, T_ref_cast, Z, eos=eos, eos_s_t=eos_s_t)
+rho_v = no.veronis(z0, S_ref_cast, T_ref_cast, Z, eos=eos, eos_s_t=eos_s_t)
 print(
     f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
     f" has Veronis density {rho_v} kg m-3"
@@ -334,13 +326,13 @@ znt = np.full(nj, np.nan)
 # at depth of z0. Put result into `znt`
 Snt = S[i0, j0:nj, :]
 Tnt = T[i0, j0:nj, :]
-s_, t_, z_ = neutral_trajectory(Snt, Tnt, Z, z0, eos=eos)
+s_, t_, z_ = no.neutral_trajectory(Snt, Tnt, Z, z0, eos=eos)
 znt[j0:nj] = z_
 
 # As above, but go southwards.
 Snt = S[i0, j0:0:-1, :]
 Tnt = T[i0, j0:0:-1, :]
-s_, t_, z_ = neutral_trajectory(Snt, Tnt, Z, z0, eos=eos)
+s_, t_, z_ = no.neutral_trajectory(Snt, Tnt, Z, z0, eos=eos)
 znt[j0:0:-1] = z_
 
 # Consider three other trajectories along this meridional section, following ANSs
@@ -377,7 +369,7 @@ print("Uncomment below to plot neutral trajectory and ANSs along meridional sect
 # In[Remove mixed layer from an omega surface]
 
 # Pre-compute depth of the mixed layer
-z_ml = mixed_layer(S, T, Z, eos)
+z_ml = no.mld(S, T, Z, eos)
 
 # The correct way to remove the mixed layer from the omega surface algorithm
 # is to pass the p_ml parameter, e.g. pass `p_ml=z_ml` in the call below.
@@ -419,21 +411,21 @@ args["p_init"] = z0
 args["interp"] = "pchip"
 args["ITER_MAX"] = 10
 args["TOL_P_SOLVER"] = 1e-5
-s, t, z, d = omega_surf(S, T, Z, **args)
+s, t, z, d = no.omega_surf(S, T, Z, **args)
 
 # potential and anomaly surfaces don't take `p_ml` as an argument, since they
 # aren't iterative algorithms, so we can just remove it manually, e.g.
 # z[z < z_ml] = np.nan
 
 # In[Neutrality errors on a surface]
-e_RMS, e_MAV = ntp_epsilon_errors_norms(s, t, z_omega, grid, eos_s_t)
+e_RMS, e_MAV = no.ntp_epsilon_errors_norms(s, t, z_omega, grid, eos_s_t)
 print(f"RMS of ϵ is {e_RMS : 4e} [kg m-4])")
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
-e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
+e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert ϵ above into two 2D maps, one for zonal ϵ errors and one for meridional ϵ errors
-ex, ey = edgedata_to_maps(e, (ni, nj), g["wrap"])
+ex, ey = no.grid.rectilinear.edgedata_to_maps(e, (ni, nj), g["wrap"])
 # These can then be mapped...
 
 # In[Neutral Tangent Plane bottle to cast]
@@ -441,7 +433,7 @@ ex, ey = edgedata_to_maps(e, (ni, nj), g["wrap"])
 sB, tB, zB = 35.0, 16.0, 500.0  # Thermodynamic properties of a given Bottle
 S1 = S.values[180, 80, :]
 T1 = T.values[180, 80, :]
-s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
+s1, t1, z1 = no.ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 
 # In[Work with Numpy arrays instead of xarrays]
 
@@ -449,9 +441,9 @@ s1, t1, z1 = ntp_bottle_to_cast(sB, tB, zB, S1, T1, Z)
 # contiguous in memory.  If not done here in advance, this will be done each
 # time potential_surf, anomaly_surf, or omega_surf is called.  Hence, this is
 # the recommended method if many approx neutral surfaces will be calculated.
-Snp, Tnp, Znp = _process_casts(S, T, Z, "Depth_c")
+Snp, Tnp, Znp = no.lib._process_casts(S, T, Z, "Depth_c")
 
-s, t, z, d = anomaly_surf(
+s, t, z, d = no.anomaly_surf(
     Snp,
     Tnp,
     Znp,
@@ -467,13 +459,13 @@ s, t, z, d = anomaly_surf(
 # In[Calculate a large-scale potential vorticity on the above specvol anomaly surface]
 
 # Create function for partial deriv of equation of state with respect to depth z
-eos_z = load_eos("jmd95", "_p", grav, rho_c)  # for scalar inputs
-eos_z = vectorize_eos(eos_z)  # for nd inputs
+eos_z = no.load_eos("jmd95", "_p", grav, rho_c)  # for scalar inputs
+eos_z = no.vectorize_eos(eos_z)  # for nd inputs
 
 # Build linear interpolation function, operating over a whole dataset (kind="u"),
 # evaluating the interpolant on the fly (out="interp"), for two dependent
 # variables (num_dep_vars=2).
-interp_two = make_pp("linear", kind="u", out="interp", num_dep_vars=2)
+interp_two = no.make_pp("linear", kind="u", out="interp", num_dep_vars=2)
 
 # Earth sidereal day period [s]
 Earth_day = 86164

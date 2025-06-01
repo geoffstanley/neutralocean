@@ -2,8 +2,7 @@ import numpy as np
 import numba as nb
 
 from .lib import diff_1d_samesize, valid_range_1_two
-
-from .ppinterp import ppinterp_1, ppinterp_1_two
+from .ppval import ppinterp_1, ppinterp_1_two
 
 
 def pchip_coeffs(X, Y):

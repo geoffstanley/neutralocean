@@ -1,10 +1,10 @@
 import numpy as np
 from scipy.optimize import minimize
 
-from neutralocean.lib import _process_casts
-from neutralocean.ppinterp import valid_range_1
-from neutralocean.eos.tools import load_eos
-from neutralocean.eos.gsw import rho as gsw_rho
+from .ppinterp import valid_range_1
+from .eos import load_eos
+from .eos.gsw import rho as rho_gsw
+from .lib import _process_casts, local_functions
 
 eos_ = load_eos("gsw", "")  # default
 eos_s_t_ = load_eos("gsw", "_s_t")  # default
@@ -160,7 +160,7 @@ def stabilize_ST(S, T, P, **kw):
     """
 
     # TODO: allow eos to be specific volume
-    eos = kw.pop("eos", gsw_rho)
+    eos = kw.pop("eos", rho_gsw)
     min_dLRPDdp = kw.pop("min_dLRPDdp", 1e-6)  # or N^2 >= 1e-8, roughly
     weight = kw.pop("weight", 10.0)  # crude approximation of |dρ/dS / dρ/dΘ|
     vert_dim = kw.pop("vert_dim", -1)
@@ -251,3 +251,6 @@ def calc_dLRPDdp_fd_1(S, T, P, eos):
     σ2 = eos(S[1:], T[1:], p_avg)
     dσdp = (σ2 - σ1) / (P[1:] - P[0:-1])
     return dσdp
+
+
+__all__ = local_functions(locals(), __name__)

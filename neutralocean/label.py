@@ -2,8 +2,8 @@ import numpy as np
 import numba as nb
 
 from .ppinterp import make_pp, ppval_1_two, pval
-from neutralocean.eos.tools import load_eos
-
+from .eos import load_eos
+from .lib import local_functions
 
 def veronis(
     p1,
@@ -16,7 +16,7 @@ def veronis(
     dp=1.0,
     interp="linear",
     eos=None,
-    eos_s_t=None
+    eos_s_t=None,
 ):
     """The surface density plus the integrated vertical gradient of Locally
     Referenced Potential Density
@@ -186,6 +186,7 @@ def _veronis_affine(p1, p0, d0, b, P, Sppc, Tppc, dp, eos_s_t):
 @nb.njit
 def pot_dens_1(p0, p_ref, P, Sppc, Tppc, eos):
     # Potential density referenced to p_ref, at p0, in 1 cast.
+    # Note: NaNs are allowed in `P`, `Sppc`, `Tppc`.
     s0, t0 = ppval_1_two(p0, P, Sppc, Tppc)
     return eos(s0, t0, p_ref)
 
@@ -193,13 +194,7 @@ def pot_dens_1(p0, p_ref, P, Sppc, Tppc, eos):
 @nb.njit
 def _int_dlrpd_dz(p1, p0, P, Sppc, Tppc, dp, eos_s_t):
     # Integrate d(LRPD)/dz from p0 to p1 in 1 cast.
-    if (
-        np.isnan(p0 + p1 + P[0])
-        or p0 < P[0]
-        or P[-1] < p0
-        or p1 < P[0]
-        or P[-1] < p1
-    ):
+    if np.isnan(p0 + p1 + P[0]) or p0 < P[0] or P[-1] < p0 or p1 < P[0] or P[-1] < p1:
         return np.nan
 
     if p1 >= p0:
@@ -271,3 +266,5 @@ def _int_x_k(p, k, dp, P, Sppc, Tppc, eos_s_t):
 # def veronis_label(p_ref, t_ref, S, T, P, p, pin, eos, eos_s_t, dp=1, interpfn=linear_coeffs):
 # 1. Do a temporal neutral_trajectory from (t,i0,j0,p[i0,j0]) to (t_ref,i0,j0,p0)
 # 2. Evaluate veronis density at (t_ref, i0, j0, p0)
+
+__all__ = local_functions(locals(), __name__)

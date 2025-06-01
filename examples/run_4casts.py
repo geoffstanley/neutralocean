@@ -1,9 +1,11 @@
+# Show basic use of neutralocean on an unstructured grid using artificial data.
+#
+# For more advanced usage of neutralocean, see the run_OCCA.py example.
+
 # In[Imports]
 
 import numpy as np
-
-from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
-from neutralocean.ntp import ntp_epsilon_errors
+import neutralocean as no
 
 # In[Create an ocean of 4 water columns]
 
@@ -75,7 +77,7 @@ grid = build_grid({"dist": graph_dist, "distperp": graph_distperp})
 # Potential specific volume surface, with given reference pressure and given isovalue.
 # This finds the surface satisfying
 #   ν(S, Θ, 0 dbar) = (1/1027.5) m3 / kg
-s, t, p, d = potential_surf(
+s, t, p, d = no.potential_surf(
     S,
     T,
     P,
@@ -93,7 +95,7 @@ print(
 # This finds the surface satisfying
 #   ν(S, Θ, p) - ν(34.5 g/kg, 4.0°C, p) = 0 m3 / kg
 s0, t0 = 34.5, 4.0
-s, t, p, d = anomaly_surf(
+s, t, p, d = no.anomaly_surf(
     S,
     T,
     P,
@@ -108,9 +110,9 @@ print(
 )
 
 
-# omega-surface, pinned to be 1500dbar on cast 0, initialized by iteratively 
+# omega-surface, pinned to be 1500dbar on cast 0, initialized by iteratively
 # making Neutral Tangent Plane links from cast 0.
-s, t, p, d = omega_surf(S, T, P, grid, pin_cast=0, p_init=1500.0)
+s, t, p, d = no.omega_surf(S, T, P, grid, pin_cast=0, p_init=1500.0)
 print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to 1500 dbar)"
@@ -119,7 +121,7 @@ print(
 )
 
 # Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
-e = ntp_epsilon_errors(s, t, p, grid)
+e = no.ntp_epsilon_errors(s, t, p, grid)
 print("The ϵ neutrality errors on the ω-surface are as follows:")
 for i in range(len(a)):
     print(f"  From cast {a[i]} to cast {b[i]}, ϵ = {e[i]} m2 kg-1")

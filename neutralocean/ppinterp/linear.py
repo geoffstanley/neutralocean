@@ -2,7 +2,7 @@ import numpy as np
 import numba as nb
 
 from .lib import diff_1d_samesize
-from .ppinterp import ppinterp_1, ppinterp_1_two
+from .ppval import ppinterp_1, ppinterp_1_two
 
 
 def linear_coeffs(X, Y):

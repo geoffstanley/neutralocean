@@ -3,8 +3,8 @@
 import numpy as np
 import numba as nb
 
-from neutralocean.lib import xr_to_np
-from neutralocean.eos.tools import load_eos
+from .eos import load_eos
+from .lib import xr_to_np, local_functions
 
 eos_s_t_ = load_eos("gsw", "_s_t")  # default
 
@@ -135,3 +135,6 @@ def _ntp_epsilon_error1(s, t, p, a, b, eos_s_t):
         )
         e[i] = rs * (s[b_] - s[a_]) + rt * (t[b_] - t[a_])
     return e
+
+
+__all__ = local_functions(locals(), __name__)

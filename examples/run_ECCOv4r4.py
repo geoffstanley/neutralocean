@@ -1,18 +1,15 @@
+# Show basic use of neutralocean on a cube-sphere grid using ECCOv4r4 data.
+#
+# For more advanced usage of neutralocean, see the run_OCCA.py example.
+
 # In[Imports]
 
 import numpy as np
 import xarray as xr
 from os.path import expanduser
 
-# Functions to make the Equation of State
-from neutralocean.eos import load_eos
-
-# Functions to compute various approximately neutral surfaces
-from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
-
-from neutralocean.stability import stabilize_ST
-from neutralocean.grid.xgcm import build_grid, edgedata_to_maps
-from neutralocean.ntp import ntp_epsilon_errors
+import neutralocean as no
+import neutralocean.grid.xgcm as nogrid
 
 # In[Load data]
 
@@ -102,22 +99,23 @@ nf = len(next(iter(face_connections.values())))
 
 # Build list of adjacent water columns and distances between those water column pairs
 xsh = ysh = "left"
-grid = build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dyG, dxG)
+grid = nogrid.build_grid(n, face_connections, dims, xsh, ysh, dxC, dyC, dyG, dxG)
 
 
 # Make Boussinesq version of the Jackett and McDougall (1995) equation of state
 #  and its partial derivatives.
 # TODO: is this what ECCOv4r4 used?
 grav, rho_c = 9.81, 1027.5
-eos = load_eos("jmd95", "", grav, rho_c)
-eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
+eos = no.load_eos("jmd95", "", grav, rho_c)
+eos_s_t = no.load_eos("jmd95", "_s_t", grav, rho_c)
 
 
 # Stabilize hydrographic casts
 print("Begin stabilization of hydrographic casts ...")
 from time import time
+
 tic = time()
-stabilize_ST(S, T, Z, eos=eos, verbose=False)  # about 140 sec
+no.stabilize_ST(S, T, Z, eos=eos, verbose=False)  # about 140 sec
 print(f"... done in {time() - tic:.2f} sec")
 
 # Select pinning cast, picking the cast closest to (x0,y0)
@@ -133,7 +131,7 @@ z0 = 1500.0  # pinning depth
 # reference depth is z0 also.
 # No diagnostics requested, so info about the grid is not needed (no `edges`
 # and `geoemtry` provided), and also eos_s_t is not needed.
-s, t, z, _ = potential_surf(
+s, t, z, _ = no.potential_surf(
     S, T, Z, eos=eos, vert_dim="k", pin_p=z0, pin_cast=pin_cast, diags=False
 )
 z_sigma = z
@@ -141,9 +139,9 @@ z_sigma = z
 # Build in-situ density anomaly surface with given reference salinity and
 # potential temperature values and an isovalue of 0, which means the surface
 # will intersect any point where the local (S,T) equals the reference values.
-# Also return diagnostics.
+# Also return diagnostics (which requires the eos_s_t input also).
 s0, t0 = 34.5, 4.0
-s, t, z, d = anomaly_surf(
+s, t, z, d = no.anomaly_surf(
     S,
     T,
     Z,
@@ -157,7 +155,7 @@ s, t, z, d = anomaly_surf(
 
 # Build an omega surface that is initialized by iteratively making Neutral
 # Tangent Plane links outwards from the pinning cast.
-s, t, z, d = omega_surf(
+s, t, z, d = no.omega_surf(
     S,
     T,
     Z,
@@ -174,12 +172,12 @@ z_omega = z
 # In[Calculate neutrality error]
 
 # Calculate ϵ neutrality errors on the latest surface, between all pairs of adjacent water columns
-e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
+e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert the 1D array of ϵ values into two maps of ϵ neutrality errors, one
 # for the errors in each of the two lateral ('i' and 'j') dimensions.  These
 # neutrality errors can then be mapped or further analyzed.
-ei, ej = edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)
+ei, ej = nogrid.edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)
 
 # In[Map depth difference between omega and potential]
 
@@ -224,7 +222,7 @@ a, b = grid["edges"]
 ΔT = SST.reshape(-1)[a] - SST.reshape(-1)[b]
 
 # Decompose ΔT (a 1D array) into two 2D arrays, one for differences in each horizontal dimension
-SSTx, SSTy = edgedata_to_maps(ΔT, n, face_connections, dims, xsh, ysh)
+SSTx, SSTy = nogrid.edgedata_to_maps(ΔT, n, face_connections, dims, xsh, ysh)
 
 
 # Next, we'll repeat the above differencing using ECCO's methods.
@@ -272,12 +270,8 @@ print(
 (t, j, i) = (9, 40, 40)
 assert SSTx[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j, i - 1, k])
 assert SSTy[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j - 1, i, k])
-print(
-    f"SSTx[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j}, {i - 1}, {k}])"
-)
-print(
-    f"SSTy[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j - 1}, {i}, {k}])"
-)
+print(f"SSTx[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j}, {i - 1}, {k}])")
+print(f"SSTy[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j - 1}, {i}, {k}])")
 
 # Check that differencing makes sense across a boundary.  Find the second point
 # that is involved in the difference across the boundary.  Verify by hand that

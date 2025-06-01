@@ -24,20 +24,14 @@ def make_pp(
         raise ValueError(f"Expected `out` in ('coeffs', 'interp'); got {out}")
 
     if num_dep_vars not in (1, 2):
-        raise ValueError(
-            "Expected `num_dep_vars` in (1, 2); got {num_dep_vars}"
-        )
+        raise ValueError("Expected `num_dep_vars` in (1, 2); got {num_dep_vars}")
 
     if out == "coeffs" and num_dep_vars != 1:
-        raise ValueError(
-            "With `out='coeffs'`, currently only handles `num_dep_vars=1`"
-        )
+        raise ValueError("With `out='coeffs'`, currently only handles `num_dep_vars=1`")
 
     if nans == False:
         if out == "interp" or kind == "u":
-            raise ValueError(
-                "With `nans=False`, expected `out='coeffs'` and `kind='1'`."
-            )
+            raise ValueError("With `nans=False`, expected `out='coeffs'` and `kind='1'`.")
 
     # Begin programmatically generating the function name to import
     if kind == "1":
@@ -60,6 +54,6 @@ def make_pp(
 
     # Below is equivalent to
     # from neutralocean.ppinterp.`interpolant` import `fcn_name`
-    return import_module(
-        "neutralocean.ppinterp." + interpolant
-    ).__getattribute__(fcn_name)
+    return import_module("neutralocean.ppinterp." + interpolant).__getattribute__(
+        fcn_name
+    )

@@ -3,14 +3,15 @@
 import numpy as np
 import numba as nb
 
-from neutralocean.ppinterp import make_pp, ppval_1_nonan_two
-from neutralocean.eos.tools import load_eos
-from neutralocean.fzero import guess_to_bounds, brent
-from neutralocean.ppinterp import valid_range_1_two
-from neutralocean.lib import _process_casts
+from .ppinterp import make_pp, ppval_1_nonan_two
+from .eos import load_eos
+from .fzero import guess_to_bounds, brent
+from .ppinterp import valid_range_1_two
+from .lib import _process_casts, local_functions
 
-eos_ = load_eos('gsw', '')  # default
-eos_s_t_ = load_eos('gsw', '_s_t')  # default
+eos_ = load_eos("gsw", "")  # default
+eos_s_t_ = load_eos("gsw", "_s_t")  # default
+
 
 @nb.njit
 def _pot_dens_diff(p, sB, tB, pB, P, Sppc, Tppc, eos):
@@ -179,16 +180,7 @@ def _ntp_bottle_to_cast_ppc(tol_p, sB, tB, pB, P, Sppc, Tppc, eos):
     # return s, t, p
 
 
-def neutral_trajectory(
-    S,
-    T,
-    P,
-    p0,
-    vert_dim=-1,
-    tol_p=1e-4,
-    interp="linear",
-    eos=eos_
-):
+def neutral_trajectory(S, T, P, p0, vert_dim=-1, tol_p=1e-4, interp="linear", eos=eos_):
     """Calculate a neutral trajectory through a sequence of casts.
 
     Given a sequence of casts with hydrographic properties `(S, T, P)`, calculate
@@ -282,3 +274,6 @@ def neutral_trajectory(
             break
 
     return s, t, p
+
+
+__all__ = local_functions(locals(), __name__)

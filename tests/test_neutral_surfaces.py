@@ -1,22 +1,16 @@
 import numpy as np
-from neutralocean.eos.tools import load_eos, vectorize_eos
-from neutralocean.surface import potential_surf, anomaly_surf, omega_surf
-from neutralocean.synthocean import synthocean
-from neutralocean.lib import find_first_nan, val_at
-from neutralocean.ntp import ntp_epsilon_errors
-from neutralocean.grid.rectilinear import build_grid
-from neutralocean.grid import divergence
+import neutralocean as no
 
 grav = 9.81
 rho_c = 1027.5
-eos = load_eos("gsw", "", grav, rho_c)
-eos_s_t = load_eos("gsw", "_s_t", grav, rho_c)
-eos_ufunc = vectorize_eos(eos)
+eos = no.load_eos("gsw", "", grav, rho_c)
+eos_s_t = no.load_eos("gsw", "_s_t", grav, rho_c)
+eos_ufunc = no.vectorize_eos(eos)
 
 # Make a simple ocean dataset
 ni, nj, nk = 16, 32, 50
 wrap = (False, False)  # non-periodic in both horizontal dimensions
-S, T, Z, _ = synthocean((ni, nj, nk), wrap=wrap)
+S, T, Z, _ = no.data.synthocean((ni, nj, nk), wrap=wrap)
 # Raise the sea-floor in some casts
 # Make one profile be land, and three profiles have a shallower bottom
 # (the last having just one valid bottle)
@@ -25,14 +19,14 @@ S[2, 1, 5:] = T[2, 1, 5:] = np.nan  # shallow ocean
 S[3, 1, 1:] = T[3, 1, 1:] = np.nan  # coastal ocean (1 valid bottle)
 
 # Build grid adjacency and distance information for neutralocean functions
-grid = build_grid((ni, nj), wrap)
+grid = no.grid.rectilinear.build_grid((ni, nj), wrap)
 
 
 def test_potential_surf():
     # Test sigma_surf using a prescribed reference depth and isovalue
     z_ref = 0.0
     isoval = 1.0 / 1027.0
-    s, t, z, _ = potential_surf(
+    s, t, z, _ = no.potential_surf(
         S,
         T,
         Z,
@@ -50,8 +44,8 @@ def test_potential_surf():
     σ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], z_ref)
 
     # Calculate seafloor potential density
-    n_good = find_first_nan(S)
-    S_bot, T_bot = (val_at(x, n_good - 1) for x in (S, T))
+    n_good = no.lib.find_first_nan(S)
+    S_bot, T_bot = (no.lib.val_at(x, n_good - 1) for x in (S, T))
     σ_bot = eos_ufunc(S_bot, T_bot, z_ref)
 
     σ = eos_ufunc(s, t, z_ref)
@@ -70,7 +64,7 @@ def test_anomaly_surf():
     # Test delta_surf using prescribed reference values and isovalue
     s_ref, t_ref = 34.5, 4.0
     isoval = 0.0
-    s, t, z, _ = anomaly_surf(
+    s, t, z, _ = no.anomaly_surf(
         S,
         T,
         Z,
@@ -88,8 +82,8 @@ def test_anomaly_surf():
     δ_sfc = eos_ufunc(S[:, :, 0], T[:, :, 0], Z[0]) - eos_ufunc(s_ref, t_ref, Z[0])
 
     # Calculate seafloor potential density
-    n_good = find_first_nan(S)
-    S_bot, T_bot, Z_bot = (val_at(x, n_good - 1) for x in (S, T, Z))
+    n_good = no.lib.find_first_nan(S)
+    S_bot, T_bot, Z_bot = (no.lib.val_at(x, n_good - 1) for x in (S, T, Z))
     δ_bot = eos_ufunc(S_bot, T_bot, Z_bot) - eos_ufunc(s_ref, t_ref, Z_bot)
 
     δ = eos_ufunc(s, t, z) - eos_ufunc(s_ref, t_ref, z)
@@ -110,16 +104,16 @@ def test_omega_surf():
     i0, j0 = (int(x / 2) for x in (ni, nj))  # ref cast in middle of domain
 
     # Calculate initial surface as a potential density surface
-    s, t, z, _ = potential_surf(
+    s, t, z, _ = no.potential_surf(
         S, T, Z, pin_cast=(i0, j0), pin_p=z0, eos=eos, diags=False
     )
 
     # Calculate divergence of ϵ on initial surface
-    e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
-    divg_e_init = divergence(e, grid["edges"])
+    e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)
+    divg_e_init = no.grid.divergence(e, grid["edges"])
 
     # Calculate omega surface, and divergence of ϵ on it
-    s, t, z, d = omega_surf(
+    s, t, z, d = no.omega_surf(
         S,
         T,
         Z,
@@ -131,8 +125,8 @@ def test_omega_surf():
         diags=True,
     )
 
-    e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
-    divg_e = divergence(e, grid["edges"])
+    e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)
+    divg_e = no.grid.divergence(e, grid["edges"])
 
     # Check ratio of ∇⋅ϵ, between initial and converged surface, is small
     rms = lambda x: np.sqrt(np.nanmean(np.square(x)))

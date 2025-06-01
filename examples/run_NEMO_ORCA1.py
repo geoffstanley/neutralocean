@@ -7,10 +7,8 @@
 
 import xarray as xr
 import pooch
-
-from neutralocean.grid.tripolar import build_grid, edgedata_to_maps
-from neutralocean.surface import potential_surf, omega_surf
-from neutralocean.eos.tools import load_eos
+import neutralocean as no
+import neutralocean.grid.tripolar as nogrid
 
 # In[Load data]
 
@@ -61,17 +59,17 @@ e1u, e2v, e2u, e1v = (mesh[x].data.squeeze() for x in ("e1u", "e2v", "e2u", "e1v
 # See documentation in `neutralocean.grid.tripolar` for more information.
 
 # Build the edges of the grid graph, and the metrics associated with each edge
-grid = build_grid((nj, ni), e1u, e2v, e2u, e1v)
+grid = nogrid.build_grid((nj, ni), e1u, e2v, e2u, e1v)
 
 # In[Approximately Neutral Surfaces]
 
 grav = 9.80665  # gravitational acceleration [m s-2]
 rho_c = 1035.0  # Boussinesq reference density [kg m-3]
-eos = load_eos("jmd95", "", grav, rho_c)
-eos_s_t = load_eos("jmd95", "_s_t", grav, rho_c)
+eos = no.load_eos("jmd95", "", grav, rho_c)
+eos_s_t = no.load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Provide reference pressure (actually depth, in Boussinesq) and isovalue
-s, t, z, d = potential_surf(
+s, t, z, d = no.potential_surf(
     S,
     T,
     Z,
@@ -98,16 +96,8 @@ z0 = 1500.0
 # the root-mean-square change in the locally referenced potential density from
 # one iteration to the next to drop below 10^-7 kg m-3, or a maximum of 10
 # iterations.
-s, t, z, d = omega_surf(
-    S,
-    T,
-    Z,
-    grid,
-    pin_cast=(j0, i0),
-    p_init=z0,
-    vert_dim="lev",
-    eos=eos,
-    eos_s_t=eos_s_t
+s, t, z, d = no.omega_surf(
+    S, T, Z, grid, pin_cast=(j0, i0), p_init=z0, vert_dim="lev", eos=eos, eos_s_t=eos_s_t
 )
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
@@ -119,13 +109,12 @@ print(
 
 
 # In[Neutrality errors on a surface]
-from neutralocean.ntp import ntp_epsilon_errors
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
-e = ntp_epsilon_errors(s, t, z, grid, eos_s_t)
+e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert ϵ above into two 2D maps, one each of the "x" and "y" dimensions
-ex, ey = edgedata_to_maps(e, (nj, ni))
+ex, ey = nogrid.edgedata_to_maps(e, (nj, ni))
 
 # These can then be mapped, e.g.:
 # import matplotlib.pyplot as plt

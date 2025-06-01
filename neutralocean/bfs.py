@@ -1,8 +1,9 @@
 import numpy as np
 import numba as nb
 
-from neutralocean.traj import _ntp_bottle_to_cast, _ntp_bottle_to_cast_ppc
-from neutralocean.ppinterp import valid_range_1_two, ppval_1_two
+from .traj import _ntp_bottle_to_cast, _ntp_bottle_to_cast_ppc
+from .ppinterp import valid_range_1_two, ppval_1_two
+from .lib import local_functions
 
 
 @nb.njit
@@ -71,9 +72,7 @@ def bfs_conncomp1(indptr, indices, root, good):
 
 
 @nb.njit
-def bfs_conncomp1_wet(
-    s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_fn, p_ml
-):
+def bfs_conncomp1_wet(s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_fn, p_ml):
     """
     As in bfs_conncomp1 but extending the perimeter via wetting.
 
@@ -365,3 +364,6 @@ def bfs_conncomp1_wet_perim(
         qH = i - 1  # Reset for next pass over perimeter
 
     return newly_wet
+
+
+__all__ = local_functions(locals(), __name__)

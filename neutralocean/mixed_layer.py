@@ -1,13 +1,13 @@
 """ Mixed Layer """
 
-from neutralocean.ppinterp import make_pp
-from neutralocean.eos.tools import load_eos, vectorize_eos
-from neutralocean.lib import _process_casts, _process_vert_dim
+from .ppinterp import make_pp
+from .eos import load_eos, vectorize_eos
+from .lib import _process_casts, _process_vert_dim, local_functions
 
 eos_ = load_eos("gsw")  # default
 
 
-def mixed_layer(
+def mld(
     S,
     T,
     P,
@@ -18,9 +18,9 @@ def mixed_layer(
     interp="linear",
     vert_dim=-1,
 ):
-    """Calculate the pressure or depth at the bottom of the mixed layer
+    """Calculate the mixed layer pressure or depth
 
-    The mixed layer is the pressure or depth at which the potential density
+    The mixed layer depth (mld) is the pressure or depth at which the potential density
     (referenced to `ref_p`) exceeds the potential density near the surface
     (specifically, the bottle indexed by `bottle_index` on each cast) by an
     amount of `pot_dens_diff`.
@@ -86,9 +86,10 @@ def mixed_layer(
 
     Returns
     -------
-    ML : ndarray
+    mld : ndarray
 
-        A 2D array giving the pressure [dbar] or depth [m, positive] of the mixed layer
+        A 2D array giving the pressure [dbar] or depth [m, positive] at the base of the
+        mixed layer
     """
 
     # Ensure eos is vectorized. It's okay if eos already was.
@@ -116,3 +117,6 @@ def mixed_layer(
     # Find the pressure or depth at which the potential density difference
     # exceeds the threshold pot_dens_diff
     return interp_fn(pot_dens_diff, DD, P, 0)
+
+
+__all__ = local_functions(locals(), __name__)

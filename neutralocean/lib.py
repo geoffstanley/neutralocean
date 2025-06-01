@@ -101,7 +101,7 @@ def take_fill(a, idx, fillval=np.nan):
 @nb.njit
 def aggsum(a, idx, n):
     """
-    Aggregate data into groups and then sum each group.
+    Aggregate data into groups and sum each group.
 
     Parameters
     ----------
@@ -360,3 +360,20 @@ def _process_pin_cast(pin_cast, S):
         return (pin_cast,)
     else:
         return pin_cast
+
+
+def local_functions(_locals, _name):
+    """List of public functions defined in the local scope. 
+    This excludes functions beginning with an "_" as well as imported functions.
+    At the end of a module, use `__all__ = local_functions(locals(), __name__)` so that
+    `from mymodule import *` will only import that module's public and locally-defined
+    functions.
+    """
+    return [
+        k
+        for (k, v) in _locals.items()
+        if callable(v) and v.__module__ == _name and not k.startswith("_")
+    ]
+
+
+__all__ = local_functions(locals(), __name__)

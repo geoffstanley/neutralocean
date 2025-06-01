@@ -1,4 +1,4 @@
-from neutralocean.lib import aggsum
+from ..lib import aggsum
 
 
 def divergence(vector, edges, distperp=1.0, area=1.0):
