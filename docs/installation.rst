@@ -36,14 +36,14 @@ Try running this script yourself, e.g. (changing path as needed)
 
 .. code-block:: console
 
-  python /path/to/neutralocean/neutralocean/examples/run_4casts.py
+  python /path/to/neutralocean/examples/run_4casts.py
 
 If that runs, your `neutralocean` package is working correctly.
 
 Input
 -----
 
-.. literalinclude:: ../neutralocean/examples/run_4casts.py
+.. literalinclude:: ../examples/run_4casts.py
 
 Output
 ------

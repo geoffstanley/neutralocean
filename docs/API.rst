@@ -11,19 +11,19 @@ Approximately Neutral Surfaces
 
 Potential Density Surface
 -------------------------
-.. autofunction:: neutralocean.surface.isopycnal.potential_surf
+.. autofunction:: neutralocean.surface.potential_surf
 
 .. _sva_surf:
 
 Specific Volume Anomaly Surface
 -------------------------------
-.. autofunction:: neutralocean.surface.isopycnal.anomaly_surf
+.. autofunction:: neutralocean.surface.anomaly_surf
 
 .. _omega_surf:
 
 Omega Surface
 -------------
-.. autofunction:: neutralocean.surface.omega.omega_surf
+.. autofunction:: neutralocean.surface.omega_surf
 
 Grids
 =====
@@ -46,7 +46,6 @@ tripolar
 .. autofunction:: neutralocean.grid.tripolar.build_grid
 
 .. autofunction:: neutralocean.grid.tripolar.edgedata_to_maps
-
 
 Graph
 -----
@@ -74,7 +73,13 @@ Veronis Density
 
 Mixed Layer
 ===========
-.. autofunction:: neutralocean.mixed_layer.mixed_layer
+.. autofunction:: neutralocean.mixed_layer.mld
+
+Static Stability
+================
+.. autofunction:: neutralocean.stability.count_unstable
+
+.. autofunction:: neutralocean.stability.stabilize_ST
 
 Equation Of State
 =================
@@ -87,39 +92,6 @@ Tools
 
 .. autofunction:: neutralocean.eos.tools.vectorize_eos
 
-JMD95
------
-.. automodule:: neutralocean.eos.jmd95
-
-.. autofunction:: neutralocean.eos.jmd95.rho
-
-.. autofunction:: neutralocean.eos.jmd95.rho_s_t
-
-.. autofunction:: neutralocean.eos.jmd95.rho_p
-
-JMDFWG06
---------
-.. automodule:: neutralocean.eos.jmdfwg06
-
-.. autofunction:: neutralocean.eos.jmdfwg06.rho
-
-.. autofunction:: neutralocean.eos.jmdfwg06.rho_s_t
-
-.. autofunction:: neutralocean.eos.jmdfwg06.rho_p
-
-TEOS-10 GSW
------------
-.. automodule:: neutralocean.eos.gsw
-
-.. autofunction:: neutralocean.eos.gsw.specvol
-
-.. autofunction:: neutralocean.eos.gsw.specvol_s_t
-
-.. autofunction:: neutralocean.eos.gsw.specvol_p
-
-.. autofunction:: neutralocean.eos.gsw.specvol_s_t_ss_st_tt_sp_tp
-
-.. autofunction:: neutralocean.eos.gsw.specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp
 
 
 (Vertical) Interpolation using Piecewise Polynomials (PP)
@@ -137,33 +109,10 @@ TEOS-10 GSW
 
 .. autofunction:: neutralocean.ppinterp.ppval_1_two
 
-.. autofunction:: neutralocean.ppinterp.linear.linear_interp
 
-.. autofunction:: neutralocean.ppinterp.linear.linear_interp_1
+Data
+====
 
-.. autofunction:: neutralocean.ppinterp.linear.linear_coeffs
+.. autofunction:: neutralocean.data.load_OCCA
 
-.. autofunction:: neutralocean.ppinterp.linear.linear_coeffs_1
-
-.. autofunction:: neutralocean.ppinterp.linear.linear_interp_two
-
-.. autofunction:: neutralocean.ppinterp.linear.linear_interp_1_two
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp_1
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs_1
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_coeffs_1_nonan
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp_two
-
-.. autofunction:: neutralocean.ppinterp.pchip.pchip_interp_1_two
-
-
-Synthetic Ocean
-===============
-.. autofunction:: neutralocean.synthocean.synthocean
+.. autofunction:: neutralocean.data.synthocean
