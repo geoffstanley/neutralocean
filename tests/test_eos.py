@@ -49,7 +49,7 @@ def test_jmd95_ufunc_array():
         (polyTEOS10bsq.rho, polyTEOS10bsq.rho_s_t, polyTEOS10bsq.rho_z)
     ],
 )
-def test_rho_derivs(eos, eos_s_t, eos_p):
+def test_eos_derivs(eos, eos_s_t, eos_p):
     """Check first partial derivatives by centred differences
 
     Parameters

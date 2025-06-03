@@ -31,7 +31,7 @@ Notes:
 To make Boussinesq versions of these functions, see 
 `neutralocean.eos.tools.make_bsq`.
 
-To make vectorized versions of these functions, see
+To make vectorized versions of these functions which return scalar outputs, see
 `neutralocean.eos.tools.vectorize_eos`.
 
 All functions here are derived from `gsw_specvol`, documented below.
