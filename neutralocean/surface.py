@@ -29,7 +29,7 @@ from .grid.graph import edges_to_csr
 from .mixed_layer import mld
 
 
-def potential_surf(S, T, P, **kwargs):
+def potential_surf(S, T, P, **kw):
     """Calculate a potential density (or specific volume) surface.
 
     Given practical / Absolute salinity `S`, potential / Conservative
@@ -245,10 +245,10 @@ def potential_surf(S, T, P, **kwargs):
     have the vertical dimension last.
     """
 
-    return _isopycnal("potential", S, T, P, **kwargs)
+    return _isopycnal("potential", S, T, P, **kw)
 
 
-def anomaly_surf(S, T, P, **kwargs):
+def anomaly_surf(S, T, P, **kw):
     """Calculate a specific volume (or in-situ density) anomaly surface.
 
     Given practical / Absolute salinity `S`, potential / Conservative
@@ -320,27 +320,36 @@ def anomaly_surf(S, T, P, **kwargs):
     See `potential_surf`.
     """
 
-    return _isopycnal("anomaly", S, T, P, **kwargs)
+    return _isopycnal("anomaly", S, T, P, **kw)
 
 
-def _isopycnal(ans_type, S, T, P, **kwargs):
+def _isopycnal(ans_type, S, T, P, **kw):
     """Calculate an isosurface of potential density or specific volume anomaly.
 
     Inputs are as in `potential_surf` and `anomaly_surf`, but first input is a
     string specifying "potential" or "anomaly" """
 
-    ref = kwargs.get("ref")
-    isoval = kwargs.get("isoval")
-    pin_cast = kwargs.get("pin_cast")
-    pin_p = kwargs.get("pin_p")
-    vert_dim = kwargs.get("vert_dim", -1)
-    TOL_P_SOLVER = kwargs.get("TOL_P_SOLVER", 1e-4)
-    eos = kwargs.get("eos")
-    eos_s_t = kwargs.get("eos_s_t")
-    diags = kwargs.get("diags", True)
-    output = kwargs.get("output", True)
-    grid = kwargs.get("grid")
-    interp = kwargs.get("interp", "linear")
+    ref = kw.get("ref")
+    isoval = kw.get("isoval")
+    pin_cast = kw.get("pin_cast")
+    pin_p = kw.get("pin_p")
+    vert_dim = kw.get("vert_dim", -1)
+    TOL_P_SOLVER = kw.get("TOL_P_SOLVER", 1e-4)
+    eos = kw.get("eos")
+    eos_s_t = kw.get("eos_s_t")
+    diags = kw.get("diags", True)
+    output = kw.get("output", True)
+    grid = kw.get("grid")
+    interp = kw.get("interp", "linear")
+    
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None or isinstance(eos, str):
+        raise ValueError(
+            "`grav` and `rho_c` and `eos` as a string are no longer supported. "
+            "Pass `eos` and `eos_s_t` as functions, which can be obtained from "
+            "`neutralocean.load_eos`. See the `examples` folder for examples."
+        )
 
     # Build function that calculates coefficients of a piecewise polynomial
     # interpolant, doing 1 problem at a time, and knowing there will be no nans
@@ -667,6 +676,13 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
     TOL_P_CHANGE_RMS = kw.get("TOL_P_CHANGE_RMS", 0.0)
     OMEGA_FORMULATION = kw.get("OMEGA_FORMULATION", "poisson")
     ITER_WET_PERIM = kw.get("ITER_WET_PERIM", np.iinfo(int).max)
+
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None:
+        raise ValueError(
+            "grav and rho_c are no longer supported. Pass `eos` and `eos_s_t`. See the `examples` folder for examples."
+        )
 
     # Build function that calculates coefficients of a piecewise polynomial
     # interpolant, doing 1 problem at a time, and knowing there will be no nans

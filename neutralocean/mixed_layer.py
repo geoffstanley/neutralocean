@@ -17,6 +17,7 @@ def mld(
     bottle_index=1,
     interp="linear",
     vert_dim=-1,
+    **kw,
 ):
     """Calculate the mixed layer pressure or depth
 
@@ -91,6 +92,15 @@ def mld(
         A 2D array giving the pressure [dbar] or depth [m, positive] at the base of the
         mixed layer
     """
+
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None or isinstance(eos, str):
+        raise ValueError(
+            "`grav` and `rho_c` and `eos` as a string are no longer supported. "
+            "Pass `eos` as a function, which can be obtained from "
+            "`neutralocean.load_eos`. See the `examples` folder for examples."
+        )
 
     # Ensure eos is vectorized. It's okay if eos already was.
     eos = vectorize_eos(eos)

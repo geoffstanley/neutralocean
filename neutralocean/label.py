@@ -17,6 +17,7 @@ def veronis(
     interp="linear",
     eos=None,
     eos_s_t=None,
+    **kw,
 ):
     """The surface density plus the integrated vertical gradient of Locally
     Referenced Potential Density
@@ -155,6 +156,15 @@ def veronis(
     # assert(isvector(S), 'S, T, P must be 1D. (Veronis density is only useful for one water column at a time!)')
     # assert(isscalar(p0), 'p0 must be a scalar')
     # assert(isscalar(p1), 'p1 must be a scalar')
+    
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None or isinstance(eos, str):
+        raise ValueError(
+            "`grav` and `rho_c` and `eos` as a string are no longer supported. "
+            "Pass `eos` and `eos_s_t` as functions, which can be obtained from "
+            "`neutralocean.load_eos`. See the `examples` folder for examples."
+        )
 
     if eos is None and eos_s_t is None:
         eos = load_eos("gsw")

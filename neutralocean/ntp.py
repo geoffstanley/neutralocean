@@ -9,7 +9,7 @@ from .lib import xr_to_np, local_functions
 eos_s_t_ = load_eos("gsw", "_s_t")  # default
 
 
-def ntp_epsilon_errors(s, t, p, grid, eos_s_t=eos_s_t_):
+def ntp_epsilon_errors(s, t, p, grid, eos_s_t=eos_s_t_, **kw):
     """
     Calculate epsilon neutrality errors on an approximately neutral surface
 
@@ -33,6 +33,15 @@ def ntp_epsilon_errors(s, t, p, grid, eos_s_t=eos_s_t_):
         `a, b = grid['edges']`.
     """
 
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None or isinstance(eos_s_t, str):
+        raise ValueError(
+            "`grav` and `rho_c` and `eos_s_t` as a string are no longer supported. "
+            "Pass `eos_s_t` as a function, which can be obtained from "
+            "`neutralocean.load_eos`. See the `examples` folder for examples."
+        )
+
     if isinstance(grid, tuple):
         edges = grid
         dist = 1.0
@@ -48,7 +57,7 @@ def ntp_epsilon_errors(s, t, p, grid, eos_s_t=eos_s_t_):
     return e
 
 
-def ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t=eos_s_t_):
+def ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t=eos_s_t_, **kw):
     """
     Calculate norms of the epsilon neutrality errors on an approximately neutral surface
 
@@ -96,6 +105,15 @@ def ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t=eos_s_t_):
         Area-weighted mean-absolute-value of the epsilon neutrality error on the surface
 
     """
+
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None or isinstance(eos_s_t, str):
+        raise ValueError(
+            "`grav` and `rho_c` and `eos_s_t` as a string are no longer supported. "
+            "Pass `eos_s_t` as a function, which can be obtained from "
+            "`neutralocean.load_eos`. See the `examples` folder for examples."
+        )
 
     # Calculate epsilon neutrality errors.  Here, treat all distances = 1.
     # The actual distances will be handled in computing the norms

@@ -34,6 +34,7 @@ def ntp_bottle_to_cast(
     tol_p=1e-4,
     interp="linear",
     eos=eos_,
+    **kw,
 ):
     """Find the neutral tangent plane from a bottle to a cast
 
@@ -85,6 +86,15 @@ def ntp_bottle_to_cast(
         Function taking three inputs corresponding to (`S, T, P)`, and
         outputting the in-situ density or specific volume.
     """
+
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None or isinstance(eos, str):
+        raise ValueError(
+            "`grav` and `rho_c` and `eos` as a string are no longer supported. "
+            "Pass `eos` as a function, which can be obtained from "
+            "`neutralocean.load_eos`. See the `examples` folder for examples."
+        )
 
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
 
@@ -180,7 +190,9 @@ def _ntp_bottle_to_cast_ppc(tol_p, sB, tB, pB, P, Sppc, Tppc, eos):
     # return s, t, p
 
 
-def neutral_trajectory(S, T, P, p0, vert_dim=-1, tol_p=1e-4, interp="linear", eos=eos_):
+def neutral_trajectory(
+    S, T, P, p0, vert_dim=-1, tol_p=1e-4, interp="linear", eos=eos_, **kw
+):
     """Calculate a neutral trajectory through a sequence of casts.
 
     Given a sequence of casts with hydrographic properties `(S, T, P)`, calculate
@@ -228,6 +240,15 @@ def neutral_trajectory(S, T, P, p0, vert_dim=-1, tol_p=1e-4, interp="linear", eo
         See `ntp_bottle_to_cast`
 
     """
+
+    rho_c = kw.get("rho_c")
+    grav = kw.get("grav")
+    if grav is not None or rho_c is not None or isinstance(eos, str):
+        raise ValueError(
+            "`grav` and `rho_c` and `eos` as a string are no longer supported. "
+            "Pass `eos` as a function, which can be obtained from "
+            "`neutralocean.load_eos`. See the `examples` folder for examples."
+        )
 
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=False)
     S, T, P = _process_casts(S, T, P, vert_dim)
