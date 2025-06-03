@@ -6,7 +6,6 @@ numba
 numpy
 xarray
 scipy
-gsw
-# pooch
+pooch
 # xgcm
 # netcdf4
