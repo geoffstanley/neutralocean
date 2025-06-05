@@ -29,6 +29,12 @@ TEOS-10 GSW
 
 .. autofunction:: neutralocean.eos.gsw.specvol
 
+.. autofunction:: neutralocean.eos.gsw.specvol_first_derivs
+
+.. autofunction:: neutralocean.eos.gsw.specvol_second_derivs
+
+.. autofunction:: neutralocean.eos.gsw.specvol_third_derivs
+
 .. autofunction:: neutralocean.eos.gsw.specvol_s_t
 
 .. autofunction:: neutralocean.eos.gsw.specvol_p

@@ -82,6 +82,7 @@ def ppval_1(x, X, Yppc, d=0):
         Independent variable. Must be monotonically increasing.
     Yppc : ndarray, 2d
         Piecewise Polynomial Coefficients.  First dimension must match `len(X)`.
+        Second dimension is the order of the polynomials.
     d : int, Default 0
         Number of derivatives to take.  If 0, simply evaluate the PP.
 
@@ -193,7 +194,12 @@ def ppval(x, X, Yppc, d, y):
 
         Piecewise Polynomial Coefficients for the interpolant.
         The shape of `Yppc` less its final dimension must be broadcastable to
-        the shape of `X` and/or `Y`.
+        the shape of `X` and/or `Y`. The size of the last dimension of `Yppc`
+        is the order of the polynomials.
+        
+    d : int
+        Order of the derivative to evaluate. When `0`, just evaluate the
+        polynomial.
 
     Returns
     -------

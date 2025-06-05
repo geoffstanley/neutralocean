@@ -30,7 +30,7 @@ The open-source `neutralocean` code is available at https://github.com/geoffstan
 Test Example
 ============
 
-The example script `run_4casts.py` (copied below and on `github <https://github.com/geoffstanley/neutralocean/blob/main/neutralocean/examples/run_4casts.py>`_) creates synthetic salt, temperature, and pressure data for 4 vertical casts, specifies which pairs of these 4 casts are adjacent (see :ref:`grids:grids`), and then calculates a potential density surface, specific volume anomaly surface, and omega surface.  Epsilon neutrality errors are calculated for each link on the final omega surface.
+The example script `run_4casts.py` (copied below and on `github <https://github.com/geoffstanley/neutralocean/blob/main/examples/run_4casts.py>`_) creates synthetic salt, temperature, and pressure data for 4 vertical casts, specifies which pairs of these 4 casts are adjacent (see :ref:`grids:grids`), and then calculates a potential density surface, specific volume anomaly surface, and omega surface.  Epsilon neutrality errors are calculated for each link on the final omega surface.
 
 Try running this script yourself, e.g. (changing path as needed)
 
