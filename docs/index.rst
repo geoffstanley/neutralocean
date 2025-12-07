@@ -16,11 +16,6 @@ measures of neutrality error.
 
 **How to cite?** If you use this software, the most appropriate paper to cite is `Stanley et al. (2021) <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436>`_.
 
-.. note::
-
-   This documentation is under development.  If you want further documentation on a particular feature, please `email me <mailto:gstanley@uvic.ca>`_.
-
-
 Contents
 ========
 
