@@ -27,15 +27,11 @@ There are also routines to calculate potential density surfaces, specific volume
 **How to cite?** If you use this software, the most appropriate paper to cite is [Stanley et al. (2021)](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436).
 
 # Installation
-Simply execute either
-```
-$ pip install neutralocean
-```
-if you use pip, or
-```
-$ conda install -c conda-forge neutralocean
-```
-if you use conda.
+This package is on [PyPI](https://pypi.org/project/neutralocean/) and [conda-forge](https://anaconda.org/conda-forge/neutralocean). Simply execute one of the following commands:
+- `pip install neutralocean`
+- `pixi add neutralocean`
+- `uv add neutralocean`
+- `conda install -c conda-forge neutralocean`
 
 # Documentation
 See <https://neutralocean.readthedocs.org>
