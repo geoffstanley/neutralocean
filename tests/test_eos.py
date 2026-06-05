@@ -2,10 +2,11 @@ import numpy as np
 import pytest
 
 from neutralocean.eos.tools import vectorize_eos
-from neutralocean.eos import jmd95, jmdfwg06, gsw, polyTEOS10bsq
+from neutralocean.eos import jmd95, jmdfwg06, gsw, polyTEOS10bsq, gswc
 
 checkval_jmd95 = (35.5, 3.0, 3000.0, 1041.83267)
 rho_jmd95_ufunc = vectorize_eos(jmd95.rho)
+
 
 # Check Values from Jackett and McDougall (1995) Appendix, p. 388
 # and Jackett et al (2006) Appendix A, p. 1723
@@ -46,7 +47,7 @@ def test_jmd95_ufunc_array():
         (jmd95.rho, jmd95.rho_s_t, jmd95.rho_p),
         (jmdfwg06.rho, jmdfwg06.rho_s_t, jmdfwg06.rho_p),
         (gsw.specvol, gsw.specvol_s_t, gsw.specvol_p),
-        (polyTEOS10bsq.rho, polyTEOS10bsq.rho_s_t, polyTEOS10bsq.rho_z)
+        (polyTEOS10bsq.rho, polyTEOS10bsq.rho_s_t, polyTEOS10bsq.rho_z),
     ],
 )
 def test_eos_derivs(eos, eos_s_t, eos_p):
@@ -74,7 +75,7 @@ def test_eos_derivs(eos, eos_s_t, eos_p):
     ------
     AssertionError
         If the results of `eos_s_t` and `eos_p` disagree considerably with
-        an approximation of partial derivatives calculated by evaluating 
+        an approximation of partial derivatives calculated by evaluating
         `eos` using centred finite differences.
 
     """
@@ -92,3 +93,40 @@ def test_eos_derivs(eos, eos_s_t, eos_p):
     assert np.isclose(rs_centred, rs, atol=0, rtol=1e-8)
     assert np.isclose(rt_centred, rt, atol=0, rtol=1e-8)
     assert np.isclose(rp_centred, rp, atol=0, rtol=1e-8)
+
+
+def test_gsw_vs_gswc():
+    """Check the built-in gsw functions match the official TEOS-10 GSW C based functions.
+
+    Parameters
+    ----------
+    None.
+
+    Returns
+    -------
+    None.
+
+    Raises
+    ------
+    AssertionError
+        If gswc.rho differs from gsw.rho,
+        if gsw.rho differs from 1 / gsw.specvol,
+        if gswc.rho_s_t differs from its equivalent calculated from gsw.specvol_s_t the chain rule,
+        if gswc.rho_p differs from its equivalent calculated from gsw.specvol_p the chain rule,
+        then an error is raised.
+    """
+    
+    eps = np.finfo(np.float64).eps
+    s, t, p = (35.0, 25.0, 2000.0)
+    r_c = gswc.rho(s, t, p)
+    rp_c = gswc.rho_p(s, t, p)
+    rs_c, rt_c = gswc.rho_s_t(s, t, p)
+    r = gsw.rho(s, t, p)
+    v = gsw.specvol(s, t, p)
+    vp = gsw.specvol_p(s, t, p)
+    vs, vt = gsw.specvol_s_t(s, t, p)
+    assert r_c == r
+    assert r == 1 / v
+    assert np.isclose(rp_c, -vp / v**2, rtol=5 * eps, atol=0)
+    assert np.isclose(rs_c, -vs / v**2, rtol=5 * eps, atol=0)
+    assert np.isclose(rt_c, -vt / v**2, rtol=5 * eps, atol=0)
