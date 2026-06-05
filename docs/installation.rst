@@ -6,6 +6,8 @@ Getting Started
 Installation
 ============
 
+``neutralocean`` supports Python 3.12 or later.
+
 Simply execute either
 
 .. code-block:: console
@@ -19,6 +21,34 @@ if you use pip, or
 	(.venv) $ conda install -c conda-forge neutralocean
 
 if you use conda.
+
+For development in this repository, using ``uv`` is recommended:
+
+.. code-block:: console
+
+	(.venv) $ uv sync --all-extras
+
+Equation of State Backends
+==========================
+
+High-level routines default to the official TEOS-10 GSW backend through
+``neutralocean.load_eos("gsw_official")``.
+
+You can also select backends explicitly:
+
+.. code-block:: python
+
+	import neutralocean as no
+
+	# Official GSW toolbox backend (default in high-level routines)
+	eos = no.load_eos("gsw_official")
+	eos_s_t = no.load_eos("gsw_official", "_s_t")
+
+	# Backward-compatible alias
+	eos_alias = no.load_eos("gswc")
+
+	# Bundled 75-term TEOS-10 polynomial backend
+	eos_poly = no.load_eos("gsw")
 
 .. _testexample:
 

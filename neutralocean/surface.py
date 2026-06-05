@@ -169,13 +169,13 @@ def potential_surf(S, T, P, **kw):
 
         Ideally, `vert_dim` is -1.  See `Notes`.
 
-    eos : function, Default `neutralocean.eos.gsw.specvol`
+    eos : function, Default `neutralocean.eos.gsw_official.rho`
 
         Function taking three inputs corresponding to (`S, T, P)`, and
         outputting the in-situ density or specific volume.
         Should be `@numba.njit` decorated and need not be vectorized.
 
-    eos_s_t : function, `neutralocean.eos.gsw.specvol_s_t`
+    eos_s_t : function, `neutralocean.eos.gsw_official.rho_s_t`
 
         Function taking three inputs corresponding to (`S, T, P)`, and
         outputting a tuple containing the partial derivatives of the equation of
@@ -361,8 +361,8 @@ def _isopycnal(ans_type, S, T, P, **kw):
     pin_cast = _process_pin_cast(pin_cast, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     if eos is None and eos_s_t is None:
-        eos = load_eos("gsw")
-        eos_s_t = load_eos("gsw", "_s_t")
+        eos = load_eos("gsw_official")
+        eos_s_t = load_eos("gsw_official", "_s_t")
     if diags and not callable(eos_s_t):
         raise ValueError("eos_s_t must be callable when diags is True")
     if diags and not (isinstance(grid, dict) and "edges" in grid):
@@ -697,8 +697,8 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
     pin_c = _process_pin_cast(pin_c, S)  # call before _process_casts
     S, T, P = _process_casts(S, T, P, vert_dim)
     if eos is None and eos_s_t is None:
-        eos = load_eos("gsw")
-        eos_s_t = load_eos("gsw", "_s_t")
+        eos = load_eos("gsw_official")
+        eos_s_t = load_eos("gsw_official", "_s_t")
 
     # Save shape of horizontal dimensions, then flatten horiz dims to 1D.
     surf_shape = S.shape[0:-1]

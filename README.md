@@ -16,26 +16,103 @@
     <img alt="tests" src="https://github.com/geoffstanley/neutralocean/actions/workflows/python-package.yml/badge.svg">
 </a>
 
-Calculate neutral surfaces in the ocean, using Python.
+`neutralocean` computes approximately neutral surfaces in the ocean, including
+omega-surfaces, potential density surfaces, specific volume anomaly surfaces,
+neutral trajectories, and neutrality diagnostics.
 
-The major task of this software is to calculate **omega-surfaces**, following the algorithm of [Stanley et al. (2021)](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436).  Omega surfaces are highly accurate approximately neutral surfaces that work by iteratively reducing the neutrality error. 
+## What this package is for
 
-There are also routines to calculate potential density surfaces, specific volume anomaly surfaces, neutral trajectories, the Veronis density label, and measures of neutrality error.
+The central workflow is omega-surface calculation following
+[Stanley et al. (2021)](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436),
+with support routines for neutral analysis and trajectory calculations.
 
-**Topobaric surfaces** [(Stanley, 2019a)](https://www.sciencedirect.com/science/article/pii/S1463500318302221) in their modified form [(Stanley 2019b)](https://www.sciencedirect.com/science/article/pii/S1463500318302233) are the most accurate approximately neutral surfaces that posses an exact geostrophic streamfunction (furnishing an Ertel potential vorticity with no baroclinic production term).  Software to compute topobaric surfaces is significantly more complicated and is currently only available in the original MATLAB [neutral-surfaces](https://github.com/geoffstanley/neutral-surfaces) toolbox.
+Topobaric surface software remains available in the original MATLAB toolbox:
+[neutral-surfaces](https://github.com/geoffstanley/neutral-surfaces).
 
-**How to cite?** If you use this software, the most appropriate paper to cite is [Stanley et al. (2021)](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436).
+## Python compatibility
 
-# Installation
-Simply execute either
+This project targets modern CPython versions:
+
+- Python 3.12+
+
+## Installation
+
+### pip
+
+```bash
+pip install neutralocean
 ```
-$ pip install neutralocean
-```
-if you use pip, or
-```
-$ conda install -c conda-forge neutralocean
-```
-if you use conda.
 
-# Documentation
-See <https://neutralocean.readthedocs.org>
+### conda-forge
+
+```bash
+conda install -c conda-forge neutralocean
+```
+
+### uv (development workflow)
+
+```bash
+uv sync
+```
+
+## Equation of state options
+
+The package supports multiple EOS backends through `neutralocean.load_eos`.
+
+- `"gsw_official"`: official Gibbs SeaWater (`gsw`) toolbox wrapper (in-situ density form).
+- `"gswc"`: backward-compatible alias for `"gsw_official"`.
+- `"gsw"`: bundled, numba-accelerated TEOS-10 75-term specific-volume polynomial.
+- `"jmd95"`, `"jmdfwg06"`, `"polyTEOS10bsq"`: additional legacy or Boussinesq forms.
+
+Examples:
+
+```python
+import neutralocean as no
+
+# Fast bundled TEOS-10 polynomial (default used in most examples)
+eos_fast = no.load_eos("gsw")
+
+# Official GSW toolbox backend
+eos_gsw = no.load_eos("gsw_official")
+```
+
+## Quickstart
+
+```python
+import neutralocean as no
+
+# Create synthetic hydrography
+S, T, Z, _ = no.data.synthocean((16, 32, 50), wrap=(False, False))
+grid = no.grid.rectilinear.build_grid((16, 32), wrap=(False, False))
+
+# Choose equation of state (default backend used by high-level routines)
+eos = no.load_eos("gsw_official")
+eos_s_t = no.load_eos("gsw_official", "_s_t")
+
+# Compute omega-surface initialized from a pinned depth
+s, t, z, diags = no.omega_surf(
+    S,
+    T,
+    Z,
+    grid,
+    pin_cast=(8, 16),
+    pin_p=2000.0,
+    eos=eos,
+    eos_s_t=eos_s_t,
+    diags=True,
+)
+```
+
+## Documentation
+
+Full user and API docs:
+<https://neutralocean.readthedocs.org>
+
+## Citation
+
+If you use this package, cite:
+
+- Stanley, G. J., Barker, P. M., and McDougall, T. J. (2021),
+  *Neutral surface topology and algorithms*,
+  Journal of Advances in Modeling Earth Systems.
+  <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436>

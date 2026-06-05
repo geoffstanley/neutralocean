@@ -9,7 +9,14 @@ import warnings
 
 # Dictionary mapping names of modules in the same directory as this file to either
 # "specvol" or "rho" depending on which variable they calculate.
-modules = {"gsw": "specvol", "polyTEOS10bsq" : "rho", "jmd95": "rho", "jmdfwg06": "rho"}
+modules = {
+    "gsw": "specvol",
+    "gsw_official": "rho",
+    "gswc": "rho",
+    "polyTEOS10bsq": "rho",
+    "jmd95": "rho",
+    "jmdfwg06": "rho",
+}
 
 
 @ft.lru_cache(maxsize=10)
@@ -18,12 +25,16 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
 
     Parameters
     ----------
-    eos : str
+        eos : str
 
-        If a str, can be 
-        - `'gsw'` to generate the 75 term approximation [1]_ of the TEOS-10 [2]_ specific volume,
-        - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation [1]_
-        of the TEOS-10 in-situ density [2]_
+                If a str, can be
+                - `'gsw'` to generate the 75 term approximation [1]_ of the TEOS-10 [2]_
+                    specific volume,
+                - `'gsw_official'` to use the official TEOS-10 Gibbs SeaWater (GSW)
+                    toolbox [2]_ wrapped in `neutralocean.eos.gsw_official`,
+                - `'gswc'` as a backward-compatible alias for `'gsw_official'`,
+                - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation [1]_
+                    of the TEOS-10 in-situ density [2]_
         - `'jmd95'` to generate the Jackett and McDougall (1995) in-situ density [3]_, or 
         - `'jmdfwg06'` to generate the Jackett et al (2006) in-situ density [4]_.
 

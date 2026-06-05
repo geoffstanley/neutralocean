@@ -3,6 +3,10 @@ neutralocean documentation
 
 ``neutralocean`` is a Python library to calculate oceanic neutral surfaces and related things.
 
+By default, high-level routines use the official TEOS-10 GSW equation of state
+backend (``load_eos("gsw_official")``), with the bundled polynomial backend
+still available as ``load_eos("gsw")``.
+
 The major task of this software is to calculate **omega surfaces**, following the algorithm of `Stanley et al. (2021) <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2020MS002436>`_.  Omega surfaces are highly accurate approximately neutral surfaces that work by iteratively reducing the neutrality error. 
 
 There are also routines to calculate 
