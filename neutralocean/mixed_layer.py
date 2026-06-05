@@ -4,7 +4,7 @@ from .ppinterp import make_pp
 from .eos import load_eos, vectorize_eos
 from .lib import _process_casts, _process_vert_dim, local_functions
 
-eos_ = load_eos("gsw")  # default
+eos_ = load_eos("gsw_official")  # default
 
 
 def mld(
@@ -44,7 +44,7 @@ def mld(
 
         Must increase monotonically along the first dimension (i.e. downwards).
 
-    eos : function, Default `neutralocean.eos.gsw.specvol`
+    eos : function, Default `neutralocean.eos.gsw_official.rho`
 
         Function taking three inputs corresponding to (`S, T, P)`, and
         outputting a the in-situ density or specific volume.

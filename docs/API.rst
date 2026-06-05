@@ -92,6 +92,22 @@ Tools
 
 .. autofunction:: neutralocean.eos.tools.vectorize_eos
 
+Official GSW backend
+--------------------
+.. autofunction:: neutralocean.eos.gsw_official.rho
+
+.. autofunction:: neutralocean.eos.gsw_official.rho_s_t
+
+.. autofunction:: neutralocean.eos.gsw_official.rho_p
+
+Bundled polynomial backend
+--------------------------
+.. autofunction:: neutralocean.eos.gsw.specvol
+
+.. autofunction:: neutralocean.eos.gsw.specvol_s_t
+
+.. autofunction:: neutralocean.eos.gsw.specvol_p
+
 
 
 (Vertical) Interpolation using Piecewise Polynomials (PP)
