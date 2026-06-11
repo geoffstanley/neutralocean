@@ -3,11 +3,11 @@ from scipy.optimize import minimize
 
 from .ppinterp import valid_range_1
 from .eos import load_eos
-from .eos.gsw import rho as rho_gsw
+from .eos.gsw_official import rho as rho_gsw
 from .lib import _process_casts, local_functions
 
-eos_ = load_eos("gsw", "")  # default
-eos_s_t_ = load_eos("gsw", "_s_t")  # default
+eos_ = load_eos("gsw_official", "")  # default
+eos_s_t_ = load_eos("gsw_official", "_s_t")  # default
 
 
 def count_unstable(S, T, P, **kw):
@@ -30,10 +30,10 @@ def count_unstable(S, T, P, **kw):
         with the partial derivatives of the equation of state with respect to
         `S` and `T` at the local `P`.
 
-    eos : function, Default `neutralocean.eos.gsw.specvol`
+    eos : function, Default `neutralocean.eos.gsw_official.rho`
         Equation of State; used when `interp_two` is None.
 
-    eos_s_t : function, Default `neutralocean.eos.gsw.specvol_s_t`
+    eos_s_t : function, Default `neutralocean.eos.gsw_official.rho_s_t`
 
         Partial derivatives of the Equation of State (`eos` above) with respect
         to `S` and `T`; used when `interp_two` is given.
@@ -97,7 +97,7 @@ def stabilize_ST(S, T, P, **kw):
         as `S` and `T`, or can be 1D with as many elements as there
         are in the vertical dimension of `S` and `T`.
 
-    eos : function, Default `neutralocean.eos.gsw.rho`
+    eos : function, Default `neutralocean.eos.gsw_official.rho`
         Equation of state for density (not specific volume).
         Takes three inputs corresponding to (`S`, `T`, `P`), and outputs density.
         Should be `@numba.njit` decorated and need not be vectorized.

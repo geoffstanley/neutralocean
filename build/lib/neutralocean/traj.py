@@ -9,8 +9,8 @@ from .fzero import guess_to_bounds, brent
 from .ppinterp import valid_range_1_two
 from .lib import _process_casts, local_functions
 
-eos_ = load_eos("gsw", "")  # default
-eos_s_t_ = load_eos("gsw", "_s_t")  # default
+eos_ = load_eos("gsw_official", "")  # default
+eos_s_t_ = load_eos("gsw_official", "_s_t")  # default
 
 
 @nb.njit
@@ -81,7 +81,7 @@ def ntp_bottle_to_cast(
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
-    eos : function, Default `neutralocean.eos.gsw.specvol`
+    eos : function, Default `neutralocean.eos.gsw_official.rho`
 
         Function taking three inputs corresponding to (`S, T, P)`, and
         outputting the in-situ density or specific volume.

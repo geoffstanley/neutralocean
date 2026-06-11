@@ -6,7 +6,7 @@ import numba as nb
 from .eos import load_eos
 from .lib import xr_to_np, local_functions
 
-eos_s_t_ = load_eos("gsw", "_s_t")  # default
+eos_s_t_ = load_eos("gsw_official", "_s_t")  # default
 
 
 def ntp_epsilon_errors(s, t, p, grid, eos_s_t=eos_s_t_, **kw):
@@ -87,7 +87,7 @@ def ntp_epsilon_errors_norms(s, t, p, grid, eos_s_t=eos_s_t_, **kw):
             `distperp[i]` is the distance of the interface between nodes whose
             linear indices are `edges[0][i]` and `edges[1][i]`.
 
-    eos_s_t : function, Default `neutralocean.eos.gsw.specvol_s_t`
+    eos_s_t : function, Default `neutralocean.eos.gsw_official.rho_s_t`
 
         Function taking three inputs corresponding to (`s, t, p)`, and
         outputting a tuple containing the partial derivatives of the equation of

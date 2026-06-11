@@ -22,17 +22,11 @@ if you use pip, or
 
 if you use conda.
 
-For development in this repository, using ``uv`` is recommended:
-
-.. code-block:: console
-
-	(.venv) $ uv sync --all-extras
-
 Equation of State Backends
 ==========================
 
-High-level routines default to the official TEOS-10 GSW backend through
-``neutralocean.load_eos("gsw_official")``.
+High-level routines default to the bundled TEOS-10 75-term specific-volume
+polynomial backend through ``neutralocean.load_eos("gsw")``.
 
 You can also select backends explicitly:
 
@@ -40,15 +34,8 @@ You can also select backends explicitly:
 
 	import neutralocean as no
 
-	# Official GSW toolbox backend (default in high-level routines)
-	eos = no.load_eos("gsw_official")
-	eos_s_t = no.load_eos("gsw_official", "_s_t")
-
-	# Backward-compatible alias
-	eos_alias = no.load_eos("gswc")
-
-	# Bundled 75-term TEOS-10 polynomial backend
-	eos_poly = no.load_eos("gsw")
+	eos = no.load_eos("gsw")
+	eos_s_t = no.load_eos("gsw", "_s_t")
 
 .. _testexample:
 

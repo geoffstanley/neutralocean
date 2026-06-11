@@ -49,31 +49,24 @@ pip install neutralocean
 conda install -c conda-forge neutralocean
 ```
 
-### uv (development workflow)
-
-```bash
-uv sync
-```
-
 ## Equation of state options
 
 The package supports multiple EOS backends through `neutralocean.load_eos`.
 
-- `"gsw_official"`: official Gibbs SeaWater (`gsw`) toolbox wrapper (in-situ density form).
-- `"gswc"`: backward-compatible alias for `"gsw_official"`.
 - `"gsw"`: bundled, numba-accelerated TEOS-10 75-term specific-volume polynomial.
 - `"jmd95"`, `"jmdfwg06"`, `"polyTEOS10bsq"`: additional legacy or Boussinesq forms.
+
+The legacy `neutralocean.eos.gswc` module wraps the official Gibbs SeaWater
+(`gsw`) toolbox and is useful as an implementation check for the bundled
+polynomial backend.
 
 Examples:
 
 ```python
 import neutralocean as no
 
-# Fast bundled TEOS-10 polynomial (default used in most examples)
-eos_fast = no.load_eos("gsw")
-
-# Official GSW toolbox backend
-eos_gsw = no.load_eos("gsw_official")
+# Fast bundled TEOS-10 polynomial
+eos = no.load_eos("gsw")
 ```
 
 ## Quickstart
@@ -86,8 +79,8 @@ S, T, Z, _ = no.data.synthocean((16, 32, 50), wrap=(False, False))
 grid = no.grid.rectilinear.build_grid((16, 32), wrap=(False, False))
 
 # Choose equation of state (default backend used by high-level routines)
-eos = no.load_eos("gsw_official")
-eos_s_t = no.load_eos("gsw_official", "_s_t")
+eos = no.load_eos("gsw")
+eos_s_t = no.load_eos("gsw", "_s_t")
 
 # Compute omega-surface initialized from a pinned depth
 s, t, z, diags = no.omega_surf(

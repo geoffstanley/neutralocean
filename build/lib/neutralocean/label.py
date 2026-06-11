@@ -87,12 +87,12 @@ def veronis(
         Polynomials.  Other interpolants can be added through the subpackage,
         `ppinterp`.
 
-    eos : function, Default `neutralocean.eos.gsw.specvol`
+    eos : function, Default `neutralocean.eos.gsw_official.rho`
 
         Function taking three inputs corresponding to (`S, T, P)`, and
         outputting the in-situ density or specific volume.
 
-    eos_s_t : function, `neutralocean.eos.gsw.specvol_s_t`
+    eos_s_t : function, `neutralocean.eos.gsw_official.rho_s_t`
 
         Function taking three inputs corresponding to (`S, T, P)`, and
         outputting a tuple containing the partial derivatives of the equation of
@@ -167,8 +167,8 @@ def veronis(
         )
 
     if eos is None and eos_s_t is None:
-        eos = load_eos("gsw")
-        eos_s_t = load_eos("gsw", "_s_t")
+        eos = load_eos("gsw_official")
+        eos_s_t = load_eos("gsw_official", "_s_t")
 
     ppc_fn = make_pp(interp, kind="1", out="coeffs", nans=True)
     Sppc = ppc_fn(P, S)

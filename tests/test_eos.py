@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from neutralocean.eos.tools import vectorize_eos
-from neutralocean.eos import jmd95, jmdfwg06, gsw, gsw_official, gswc, polyTEOS10bsq
+from neutralocean.eos import jmd95, jmdfwg06, gsw, gswc, polyTEOS10bsq
 
 checkval_jmd95 = (35.5, 3.0, 3000.0, 1041.83267)
 rho_jmd95_ufunc = vectorize_eos(jmd95.rho)
@@ -17,7 +17,7 @@ rho_jmd95_ufunc = vectorize_eos(jmd95.rho)
         (jmdfwg06.rho, (20.0, 20.0, 1000.0, 1017.72886801964), 11),
         (jmdfwg06.rho, (40.0, 12.0, 8000.0, 1062.95279820631), 11),
         (gsw.specvol, (35.0, 25.0, 2000.0, 9.694293111803510e-04), 18),
-        (gsw_official.rho, (35.0, 25.0, 2000.0, 1031.53472715038), 11),
+        (gsw.rho, (35.0, 25.0, 2000.0, 1031.53472715038), 11),
         (gswc.rho, (35.0, 25.0, 2000.0, 1031.53472715038), 11),
         (polyTEOS10bsq.rho_vert, (1000.0, 4.59763035), 8),
         (polyTEOS10bsq.rho_horiz, (30.0, 10.0, 1000.0, 1022.85377), 5),
@@ -48,7 +48,6 @@ def test_jmd95_ufunc_array():
         (jmd95.rho, jmd95.rho_s_t, jmd95.rho_p),
         (jmdfwg06.rho, jmdfwg06.rho_s_t, jmdfwg06.rho_p),
         (gsw.specvol, gsw.specvol_s_t, gsw.specvol_p),
-        (gsw_official.rho, gsw_official.rho_s_t, gsw_official.rho_p),
         (gswc.rho, gswc.rho_s_t, gswc.rho_p),
         (polyTEOS10bsq.rho, polyTEOS10bsq.rho_s_t, polyTEOS10bsq.rho_z)
     ],
@@ -96,3 +95,40 @@ def test_eos_derivs(eos, eos_s_t, eos_p):
     assert np.isclose(rs_centred, rs, atol=0, rtol=1e-8)
     assert np.isclose(rt_centred, rt, atol=0, rtol=1e-8)
     assert np.isclose(rp_centred, rp, atol=0, rtol=1e-8)
+
+
+@pytest.mark.parametrize(
+    "s,t,p",
+    [
+        (35.0, 25.0, 2000.0),
+        (34.5, 3.0, 1000.0),
+        (40.0, 12.0, 8000.0),
+    ],
+)
+def test_gsw_rho_matches_gswc(s, t, p):
+    assert np.isclose(gsw.rho(s, t, p), gswc.rho(s, t, p), atol=1e-12, rtol=0.0)
+
+
+@pytest.mark.parametrize(
+    "s,t,p",
+    [
+        (35.0, 25.0, 2000.0),
+        (34.5, 3.0, 1000.0),
+        (40.0, 12.0, 8000.0),
+    ],
+)
+def test_gsw_rho_derivatives_match_gswc(s, t, p):
+    specvol = gsw.specvol(s, t, p)
+    specvol_s, specvol_t = gsw.specvol_s_t(s, t, p)
+    specvol_p = gsw.specvol_p(s, t, p)
+
+    rho_s = -specvol_s / specvol**2
+    rho_t = -specvol_t / specvol**2
+    rho_p = -specvol_p / specvol**2
+
+    gswc_rho_s, gswc_rho_t = gswc.rho_s_t(s, t, p)
+    gswc_rho_p = gswc.rho_p(s, t, p)
+
+    assert np.isclose(rho_s, gswc_rho_s, atol=0.0, rtol=1e-13)
+    assert np.isclose(rho_t, gswc_rho_t, atol=0.0, rtol=1e-13)
+    assert np.isclose(rho_p, gswc_rho_p, atol=0.0, rtol=1e-13)
