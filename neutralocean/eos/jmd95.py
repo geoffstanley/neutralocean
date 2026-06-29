@@ -129,6 +129,10 @@ def rho(s, t, p, pfac=1.0):
     original `densjmd95.m` function, though the difference is at the
     level of machine precision.
 
+    Check value: rho(35.5, 3, 3000) should be close to 1041.83267, which
+    is the check value provided by Jackett and McDougall (1995). 
+    With double precision, this function should return 1041.8326696373256.
+
     .. highlight:: matlab
     .. code-block:: matlab
 
