@@ -95,6 +95,32 @@ def test_eos_derivs(eos, eos_s_t, eos_p):
     assert np.isclose(rp_centred, rp, atol=0, rtol=1e-8)
 
 
+@pytest.mark.parametrize(
+    "module",
+    [gsw],
+)
+def test_rho_vs_specvol(module):
+    """Check that rho and specvol agree, for each module containing these functions
+    Parameters
+    ----------
+    module: module
+        A module containing functions `rho` and `specvol`.
+
+    Returns
+    -------
+    None.
+
+    Raises
+    ------
+    AssertionError
+        if module.rho differs from 1 / module.specvol
+    """
+    s, t, p = (35.0, 25.0, 2000.0)
+    r = module.rho(s, t, p)
+    v = module.specvol(s, t, p)
+    assert r == 1 / v
+
+
 def test_gsw_vs_gswc():
     """Check the built-in gsw functions match the official TEOS-10 GSW C based functions.
 
@@ -109,24 +135,23 @@ def test_gsw_vs_gswc():
     Raises
     ------
     AssertionError
-        If gswc.rho differs from gsw.rho,
-        if gsw.rho differs from 1 / gsw.specvol,
-        if gswc.rho_s_t differs from its equivalent calculated from gsw.specvol_s_t the chain rule,
-        if gswc.rho_p differs from its equivalent calculated from gsw.specvol_p the chain rule,
+        If any of the following occur,
+        - gswc.rho differs from gsw.rho,
+        - gswc.rho_s_t differs from its equivalent calculated from gsw.specvol_s_t the chain rule,
+        - gswc.rho_p differs from its equivalent calculated from gsw.specvol_p the chain rule,
         then an error is raised.
     """
-    
+
     eps = np.finfo(np.float64).eps
     s, t, p = (35.0, 25.0, 2000.0)
     r_c = gswc.rho(s, t, p)
     rp_c = gswc.rho_p(s, t, p)
     rs_c, rt_c = gswc.rho_s_t(s, t, p)
     r = gsw.rho(s, t, p)
-    v = gsw.specvol(s, t, p)
+    v = 1 / r  # == gsw.specvol(s, t, p) tested by test_rho_vs_specvol
     vp = gsw.specvol_p(s, t, p)
     vs, vt = gsw.specvol_s_t(s, t, p)
     assert r_c == r
-    assert r == 1 / v
     assert np.isclose(rp_c, -vp / v**2, rtol=5 * eps, atol=0)
     assert np.isclose(rs_c, -vs / v**2, rtol=5 * eps, atol=0)
     assert np.isclose(rt_c, -vt / v**2, rtol=5 * eps, atol=0)

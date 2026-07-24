@@ -2,7 +2,6 @@
 
 import neutralocean as no
 
-
 # In[Load OCCA data]
 
 g, S, T = no.data.load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
@@ -36,7 +35,7 @@ interp_name = "linear"
 # Note OCCA uses a latitude by longitude grid, which is rectangular in memory, hence we
 # select the `rectilinear` submodule of the `grid` subpackage.
 grid = no.grid.rectilinear.build_grid(
-    (ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
+    (ni, nj), g["periodic"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
 )
 
 # Prepare some default options for potential_surf, anomaly_surf, and omega_surf
@@ -425,7 +424,7 @@ print(f"RMS of ϵ is {e_RMS : 4e} [kg m-4])")
 e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert ϵ above into two 2D maps, one for zonal ϵ errors and one for meridional ϵ errors
-ex, ey = no.grid.rectilinear.edgedata_to_maps(e, (ni, nj), g["wrap"])
+ex, ey = no.grid.rectilinear.edgedata_to_maps(e, (ni, nj), g["periodic"])
 # These can then be mapped...
 
 # In[Neutral Tangent Plane bottle to cast]

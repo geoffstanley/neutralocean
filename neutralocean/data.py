@@ -1,6 +1,7 @@
 import numpy as np
 import xarray as xr
 import pooch
+import warnings
 
 __all__ = ["load_OCCA", "synthocean"]
 
@@ -47,7 +48,7 @@ def load_OCCA():
     g["rSphere"] = 6.37e6  # A guess. Same as ECCO2
     g["resx"] = 1  # 1 grid cell per zonal degree
     g["resy"] = 1  # 1 grid cell per meridional degree
-    g["wrap"] = (True, False)  # periodic in longitude, not in latitude
+    g["periodic"] = (True, False)  # periodic in longitude, not in latitude
 
     # Lateral coordinates
     g["XCvec"], g["XGvec"], g["YCvec"], g["YGvec"] = (
@@ -88,7 +89,9 @@ def load_OCCA():
     return g, S, T
 
 
-def synthocean(shape, pbot=4000.0, SSSSa=0.3, zonally_uniform=False, wrap=(False, False)):
+def synthocean(
+    shape, pbot=4000.0, SSSSa=0.3, zonally_uniform=False, periodic=(False, False), wrap=None
+):
     """
     Synthetic idealization of the Pacific and Southern Ocean with tuneable parameters
 
@@ -114,10 +117,10 @@ def synthocean(shape, pbot=4000.0, SSSSa=0.3, zonally_uniform=False, wrap=(False
         helicity is zero.  If `False`, some zonal structure is created which
         results in non-zero neutral helicity.
 
-    wrap : tuple of bool, Default (False, False)
+    periodic : tuple of bool, Default (False, False)
         Specify periodicity of the lateral dimensions.
-        When `wrap[0]` is `False`, `S[0, :, :] = T[0, :, :] = nan`.
-        When `wrap[1]` is `False`, `S[:, 0, :] = T[:, 0, :] = nan`.
+        When `periodic[0]` is `False`, `S[0, :, :] = T[0, :, :] = nan`.
+        When `periodic[1]` is `False`, `S[:, 0, :] = T[:, 0, :] = nan`.
 
 
     Returns
@@ -134,6 +137,14 @@ def synthocean(shape, pbot=4000.0, SSSSa=0.3, zonally_uniform=False, wrap=(False
         and areas.  See code for details.
 
     """
+
+    if wrap is not None:
+        warnings.warn(
+            "The 'wrap' argument is deprecated; use 'periodic' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        periodic = wrap
 
     ni, nj, nk = shape
 
@@ -202,10 +213,10 @@ def synthocean(shape, pbot=4000.0, SSSSa=0.3, zonally_uniform=False, wrap=(False
     P = np.linspace(0, 1, nk) ** 3 * pbot
 
     # Add walls
-    if not wrap[0]:
+    if not periodic[0]:
         S[0, :, :] = np.nan
         T[0, :, :] = np.nan
-    if not wrap[1]:
+    if not periodic[1]:
         S[:, 0, :] = np.nan
         T[:, 0, :] = np.nan
 

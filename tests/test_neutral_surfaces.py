@@ -9,8 +9,8 @@ eos_ufunc = no.vectorize_eos(eos)
 
 # Make a simple ocean dataset
 ni, nj, nk = 16, 32, 50
-wrap = (False, False)  # non-periodic in both horizontal dimensions
-S, T, Z, _ = no.data.synthocean((ni, nj, nk), wrap=wrap)
+periodic = (False, False)  # non-periodic in both horizontal dimensions
+S, T, Z, _ = no.data.synthocean((ni, nj, nk), periodic=periodic)
 # Raise the sea-floor in some casts
 # Make one profile be land, and three profiles have a shallower bottom
 # (the last having just one valid bottle)
@@ -19,7 +19,7 @@ S[2, 1, 5:] = T[2, 1, 5:] = np.nan  # shallow ocean
 S[3, 1, 1:] = T[3, 1, 1:] = np.nan  # coastal ocean (1 valid bottle)
 
 # Build grid adjacency and distance information for neutralocean functions
-grid = no.grid.rectilinear.build_grid((ni, nj), wrap)
+grid = no.grid.rectilinear.build_grid((ni, nj), periodic)
 
 
 def test_potential_surf():
