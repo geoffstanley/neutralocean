@@ -269,7 +269,7 @@ def _int_x_k(p, k, dp, P, Sppc, Tppc, eos_s_t):
 
     rs_, rt_ = eos_s_t(s_, t_, p_)
     y_ = rs_ * dsdp_ + rt_ * dtdp_
-    return np.trapz(y_, x=p_)
+    return np.trapezoid(y_, x=p_)
 
 
 # TODO

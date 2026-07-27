@@ -34,10 +34,18 @@ dependencies = [
 	"scipy",
 	"xarray",
 	"xgcm",
-	"pooch",
 ]
 
 [project.optional-dependencies]
+examples = [
+	"pooch",
+	"netcdf4",
+]
+gsw = [
+	"gsw",
+]
+
+[dependency-groups]
 test = [
 	"pytest",
 	"black",
