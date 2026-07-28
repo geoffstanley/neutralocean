@@ -3,7 +3,9 @@ import numba as nb
 
 from .ppinterp import make_pp, ppval_1_two, pval
 from .eos import load_eos
-from .lib import local_functions
+
+__all__ = ["veronis", "pot_dens_1"]
+
 
 def veronis(
     p1,
@@ -156,7 +158,7 @@ def veronis(
     # assert(isvector(S), 'S, T, P must be 1D. (Veronis density is only useful for one water column at a time!)')
     # assert(isscalar(p0), 'p0 must be a scalar')
     # assert(isscalar(p1), 'p1 must be a scalar')
-    
+
     rho_c = kw.get("rho_c")
     grav = kw.get("grav")
     if grav is not None or rho_c is not None or isinstance(eos, str):
@@ -276,5 +278,3 @@ def _int_x_k(p, k, dp, P, Sppc, Tppc, eos_s_t):
 # def veronis_label(p_ref, t_ref, S, T, P, p, pin, eos, eos_s_t, dp=1, interpfn=linear_coeffs):
 # 1. Do a temporal neutral_trajectory from (t,i0,j0,p[i0,j0]) to (t_ref,i0,j0,p0)
 # 2. Evaluate veronis density at (t_ref, i0, j0, p0)
-
-__all__ = local_functions(locals(), __name__)

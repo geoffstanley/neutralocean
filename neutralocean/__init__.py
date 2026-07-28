@@ -18,11 +18,10 @@ from .surface import *
 from .traj import *
 
 # List of modules not explicitly imported above
-modules = ["data", "fzero", "lib", "_vertsolve"]
+_modules = ["data", "fzero", "lib", "_vertsolve"]
 
-__all__ = modules + [
-    k for (k, v) in locals().items() if not k.startswith("_")
-]  # all local, public functions
+# all local, public functions
+__all__ = _modules + [k for (k, v) in locals().items() if not k.startswith("_")]
 
 
 def __dir__():
@@ -33,10 +32,10 @@ def __dir__():
 # Note only `data.py` is lazily loaded; all others get loaded implicitly by the above
 # imports.
 def __getattr__(name):
-    if name in modules:
+    if name in _modules:
         return _importlib.import_module(f"neutralocean.{name}")
     else:
         try:
             return globals()[name]
         except KeyError:
-            raise AttributeError(f"Module 'neutralocean' has no attribute '{name}'")
+            raise AttributeError(f"Package 'neutralocean' has no attribute '{name}'")

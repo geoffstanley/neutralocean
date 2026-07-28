@@ -4,6 +4,8 @@ import numpy as np
 import numba as nb
 import xarray as xr
 
+__all__ = ["find_first_nan", "take_fill", "aggsum", "val_at", "xr_to_np"]
+
 
 def find_first_nan(a, axis=-1):
     """The index to the first NaN along a given axis
@@ -356,20 +358,3 @@ def _process_pin_cast(pin_cast, S):
         return (pin_cast,)
     else:
         return pin_cast
-
-
-def local_functions(_locals, _name):
-    """List of public functions defined in the local scope. 
-    This excludes functions beginning with an "_" as well as imported functions.
-    At the end of a module, use `__all__ = local_functions(locals(), __name__)` so that
-    `from mymodule import *` will only import that module's public and locally-defined
-    functions.
-    """
-    return [
-        k
-        for (k, v) in _locals.items()
-        if callable(v) and v.__module__ == _name and not k.startswith("_")
-    ]
-
-
-__all__ = local_functions(locals(), __name__)
