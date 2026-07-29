@@ -64,7 +64,27 @@ from .tools import make_pp
 _modules = ["linear", "pchip", "pplib", "ppval", "tools"]
 
 # all local, public functions
-__all__ = _modules + [k for (k, v) in locals().items() if callable(v) and not k.startswith("_")]
+# __all__ = _modules + [k for (k, v) in locals().items() if callable(v) and not k.startswith("_")]
+__all__ = (
+    # Submodules
+    "linear", # pyright: ignore[reportUnsupportedDunderAll]
+    "pchip", # pyright: ignore[reportUnsupportedDunderAll]
+    "pplib", # pyright: ignore[reportUnsupportedDunderAll]
+    "ppval",
+    "tools",
+    # Top level functions
+    "pval",
+    "ppval_1",
+    "ppval_1_two",
+    "ppval",
+    "ppval_two",
+    "ppval_1_nonan",
+    "ppval_1_nonan_two",
+    "valid_range_1",
+    "valid_range_1_two",
+    "valid_range",
+    "make_pp",
+)
 
 
 def __dir__():
@@ -79,4 +99,4 @@ def __getattr__(name):
         try:
             return globals()[name]
         except KeyError:
-            raise AttributeError(f"Module 'neutralocean.ppinterp' has no attribute '{name}'")
+            raise AttributeError(f"Package 'neutralocean.ppinterp' has no attribute '{name}'")
