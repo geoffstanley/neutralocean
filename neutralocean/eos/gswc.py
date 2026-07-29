@@ -1,11 +1,12 @@
 """
 Density of Sea Water using the TEOS-10 Gibbs Seawater [1]_ function.
 
-This uses the official gsw Python toolbox that wraps C code. 
+This uses the official gsw Python toolbox that wraps C code.
 Instead, `neutralocean` uses a pure Python (though numba accelerated) implementation, in
-`./gsw.py`, because it allows for more flexible and faster calculation of partial 
-derivatives, as well as an efficient Boussinesq version of the equation of state. 
-This module exists here as legacy code, though it can be used as a check for `./gsw.py`.
+`./gsw.py`, because it allows for more flexible and faster calculation of partial
+derivatives, as well as an efficient Boussinesq version of the equation of state.
+This module exists here as legacy code, and to provide tests against `./gsw.py`, which 
+are performed in `test_eos.py`.
 
 Functions:
 
@@ -23,15 +24,18 @@ Notes:
 To make vectorized versions of `rho` and `rho_p`, see
 `neutralocean.eos.tools.vectorize_eos`.
 
-.. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
-the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
-ISBN 978-0-646-55621-5. 
+.. [1] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
+the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
+ISBN 978-0-646-55621-5.
 """
 
 import ctypes
 import numba as nb
-import gsw
 
+try:
+    import gsw
+except:
+    raise RuntimeError("gswc.py module requires the `gsw` package. Run `pip install neutralocean[gsw]`")
 
 # The following shows how we can access the C library scalar functions that
 # are used by GSW-Python, since it is much faster for our jit functions to

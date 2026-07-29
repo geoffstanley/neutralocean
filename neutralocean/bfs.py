@@ -3,7 +3,8 @@ import numba as nb
 
 from .traj import _ntp_bottle_to_cast, _ntp_bottle_to_cast_ppc
 from .ppinterp import valid_range_1_two, ppval_1_two
-from .lib import local_functions
+
+__all__ = ["bfs_conncomp1", "bfs_conncomp1_wet", "bfs_conncomp1_wet_perim"]
 
 
 @nb.njit
@@ -331,9 +332,7 @@ def bfs_conncomp1_wet_perim(
                 for n in neigh:
                     if np.isfinite(p[n]):
                         # Try NTP link from bottle at n to cast at m
-                        p_ = _ntp_bottle_to_cast_ppc(
-                            tol_p, s[n], t[n], p[n], Pm, Sppc, Tppc, eos
-                        )
+                        p_ = _ntp_bottle_to_cast_ppc(tol_p, s[n], t[n], p[n], Pm, Sppc, Tppc, eos)
 
                         if np.isfinite(p_) and p_ > p_ml[n]:
                             # The NTP connection was successful, and its location
@@ -364,6 +363,3 @@ def bfs_conncomp1_wet_perim(
         qH = i - 1  # Reset for next pass over perimeter
 
     return newly_wet
-
-
-__all__ = local_functions(locals(), __name__)

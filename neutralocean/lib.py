@@ -4,6 +4,8 @@ import numpy as np
 import numba as nb
 import xarray as xr
 
+__all__ = ["find_first_nan", "take_fill", "aggsum", "val_at", "xr_to_np"]
+
 
 def find_first_nan(a, axis=-1):
     """The index to the first NaN along a given axis
@@ -206,7 +208,7 @@ def xr_to_np(S):
 def _xr_in(S, vert_dim):
     # Prepare xarray container for output: like input S but without dimension
     # labelled `drop_dim`
-    if isinstance(S, xr.core.dataarray.DataArray):
+    if isinstance(S, xr.DataArray):
         if vert_dim is None:
             return xr.full_like(S, 0)
         elif isinstance(vert_dim, int):
@@ -238,7 +240,7 @@ def _xrs_in(S, T, P, vert_dim):
 
 def _xr_out(s, sxr):
     # Return xarrays if inputs were xarrays
-    if isinstance(sxr, xr.core.dataarray.DataArray):
+    if isinstance(sxr, xr.DataArray):
         sxr.data = s
         return sxr
     else:
@@ -307,37 +309,33 @@ def _interp_casts(S, T, P, interp_fn, Sppc=None, Tppc=None):
     return Sppc, Tppc
 
 
-def _process_wrap(wrap, s=None, diags=False):
+def _process_periodic(periodic, s=None, diags=False):
     """Convert to a tuple of `int`s specifying which horizontal dimensions are periodic"""
 
-    if wrap is None:
+    if periodic is None:
         if diags:
-            raise ValueError(
-                "wrap must be given for omega surfaces, or when `diags` is True"
-            )
+            raise ValueError("periodic must be given for omega surfaces, or when `diags` is True")
         else:
-            return wrap
+            return periodic
 
-    if isinstance(wrap, str):
-        wrap = (wrap,)  # Convert single string to tuple
-    if not isinstance(wrap, (tuple, list)):
-        raise TypeError("If given, wrap must be a tuple or list or str")
-    if all(isinstance(x, str) for x in wrap):
+    if isinstance(periodic, str):
+        periodic = (periodic,)  # Convert single string to tuple
+    if not isinstance(periodic, (tuple, list)):
+        raise TypeError("If given, periodic must be a tuple or list or str")
+    if all(isinstance(x, str) for x in periodic):
         try:
             # Convert dim names to tuple of bool
-            wrap = tuple(x in wrap for x in s.dims)
+            periodic = tuple(x in periodic for x in s.dims)
         except:
-            raise TypeError(
-                "With wrap provided as strings, s must have a .dims attribute"
-            )
+            raise TypeError("With periodic provided as strings, s must have a .dims attribute")
 
     # type checking on final value
-    if not (isinstance(wrap, (tuple, list)) and len(wrap) == 2):
+    if not (isinstance(periodic, (tuple, list)) and len(periodic) == 2):
         raise TypeError(
-            "wrap must be a two element (logical) array "
+            "periodic must be a two element (logical) array "
             "or a string (or array of strings) referring to dimensions in xarray S"
         )
-    return wrap
+    return periodic
 
 
 def _process_pin_cast(pin_cast, S):
@@ -360,20 +358,3 @@ def _process_pin_cast(pin_cast, S):
         return (pin_cast,)
     else:
         return pin_cast
-
-
-def local_functions(_locals, _name):
-    """List of public functions defined in the local scope. 
-    This excludes functions beginning with an "_" as well as imported functions.
-    At the end of a module, use `__all__ = local_functions(locals(), __name__)` so that
-    `from mymodule import *` will only import that module's public and locally-defined
-    functions.
-    """
-    return [
-        k
-        for (k, v) in _locals.items()
-        if callable(v) and v.__module__ == _name and not k.startswith("_")
-    ]
-
-
-__all__ = local_functions(locals(), __name__)

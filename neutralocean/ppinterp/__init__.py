@@ -1,7 +1,7 @@
 """
 Piecewise polynomial interpolation in one dimension.
 
-This package separates 1D interpolation into two steps: 
+This package separates 1D interpolation into two steps:
     1. Compute coefficients for a piecewise polynomial interpolant,
     2. Evaluate the interpolant.
 
@@ -14,7 +14,7 @@ If the interpolant will only be evaluated once or a few times, then it will
 be faster to combine Steps 1 and 2, building the polynomial (not a piecewise
 polynomial) for just the interval containing the evaluation site, using only as
 much data around the evaluation site as is required. To do this, use the
-`*interp*` methods, such as `linear_interp` and `pchip_interp`. 
+`*interp*` methods, such as `linear_interp` and `pchip_interp`.
 
 The core numerical methods handle just one interpolation problem; that is, the
 evaluation site (`x`) is a scalar and the input independent and dependent
@@ -27,16 +27,16 @@ are mutually broadcastable from the basic 1D problem, thus allowing multiple
 low-level for loop is used to wrap the single 1D problem. Operationally, this
 is achieved using `numba`'s `guvectorize` decorator.
 
-If the interpolant must be evaluated many times but the dataset is large and 
-memory is limited, then the best strategy is to compute the piecewise 
-polynomial coefficients for a single 1D interpolation problem (Step 1), then 
+If the interpolant must be evaluated many times but the dataset is large and
+memory is limited, then the best strategy is to compute the piecewise
+polynomial coefficients for a single 1D interpolation problem (Step 1), then
 evaluate it (Step 2) as many times as needed. This can be achieved by a
-`numba.njit` accelerated for loop over each 1D problem, using the `"_1"` 
+`numba.njit` accelerated for loop over each 1D problem, using the `"_1"`
 function variants. For example, `neutralocean.surface._vertsolve` does this
-to solve many individual 1D non-linear root finding problems. 
+to solve many individual 1D non-linear root finding problems.
 
 If performing a single 1D interpolation problem and all input data is finite
-(no NaN's), the `"_nonan"` variants provide a small speed advantage. 
+(no NaN's), the `"_nonan"` variants provide a small speed advantage.
 
 If there are two dependent variables that share the same dependent variable,
 the `"_two"` variants offer a speed advantage over calling the basic
@@ -61,11 +61,30 @@ from .ppval import (
 from .lib import valid_range_1, valid_range_1_two, valid_range
 from .tools import make_pp
 
-modules = ["linear", "pchip", "pplib", "ppval", "tools"]
+_modules = ["linear", "pchip", "pplib", "ppval", "tools"]
 
-__all__ = modules + [
-    k for (k, v) in locals().items() if callable(v) and not k.startswith("_")
-]  # all local, public functions
+# all local, public functions
+# __all__ = _modules + [k for (k, v) in locals().items() if callable(v) and not k.startswith("_")]
+__all__ = (
+    # Submodules
+    "linear", # pyright: ignore[reportUnsupportedDunderAll]
+    "pchip", # pyright: ignore[reportUnsupportedDunderAll]
+    "pplib", # pyright: ignore[reportUnsupportedDunderAll]
+    "ppval",
+    "tools",
+    # Top level functions
+    "pval",
+    "ppval_1",
+    "ppval_1_two",
+    "ppval",
+    "ppval_two",
+    "ppval_1_nonan",
+    "ppval_1_nonan_two",
+    "valid_range_1",
+    "valid_range_1_two",
+    "valid_range",
+    "make_pp",
+)
 
 
 def __dir__():
@@ -74,12 +93,10 @@ def __dir__():
 
 # Lazy load of submodules
 def __getattr__(name):
-    if name in modules:
+    if name in _modules:
         return _importlib.import_module(f"neutralocean.ppinterp.{name}")
     else:
         try:
             return globals()[name]
         except KeyError:
-            raise AttributeError(
-                f"Module 'neutralocean.ppinterp' has no attribute '{name}'"
-            )
+            raise AttributeError(f"Package 'neutralocean.ppinterp' has no attribute '{name}'")

@@ -1,3 +1,78 @@
+# neutralocean packaging configuration.
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neutralocean"
+dynamic = ["version", "readme"]
+description = "Neutral surfaces in the ocean"
+requires-python = ">=3.12"
+license = { file = "LICENSE.txt" }
+authors = [{ name = "Geoff Stanley", email = "geoff.stanley@ec.gc.ca" }]
+keywords = ["oceanography", "physical-oceanography", "neutral-surfaces", "teos-10"]
+classifiers = [
+	"Development Status :: 4 - Beta",
+	"Environment :: Console",
+	"Intended Audience :: Developers",
+	"Intended Audience :: Education",
+	"Intended Audience :: Science/Research",
+	"License :: OSI Approved :: MIT License",
+	"Operating System :: OS Independent",
+	"Programming Language :: Python",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.12",
+	"Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+	"Topic :: Education",
+	"Topic :: Scientific/Engineering",
+	"Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+	"numba",
+	"numpy",
+	"scipy",
+	"xarray",
+	"xgcm",
+	"flake8",
+	"pytest",
+	"gsw",
+]
+
+[project.optional-dependencies]
+examples = [
+	"pooch",
+	"netcdf4",
+]
+gsw = [
+	"gsw",
+]
+
+[dependency-groups]
+test = [
+	"black",
+]
+docs = [
+	"sphinx",
+	"sphinx-rtd-theme",
+]
+
+[project.urls]
+Homepage = "https://github.com/geoffstanley/neutralocean"
+Documentation = "https://neutralocean.readthedocs.org"
+Repository = "https://github.com/geoffstanley/neutralocean"
+"Issue Tracker" = "https://github.com/geoffstanley/neutralocean/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "neutralocean.__version__" }
+readme = { file = ["README.md"], content-type = "text/markdown" }
+
+[tool.setuptools.packages.find]
+include = ["neutralocean", "neutralocean.*"]
+
 [tool.black]
-target-version = ['py38']
-exclude = '^/sandbox/.*|^/docs/.*'
+target-version = ["py314"]
+exclude = "^/sandbox/.*|^/docs/.*"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,6 +1,6 @@
 """
 Calculate approximately neutral surfaces in the ocean.
-Three such surfaces are currently supported: 
+Three such surfaces are currently supported:
     potential density (or specific volume) surfaces,
     in-situ density (or specific volume) anomaly surfaces, and
     omega surfaces.
@@ -22,11 +22,12 @@ from .lib import (
     _process_pin_cast,
     _process_casts,
     aggsum,
-    local_functions,
 )
 from .bfs import bfs_conncomp1, bfs_conncomp1_wet_perim
 from .grid.graph import edges_to_csr
 from .mixed_layer import mld
+
+__all__ = ["potential_surf", "anomaly_surf", "omega_surf"]
 
 
 def potential_surf(S, T, P, **kw):
@@ -341,7 +342,7 @@ def _isopycnal(ans_type, S, T, P, **kw):
     output = kw.get("output", True)
     grid = kw.get("grid")
     interp = kw.get("interp", "linear")
-    
+
     rho_c = kw.get("rho_c")
     grav = kw.get("grav")
     if grav is not None or rho_c is not None or isinstance(eos, str):
@@ -371,9 +372,7 @@ def _isopycnal(ans_type, S, T, P, **kw):
     # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
     # selection to (ref, isoval) pair
     _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S)
-    ref, isoval = _choose_ref_isoval(
-        ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
-    )
+    ref, isoval = _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn)
 
     # Solve non-linear root finding problem in each cast
     vertsolve = _make_vertsolve(eos, ppc_fn, ans_type)
@@ -421,9 +420,7 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     # >>> _isopycnal(ans_type, S, T, P, pin_cast, pin_p)
     if ref is None:
         if pin_cast is None or pin_p is None:
-            raise TypeError(
-                'If "ref" is not provided, "pin_cast" and "pin_p" must be provided'
-            )
+            raise TypeError('If "ref" is not provided, "pin_cast" and "pin_p" must be provided')
     else:  # ref is not None
         if isoval is None and (pin_cast is None or pin_p is None):
             raise TypeError(
@@ -435,9 +432,7 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     if ref is not None:
         if ans_type == "potential":
             if not isinstance(ref, float):
-                raise TypeError(
-                    'For "potential" surfaces, if provided "ref" must be a float'
-                )
+                raise TypeError('For "potential" surfaces, if provided "ref" must be a float')
         else:  # ans_type == "anomaly"
             if not (isinstance(ref, (tuple, list)) and len(ref) == 2):
                 raise TypeError(
@@ -481,9 +476,8 @@ def _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc
         else:  # ans_type == "anomaly"
             if ref is None or any(x is None for x in ref):
                 ref = (s0, t0)
-            isoval = eos(s0, t0, pin_p) - eos(
-                ref[0], ref[1], pin_p
-            )  #  == 0 when ref = (s0, t0)
+            # isoval == 0 when ref = (s0, t0)
+            isoval = eos(s0, t0, pin_p) - eos(ref[0], ref[1], pin_p)
 
     return ref, isoval
 
@@ -930,8 +924,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
 
     # Reshape (from 1D arrays) and put into DataArrays if appropriate
     s, t, p = (
-        _xr_out(np.reshape(x, surf_shape), xxr)
-        for (x, xxr) in ((s, sxr), (t, txr), (p, pxr))
+        _xr_out(np.reshape(x, surf_shape), xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr))
     )
 
     return s, t, p, d
@@ -969,9 +962,7 @@ def _omega_matsolve_gradient(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t):
         ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
         return ϕ.reshape(p.shape)
 
-    a, b, e, fac, ref = _omega_matsolve_helper(
-        s, t, p, edges, sqrtdistratio, m, mref, eos_s_t
-    )
+    a, b, e, fac, ref = _omega_matsolve_helper(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t)
 
     rhs = np.concatenate((-e, [0.0]))  # add 0 for pinning equation
 
@@ -1061,9 +1052,7 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     # Get list of edges (a,b), ϵ neutrality errors, and geometric factors
     # for the current connected component containing the reference cast, and
     # map everything onto a set of N
-    a, b, e, fac, ref = _omega_matsolve_helper(
-        s, t, p, edges, distratio, m, mref, eos_s_t
-    )
+    a, b, e, fac, ref = _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t)
 
     # Divergence of ϵ,
     # D = ∑_{n ∈ N(m)} ϵₘₙ
@@ -1154,6 +1143,3 @@ def _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t):
     ref = remap[mref]
 
     return a, b, e, fac, ref
-
-
-__all__ = local_functions(locals(), __name__)

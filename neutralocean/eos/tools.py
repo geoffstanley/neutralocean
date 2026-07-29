@@ -9,7 +9,7 @@ import warnings
 
 # Dictionary mapping names of modules in the same directory as this file to either
 # "specvol" or "rho" depending on which variable they calculate.
-modules = {"gsw": "specvol", "polyTEOS10bsq" : "rho", "jmd95": "rho", "jmdfwg06": "rho"}
+modules = {"gsw": "specvol", "polyTEOS10bsq": "rho", "jmd95": "rho", "jmdfwg06": "rho"}
 
 
 @ft.lru_cache(maxsize=10)
@@ -20,11 +20,11 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
     ----------
     eos : str
 
-        If a str, can be 
+        If a str, can be
         - `'gsw'` to generate the 75 term approximation [1]_ of the TEOS-10 [2]_ specific volume,
         - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation [1]_
-        of the TEOS-10 in-situ density [2]_
-        - `'jmd95'` to generate the Jackett and McDougall (1995) in-situ density [3]_, or 
+          of the TEOS-10 in-situ density [2]_
+        - `'jmd95'` to generate the Jackett and McDougall (1995) in-situ density [3]_, or
         - `'jmdfwg06'` to generate the Jackett et al (2006) in-situ density [4]_.
 
     derivs : str, Default ""
@@ -32,7 +32,7 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
         String specifying which partial derivatives of the EOS are desired.
         Only used when `eos` is a string.
         The actual function loaded is named `eos + derivs`.
-        For example, "" loads the EOS itself, 
+        For example, "" loads the EOS itself,
         "_p" will load the partial derivative with respect to p,
         "_s_t" will load the function whose two outputs are the s and t
         partial derivatives, respectively.
@@ -51,17 +51,17 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
     -------
     fn: function
 
-        Equation of State function accepting three arguments: 
-        (salinity, temperature, pressure) when `grav` or `rho_c` is None, or 
+        Equation of State function accepting three arguments:
+        (salinity, temperature, pressure) when `grav` is None and `rho_c` is None, or
         (salinity, temperature, depth) otherwise.
-    
+
     Notes
     -----
     .. [1] Roquet, F., G. Madec, Trevor J. McDougall, and Paul M. Barker. “Accurate
        Polynomial Expressions for the Density and Specific Volume of Seawater Using
        the TEOS-10 Standard.” Ocean Modelling 90 (June 2015): 29-43.
        https://doi.org/10.1016/j.ocemod.2015.04.002.
-        
+
     .. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
        the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
        SBN 978-0-646-55621-5.
@@ -75,12 +75,10 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
        https://doi.org/10.1175/JTECH1946.1
 
     """
-    
+
     if eos in modules:
         fcn_name = modules[eos] + derivs
-        fn = importlib.import_module(
-            "neutralocean.eos." + eos
-        ).__getattribute__(fcn_name)
+        fn = importlib.import_module("neutralocean.eos." + eos).__getattribute__(fcn_name)
     else:
         raise ValueError(
             f"Equation of state {eos} not (yet) implemented."
@@ -206,8 +204,8 @@ def make_bsq(fn, grav, rho_c):
         However, it can also be a function for partial derivative(s) of the
         equation of state with respect to salinity, temperature, or pressure.
         The 4th argument, `pfac`, pre-multiplies `pressure` before the main calculation,
-        and also post-multiplies the output as many times as there are pressure 
-        partial derivatives. 
+        and also post-multiplies the output as many times as there are pressure
+        partial derivatives.
 
     grav : float
         Gravitational acceleration [m s-2]
