@@ -23,7 +23,7 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
         If a str, can be
         - `'gsw'` to generate the 75 term approximation [1]_ of the TEOS-10 [2]_ specific volume,
         - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation [1]_
-        of the TEOS-10 in-situ density [2]_
+          of the TEOS-10 in-situ density [2]_
         - `'jmd95'` to generate the Jackett and McDougall (1995) in-situ density [3]_, or
         - `'jmdfwg06'` to generate the Jackett et al (2006) in-situ density [4]_.
 
@@ -52,7 +52,7 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
     fn: function
 
         Equation of State function accepting three arguments:
-        (salinity, temperature, pressure) when `grav` or `rho_c` is None, or
+        (salinity, temperature, pressure) when `grav` is None and `rho_c` is None, or
         (salinity, temperature, depth) otherwise.
 
     Notes
