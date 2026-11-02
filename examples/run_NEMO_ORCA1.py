@@ -102,7 +102,7 @@ s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to {z0}m)"
-    f" intersecting the cast indexed by {(j0,i0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(j0, i0)} at depth {z0}m"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 

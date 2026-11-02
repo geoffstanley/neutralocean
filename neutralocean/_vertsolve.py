@@ -46,7 +46,6 @@ def _vertsolve(S, T, P, ref, d0, tol_p, eos, ppc_fn, zero_func):
     p = np.full(shape2D, np.nan)
 
     for n in np.ndindex(shape2D):
-
         # Select this water column
         Sn = S[n]
         Tn = T[n]
@@ -55,7 +54,6 @@ def _vertsolve(S, T, P, ref, d0, tol_p, eos, ppc_fn, zero_func):
         k, K = valid_range_1_two(Sn, Pn)  # S and T have same nan-structure
 
         if K - k > 1:
-
             Pn = Pn[k:K]
             Sppc = ppc_fn(Pn, Sn[k:K])
             Tppc = ppc_fn(Pn, Tn[k:K])
@@ -95,7 +93,6 @@ def _vertsolve_omega(s, t, p, S, T, P, ϕ, tol_p, eos, ppc_fn):
 
         k, K = valid_range_1_two(Sn, Pn)  # S and T have same nan-structure
         if K - k > 1 and np.isfinite(ϕn):
-
             pn = p[n]
             Pn = Pn[k:K]
 

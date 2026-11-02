@@ -44,8 +44,7 @@ examples = [
 
 [dependency-groups]
 test = [
-	"black",
-	"flake8",
+	"ruff",
 	"pytest",
 	"gsw",
 ]
@@ -67,10 +66,13 @@ readme = { file = ["README.md"], content-type = "text/markdown" }
 [tool.setuptools.packages.find]
 include = ["neutralocean", "neutralocean.*"]
 
-[tool.black]
+[tool.ruff]
 line-length = 120
-target-version = ["py314"]
-extend-exclude = "^/docs/.*"
+target-version = "py312"
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

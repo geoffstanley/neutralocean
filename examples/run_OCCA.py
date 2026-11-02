@@ -54,7 +54,6 @@ def load_OCCA():
 
     # Read grid info from the theta nc file
     with xr.open_dataset(file_theta) as ds:
-
         # Lateral coordinates
         g["XCvec"], g["XGvec"], g["YCvec"], g["YGvec"] = (
             np.require(ds[x].values, dtype=np.double, requirements="C")
@@ -156,7 +155,7 @@ args["pin_p"] = z0
 s, t, z, d = no.potential_surf(S, T, Z, **args)
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
@@ -200,7 +199,7 @@ args["pin_p"] = z0
 s, t, z, d = no.anomaly_surf(S, T, Z, **args)
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
@@ -214,7 +213,7 @@ s, t, z, d = no.anomaly_surf(S, T, Z, **args)
 z_delta = z  # save for later
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
@@ -234,7 +233,7 @@ s, t, z, d = no.omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
     f" initialized from the given in-situ density anomaly surface"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 
@@ -257,7 +256,7 @@ s, t, z, d = no.omega_surf(S, T, Z, **args)
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
     f" ** The omega-surface"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 args_omega = args.copy()  # save for later
@@ -274,7 +273,7 @@ args["p_init"] = z_omega  # set init surface from above
 s, t, z, d = no.omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
-    f" initialized from an omega surface and pinned to the cast {(i1,j1)} at {z0}m)"
+    f" initialized from an omega surface and pinned to the cast {(i1, j1)} at {z0}m)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 
@@ -391,13 +390,13 @@ if not same_valid_casts(z_omega, z_omega_pair):
     )
 
 b = calc_b(z_omega, z_omega_pair, (i0, j0))
-print("The integrating factor b for the omega surface varies between " f"{np.nanmin(b)} and {np.nanmax(b)}.")
+print(f"The integrating factor b for the omega surface varies between {np.nanmin(b)} and {np.nanmax(b)}.")
 
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
 rho_v = no.veronis(z0, S_ref_cast, T_ref_cast, Z, eos=eos, eos_s_t=eos_s_t)
-print(f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m" f" has Veronis density {rho_v} kg m-3")
+print(f"A surface through the cast indexed by {(i0, j0)} at depth {z0}m has Veronis density {rho_v} kg m-3")
 
 # In[Neutral Trajectory]
 
@@ -430,7 +429,7 @@ j_south = np.argmax(
     )
 )
 print(
-    f"From (i,j)={(i0,j0)} at {z0}m moving south to j={j_south}, ...\n"
+    f"From (i,j)={(i0, j0)} at {z0}m moving south to j={j_south}, ...\n"
     f"Neutral Trajectory              ends at {znt[j_south]:8.4f}m depth,\n"
     f"Omega Surface                   ends at {zom[j_south]:8.4f}m depth,\n"
     f"Potential Density Surface       ends at {zpd[j_south]:8.4f}m depth,\n"
@@ -501,7 +500,7 @@ s, t, z, d = no.omega_surf(S, T, Z, **args)
 
 # In[Neutrality errors on a surface]
 e_RMS, e_MAV = no.ntp_epsilon_errors_norms(s, t, z_omega, grid, eos_s_t)
-print(f"RMS of ϵ is {e_RMS : 4e} [kg m-4])")
+print(f"RMS of ϵ is {e_RMS: 4e} [kg m-4])")
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
 e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)

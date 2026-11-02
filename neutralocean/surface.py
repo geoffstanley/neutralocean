@@ -402,7 +402,7 @@ def _isopycnal(ans_type, S, T, P, **kw):
         d["n_wet"] = n_wet
         if output:
             print(
-                f"{ans_type} done" f" | {n_wet:11d} wet casts" f" | RMS(ϵ) = {e_RMS:.8e}",
+                f"{ans_type} done | {n_wet:11d} wet casts | RMS(ϵ) = {e_RMS:.8e}",
                 f" | {d['timer']:.3f} sec",
             )
 
@@ -424,7 +424,7 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     else:  # ref is not None
         if isoval is None and (pin_cast is None or pin_p is None):
             raise TypeError(
-                'If "ref" is provided, either "isoval" must be provided or' ' "pin_cast" and "pin_p" must be provided'
+                'If "ref" is provided, either "isoval" must be provided or "pin_cast" and "pin_p" must be provided'
             )
 
     # Error checking on ref
@@ -441,7 +441,7 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
         try:
             S[pin_cast]
         except:
-            raise ValueError('If provided, "pin_cast" must be able to index all but the' " vertical dimension of S")
+            raise ValueError('If provided, "pin_cast" must be able to index all but the vertical dimension of S')
 
     # Error checking on pin_p
     if not isinstance(pin_p, (type(None), float)):
@@ -778,7 +778,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
         if not isinstance(p_init, np.ndarray):
             raise TypeError('If provided, "p_init" or "p_init.values" must be an ndarray')
         if p_init.shape != surf_shape:
-            raise ValueError(f'"p_init" should contain a 2D array of size {surf_shape};' f" found size {p_init.shape}")
+            raise ValueError(f'"p_init" should contain a 2D array of size {surf_shape}; found size {p_init.shape}')
         p_init = np.reshape(p_init, -1)  # now reshape to 1D
         pin_p = p_init[pin_c]
         p = p_init.copy()
@@ -803,14 +803,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
         d["n_wet"][0] = n_wet
 
         if output:
-            print(
-                "iter |"
-                "    MAV(ϕ)     |"
-                "    RMS(Δp)      |"
-                " # wet casts (# new) |"
-                "     RMS(ϵ)     |"
-                " time (s)"
-            )
+            print("iter |    MAV(ϕ)     |    RMS(Δp)      | # wet casts (# new) |     RMS(ϵ)     | time (s)")
             print(
                 f"{0:4d} |"
                 f"                                 |"

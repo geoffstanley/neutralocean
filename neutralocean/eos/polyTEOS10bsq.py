@@ -251,7 +251,7 @@ def rho_horiz(s, t, z):
         + ((((EOS510*x + EOS410)*x + EOS310)*x + EOS210)*x + EOS110)*x + EOS010)*y   
         + (((((EOS600*x + EOS500)*x + EOS400)*x + EOS300)*x + EOS200)*x + EOS100)*x + EOS000
     )
-    
+
     return ((n3 * z + n2) * z + n1) * z + n0
     # fmt: on
 
@@ -361,6 +361,7 @@ def _process(s, t, z):
 
 
 """ Begin individual partial derivatives """
+
 
 # fmt: off
 @nb.njit

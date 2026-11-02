@@ -120,7 +120,6 @@ def _pchip_coeffs_1(X, Y, k, K):
     C = np.full((nk, 4), np.nan)
 
     if K - k > 2:
-
         # Calculate PCHIP slopes
         #  Slopes at end points:
         #   Set d[k] and d[K-1] via non-centered, shape-preserving three-point formulae.
@@ -223,7 +222,6 @@ def _pchip_coeffs_i(X, Y, i):
     at_end = (i == len(X) - 2) or np.isnan(X[i + 2] + Y[i + 2])
 
     if at_start and at_end:
-
         # if np.isnan(X[i + 1]) or np.isnan(Y[i + 1]):
         #     # Only one valid data point.  Leave the interpolant as NaN.
         #     d[0], c, b = np.nan, np.nan, np.nan
@@ -279,7 +277,6 @@ def _pchip_coeffs_i(X, Y, i):
             if np.sign(d[1]) != np.sign(δ[1]):
                 d[1] = 0.0
             elif (np.sign(δ[1]) != np.sign(δ[0])) and (np.abs(d[1]) > np.abs(3 * δ[1])):
-
                 d[1] = 3.0 * δ[1]
 
         else:

@@ -306,7 +306,7 @@ def rho_s_t(s, t, p, pfac=1.0):
         + z * ( eosJMDCKP4 + t*(eosJMDCKP5 + t* eosJMDCKP6) + s1o2*(1.5*eosJMDCKP7)
         + z * ( eosJMDCKP11 + t*(eosJMDCKP12 + t* (eosJMDCKP13)) )) )  # K_s
         ) / (K - z)
-    
+
     rho_t = (
                  ( eosJMDCFw1 + t*(2.0*eosJMDCFw2 + t*(3.0*eosJMDCFw3 + t*(4.0*eosJMDCFw4 + t*(5.0*eosJMDCFw5))))
         + s *    ( eosJMDCSw1 + t*(2.0*eosJMDCSw2 + t*(3.0*eosJMDCSw3 + t*(4.0*eosJMDCSw4)))
@@ -383,7 +383,7 @@ def rho_p(s, t, p, pfac=1.0):
             + s * eosJMDCSw8
         ) # density of sea water at the surface
         )
-    
+
     # (K1 + 2 * K2) is K_p, the partial derivative of K w.r.t z
     rho_p = rho * (K - z * (K1plusK2 + K2)) / (K - z)**2
     # fmt: on

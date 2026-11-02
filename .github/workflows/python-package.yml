@@ -29,11 +29,9 @@ jobs:
       run: uv python install ${{ matrix.python-version }}
     - name: Install dependencies
       run: uv sync --python ${{ matrix.python-version }} --locked --group test --no-editable
-    - name: Lint with flake8
+    - name: Lint and format check
       run: |
-        # stop the build if there are Python syntax errors or undefined names in neutralocean/, tests/, examples/
-        uv run --python ${{ matrix.python-version }} --no-sync flake8 neutralocean tests examples --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        uv run --python ${{ matrix.python-version }} --no-sync flake8 neutralocean tests examples --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+        uv run --python ${{ matrix.python-version }} --no-sync ruff check neutralocean tests examples
+        uv run --python ${{ matrix.python-version }} --no-sync ruff format --check neutralocean tests examples
     - name: Test with pytest
       run: uv run --python ${{ matrix.python-version }} --no-sync pytest
