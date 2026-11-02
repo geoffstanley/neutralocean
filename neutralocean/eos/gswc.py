@@ -5,7 +5,7 @@ This uses the official gsw Python toolbox that wraps C code.
 Instead, `neutralocean` uses a pure Python (though numba accelerated) implementation, in
 `./gsw.py`, because it allows for more flexible and faster calculation of partial
 derivatives, as well as an efficient Boussinesq version of the equation of state.
-This module exists here as legacy code, and to provide tests against `./gsw.py`, which 
+This module exists here as legacy code, and to provide tests against `./gsw.py`, which
 are performed in `test_eos.py`.
 
 Functions:

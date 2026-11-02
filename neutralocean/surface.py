@@ -424,8 +424,7 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     else:  # ref is not None
         if isoval is None and (pin_cast is None or pin_p is None):
             raise TypeError(
-                'If "ref" is provided, either "isoval" must be provided or'
-                ' "pin_cast" and "pin_p" must be provided'
+                'If "ref" is provided, either "isoval" must be provided or' ' "pin_cast" and "pin_p" must be provided'
             )
 
     # Error checking on ref
@@ -435,19 +434,14 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
                 raise TypeError('For "potential" surfaces, if provided "ref" must be a float')
         else:  # ans_type == "anomaly"
             if not (isinstance(ref, (tuple, list)) and len(ref) == 2):
-                raise TypeError(
-                    'For "anomaly" surfaces, if provided "ref" must be 2 element tuple/list of float'
-                )
+                raise TypeError('For "anomaly" surfaces, if provided "ref" must be 2 element tuple/list of float')
 
     # Error checking on pin_cast.  Let dict inputs (for xarray) pass through fine...
     if not isinstance(pin_cast, (type(None), dict)):
         try:
             S[pin_cast]
         except:
-            raise ValueError(
-                'If provided, "pin_cast" must be able to index all but the'
-                " vertical dimension of S"
-            )
+            raise ValueError('If provided, "pin_cast" must be able to index all but the' " vertical dimension of S")
 
     # Error checking on pin_p
     if not isinstance(pin_p, (type(None), float)):
@@ -784,10 +778,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
         if not isinstance(p_init, np.ndarray):
             raise TypeError('If provided, "p_init" or "p_init.values" must be an ndarray')
         if p_init.shape != surf_shape:
-            raise ValueError(
-                f'"p_init" should contain a 2D array of size {surf_shape};'
-                f" found size {p_init.shape}"
-            )
+            raise ValueError(f'"p_init" should contain a 2D array of size {surf_shape};' f" found size {p_init.shape}")
         p_init = np.reshape(p_init, -1)  # now reshape to 1D
         pin_p = p_init[pin_c]
         p = p_init.copy()
@@ -923,9 +914,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
             d[k] = v[0 : iter_ + (k in ("e_MAV", "e_RMS"))]
 
     # Reshape (from 1D arrays) and put into DataArrays if appropriate
-    s, t, p = (
-        _xr_out(np.reshape(x, surf_shape), xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr))
-    )
+    s, t, p = (_xr_out(np.reshape(x, surf_shape), xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr)))
 
     return s, t, p, d
 

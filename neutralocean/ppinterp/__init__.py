@@ -67,9 +67,9 @@ _modules = ["linear", "pchip", "pplib", "ppval", "tools"]
 # __all__ = _modules + [k for (k, v) in locals().items() if callable(v) and not k.startswith("_")]
 __all__ = (
     # Submodules
-    "linear", # pyright: ignore[reportUnsupportedDunderAll]
-    "pchip", # pyright: ignore[reportUnsupportedDunderAll]
-    "pplib", # pyright: ignore[reportUnsupportedDunderAll]
+    "linear",  # pyright: ignore[reportUnsupportedDunderAll]
+    "pchip",  # pyright: ignore[reportUnsupportedDunderAll]
+    "pplib",  # pyright: ignore[reportUnsupportedDunderAll]
     "ppval",
     "tools",
     # Top level functions

@@ -97,9 +97,7 @@ z0 = 1500.0
 # the root-mean-square change in the locally referenced potential density from
 # one iteration to the next to drop below 10^-7 kg m-3, or a maximum of 10
 # iterations.
-s, t, z, d = no.omega_surf(
-    S, T, Z, grid, pin_cast=(j0, i0), p_init=z0, vert_dim="lev", eos=eos, eos_s_t=eos_s_t
-)
+s, t, z, d = no.omega_surf(S, T, Z, grid, pin_cast=(j0, i0), p_init=z0, vert_dim="lev", eos=eos, eos_s_t=eos_s_t)
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
     f" ** The omega-surface"

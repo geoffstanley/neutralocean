@@ -13,8 +13,7 @@ import neutralocean.grid.xgcm as nogrid
 
 # In[Load data]
 
-print(
-    """To get started, we need some ECCOv4r4 data. 
+print("""To get started, we need some ECCOv4r4 data. 
 Make an Earthdata Login at
     https://urs.earthdata.nasa.gov/
 and install "podaac data downloader" following the instructions at
@@ -25,8 +24,7 @@ one day of data:
     podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 2002-12-23T00:00:01Z --end-date 2002-12-23T23:59:59Z -e ""
 Finally, edit the variable `folder_ecco4` below to point to the directory where
 you saved these `*.nc` files.
-"""
-)
+""")
 # To get the first and last day of data, also run the following 2 lines:
 # podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 1992-01-01T00:00:01Z --end-date 1992-01-01T23:59:59Z -e ""
 # podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 2017-12-31T00:00:01Z --end-date 2017-12-31T23:59:59Z -e ""
@@ -34,18 +32,11 @@ you saved these `*.nc` files.
 folder_ecco4 = expanduser("~/work/data/ECCOv4r4/data/")  # << EDIT AS NEEDED >>
 file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
 date = "2002-12-23"
-file_ST = (
-    folder_ecco4
-    + "OCEAN_TEMPERATURE_SALINITY_day_mean_"
-    + date
-    + "_ECCO_V4r4_native_llc0090.nc"
-)
+file_ST = folder_ecco4 + "OCEAN_TEMPERATURE_SALINITY_day_mean_" + date + "_ECCO_V4r4_native_llc0090.nc"
 
 # Load horizontal grid information
 with xr.open_dataset(file_grid) as ds:
-    XC, YC, dxC, dyC, dyG, dxG = (
-        ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dyG", "dxG")
-    )
+    XC, YC, dxC, dyC, dyG, dxG = (ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dyG", "dxG"))
 
 # Load hydrographic data
 with xr.open_dataset(file_ST) as ds:
@@ -120,9 +111,7 @@ print(f"... done in {time() - tic:.2f} sec")
 
 # Select pinning cast, picking the cast closest to (x0,y0)
 x0, y0 = (-172, -4)  # longitude, latitude -- Pacific equatorial ocean
-pin_cast = np.unravel_index(
-    ((XC.values - x0) ** 2 + (YC.values - y0) ** 2).argmin(), XC.shape
-)
+pin_cast = np.unravel_index(((XC.values - x0) ** 2 + (YC.values - y0) ** 2).argmin(), XC.shape)
 z0 = 1500.0  # pinning depth
 
 # In[Build approximately neutral surfaces]
@@ -131,9 +120,7 @@ z0 = 1500.0  # pinning depth
 # reference depth is z0 also.
 # No diagnostics requested, so info about the grid is not needed (no `edges`
 # and `geoemtry` provided), and also eos_s_t is not needed.
-s, t, z, _ = no.potential_surf(
-    S, T, Z, eos=eos, vert_dim="k", pin_p=z0, pin_cast=pin_cast, diags=False
-)
+s, t, z, _ = no.potential_surf(S, T, Z, eos=eos, vert_dim="k", pin_p=z0, pin_cast=pin_cast, diags=False)
 z_sigma = z
 
 # Build in-situ density anomaly surface with given reference salinity and
@@ -262,12 +249,10 @@ SSTy_ = grid_llc.diff(T[..., k], "Y").values
 # First, check the two differencing methods are equal, everywhere
 assert np.array_equal(SSTx, SSTx_, equal_nan=True)
 assert np.array_equal(SSTy, SSTy_, equal_nan=True)
-print(
-    "Test for equivalence between neutralocean grid differencing and xgcm grid differencing: passed."
-)
+print("Test for equivalence between neutralocean grid differencing and xgcm grid differencing: passed.")
 
 # Now, check that differencing makes sense at an interior point
-(t, j, i) = (9, 40, 40)
+t, j, i = (9, 40, 40)
 assert SSTx[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j, i - 1, k])
 assert SSTy[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j - 1, i, k])
 print(f"SSTx[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j}, {i - 1}, {k}])")

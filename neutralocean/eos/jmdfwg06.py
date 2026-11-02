@@ -13,7 +13,7 @@ rho_p :: compute the partial derivative of in-situ density with
     respect to pressure (or depth)
 
 Notes:
-To make Boussinesq versions of these functions, see 
+To make Boussinesq versions of these functions, see
 `neutralocean.eos.tools.make_bsq`.
 
 To make vectorized versions of these functions, see
@@ -80,7 +80,7 @@ def rho(s, t, p, pfac=1.0):
     p : float
         Pressure [dbar]
     pfac : float, Optional
-        Multiplicative scaling factor applied to `p`. 
+        Multiplicative scaling factor applied to `p`.
         Default value is 1.0 [dbar-1]. See `Notes`.
 
     Returns
@@ -91,13 +91,13 @@ def rho(s, t, p, pfac=1.0):
     Notes
     -----
     The Boussinesq version of this function is called with third input `p` as
-    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where 
+    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where
     `grav` is the gravitational acceleration [m.s-2]
     `rho_c` is the Boussinesq reference density [kg.m-3],
     `pfac_default = 1.0` [dbar-1] is the non-Boussinesq value of `pfac`
     `Pa2db = 1e-4` [dbar.Pa-1].
     Thus, `p * Pa2db * grav * rho_c` is the hydrostatic pressure [dbar] at depth
-    `p` assuming the water column's density was `rho_c`. 
+    `p` assuming the water column's density was `rho_c`.
 
     To create a Boussinesq version of this function that accepts 3 arguments
     (salinity, temperature, depth), use `neutralocean.eos.tools.make_bsq`.
@@ -172,13 +172,7 @@ def rho_s_t(s, t, p, pfac=1.0):
     # and similarly for rho_t
 
     num_s = a4 + a5 * t + 2.0 * a6 * s + z * a9
-    num_t = (
-        a1
-        + t * (2.0 * a2 + 3.0 * a3 * t)
-        + a5 * s
-        + 2.0 * a8 * zt
-        + 2.0 * a11 * z * zt
-    )
+    num_t = a1 + t * (2.0 * a2 + 3.0 * a3 * t) + a5 * s + 2.0 * a8 * zt + 2.0 * a11 * z * zt
 
     den_s = b5 + t * (b6 + b7 * t2) + sp5 * (1.5 * b8 + 1.5 * b9 * t2)
     den_t = (

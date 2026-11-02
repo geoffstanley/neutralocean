@@ -1,4 +1,4 @@
-"""Functions to handle updating the pressure / depth of a surface, by 
+"""Functions to handle updating the pressure / depth of a surface, by
 solving a nonlinear equation in the vertical dimension of each water column"""
 
 import numpy as np

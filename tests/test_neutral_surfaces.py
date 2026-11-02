@@ -54,10 +54,7 @@ def test_potential_surf():
     # potential density on surface nearly matches isovalue,
     # or the surface does not intersect this cast (σ is nan) because of one of
     # three conditions: the cast was land, the surface outcropped, or the surface incropped.
-    assert np.all(
-        (np.abs(σ - isoval) < 1e-8)
-        | (np.isnan(σ) & ((n_good == 0) | (isoval < σ_sfc) | (σ_bot < isoval)))
-    )
+    assert np.all((np.abs(σ - isoval) < 1e-8) | (np.isnan(σ) & ((n_good == 0) | (isoval < σ_sfc) | (σ_bot < isoval))))
 
 
 def test_anomaly_surf():
@@ -92,10 +89,7 @@ def test_anomaly_surf():
     # in-situ density anomaly on surface nearly matches isovalue,
     # or the surface does not intersect this cast (δ is nan) because of one of
     # three conditions: the cast was land, the surface outcropped, or the surface incropped.
-    assert np.all(
-        (np.abs(δ - isoval) < 1e-8)
-        | (np.isnan(δ) & ((n_good == 0) | (isoval < δ_sfc) | (δ_bot < isoval)))
-    )
+    assert np.all((np.abs(δ - isoval) < 1e-8) | (np.isnan(δ) & ((n_good == 0) | (isoval < δ_sfc) | (δ_bot < isoval))))
 
 
 def test_omega_surf():
@@ -104,9 +98,7 @@ def test_omega_surf():
     i0, j0 = (int(x / 2) for x in (ni, nj))  # ref cast in middle of domain
 
     # Calculate initial surface as a potential density surface
-    s, t, z, _ = no.potential_surf(
-        S, T, Z, pin_cast=(i0, j0), pin_p=z0, eos=eos, diags=False
-    )
+    s, t, z, _ = no.potential_surf(S, T, Z, pin_cast=(i0, j0), pin_p=z0, eos=eos, diags=False)
 
     # Calculate divergence of ϵ on initial surface
     e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)

@@ -81,8 +81,7 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
         fn = importlib.import_module("neutralocean.eos." + eos).__getattribute__(fcn_name)
     else:
         raise ValueError(
-            f"Equation of state {eos} not (yet) implemented."
-            " Currently, eos must be one of " + modules.__str__()
+            f"Equation of state {eos} not (yet) implemented." " Currently, eos must be one of " + modules.__str__()
         )
 
     if grav != None and rho_c != None:

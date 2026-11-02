@@ -4,9 +4,7 @@ import warnings
 __all__ = ["synthocean"]
 
 
-def synthocean(
-    shape, pbot=4000.0, SSSSa=0.3, zonally_uniform=False, periodic=(False, False), wrap=None
-):
+def synthocean(shape, pbot=4000.0, SSSSa=0.3, zonally_uniform=False, periodic=(False, False), wrap=None):
     """
     Synthetic idealization of the Pacific and Southern Ocean with tuneable parameters
 

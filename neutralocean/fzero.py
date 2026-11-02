@@ -5,7 +5,6 @@ Functions for finding the zero of a univariate function.
 import numpy as np
 import numba as nb
 
-
 eps = np.finfo(np.float64).eps
 __all__ = ["brent", "guess_to_bounds", "brent_guess"]
 

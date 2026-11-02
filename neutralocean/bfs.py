@@ -200,9 +200,7 @@ def bfs_conncomp1_wet(s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_f
 
                     # Try NTP link from bottle at m to cast at n.
                     # TODO: impose p[n] <= p_ml[n] here instead of below?
-                    s_, t_, p_ = _ntp_bottle_to_cast(
-                        s[m], t[m], p[m], Sn, Tn, Pn, k, K, tol_p, eos, ppc_fn
-                    )
+                    s_, t_, p_ = _ntp_bottle_to_cast(s[m], t[m], p[m], Sn, Tn, Pn, k, K, tol_p, eos, ppc_fn)
 
                     if np.isfinite(p_) and p_ > p_ml[n]:
                         # The NTP connection was successful, and its location
@@ -217,9 +215,7 @@ def bfs_conncomp1_wet(s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_f
 
 
 @nb.njit
-def bfs_conncomp1_wet_perim(
-    s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_fn, p_ml, n_rep
-):
+def bfs_conncomp1_wet_perim(s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_fn, p_ml, n_rep):
     """
     Find the Connected Component of a graph's good nodes containing a root node
     via Breadth-first Search.

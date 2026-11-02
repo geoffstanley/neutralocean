@@ -13,7 +13,7 @@ rho_p :: compute the partial derivative of in-situ density with
     respect to pressure (or depth)
 
 Notes:
-To make Boussinesq versions of these functions, see 
+To make Boussinesq versions of these functions, see
 `neutralocean.eos.tools.make_bsq`.
 
 To make vectorized versions of these functions, see
@@ -24,7 +24,6 @@ To make vectorized versions of these functions, see
 
 import numpy as np
 import numba as nb
-
 
 # fmt: off
 # Coefficients nonlinear equation of state in pressure coordinates for
@@ -77,6 +76,7 @@ eosJMDCKP12 =   6.128773e-09 # .== original / 10
 eosJMDCKP13 =   6.207323e-11 # .== original / 10
 # fmt: on
 
+
 # If ndarray inputs are needed, it is best to use @nb.vectorize.  That is,
 # apply `.tools.vectorize_eos`.  A vectorized function specified
 # for scalars is about twice as fast as a signatureless njit'ed function
@@ -94,7 +94,7 @@ def rho(s, t, p, pfac=1.0):
     p : float
         Pressure [dbar]
     pfac : float, Optional
-        Multiplicative scaling factor applied to `p`. 
+        Multiplicative scaling factor applied to `p`.
         Default value is 1.0 [dbar-1]. See `Notes`.
 
     Returns
@@ -105,13 +105,13 @@ def rho(s, t, p, pfac=1.0):
     Notes
     -----
     The Boussinesq version of this function is called with third input `p` as
-    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where 
+    depth [m] and `pfac = pfac_default * Pa2db * grav * rho_c` where
     `grav` is the gravitational acceleration [m.s-2]
     `rho_c` is the Boussinesq reference density [kg.m-3],
     `pfac_default = 1.0` [dbar-1] is the non-Boussinesq value of `pfac`
     `Pa2db = 1e-4` [dbar.Pa-1].
     Thus, `p * Pa2db * grav * rho_c` is the hydrostatic pressure [dbar] at depth
-    `p` assuming the water column's density was `rho_c`. 
+    `p` assuming the water column's density was `rho_c`.
 
     To create a Boussinesq version of this function that accepts 3 arguments
     (salinity, temperature, depth), use `neutralocean.eos.tools.make_bsq`.
@@ -130,7 +130,7 @@ def rho(s, t, p, pfac=1.0):
     level of machine precision.
 
     Check value: rho(35.5, 3, 3000) should be close to 1041.83267, which
-    is the check value provided by Jackett and McDougall (1995). 
+    is the check value provided by Jackett and McDougall (1995).
     With double precision, this function should return 1041.8326696373256.
 
     .. highlight:: matlab

@@ -38,6 +38,7 @@ x_targets = np.sort(np.concatenate((X1, x_midpts)))
 
 Y1 = Y[0, :]
 
+
 # Note re: lhs vs rhs:
 # Our code won't agree with SciPy when evaluating a function that is piecewise
 # discontinuous (e.g. first derivative of a linear interpolant or second
@@ -61,9 +62,7 @@ def test_interp(interp, num_deriv, x):
         k, K = valid_range_1(X[i] + Y[i])
         try:
             if interp == "linear":
-                fn = UnivariateSpline(
-                    X[i, k:K], Y[i, k:K], k=1, s=0, ext="raise"
-                )
+                fn = UnivariateSpline(X[i, k:K], Y[i, k:K], k=1, s=0, ext="raise")
             elif interp == "pchip":
                 fn = PchipInterpolator(X[i, k:K], Y[i, k:K], extrapolate=False)
 

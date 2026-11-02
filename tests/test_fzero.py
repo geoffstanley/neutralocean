@@ -5,6 +5,7 @@ from neutralocean.fzero import brent_guess
 
 tol = 1e-6
 
+
 # Test with univariate function
 @numba.njit
 def univar(x):

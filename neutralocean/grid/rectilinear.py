@@ -99,9 +99,7 @@ def _build_edges(dims, periodic):
 
     ndim = len(dims)  # Number of dimensions in the grid
     assert ndim == 2, "currently only works for 2D grids."
-    assert (
-        len(periodic) == ndim
-    ), "periodic must be a tuple the same length as dims."
+    assert len(periodic) == ndim, "periodic must be a tuple the same length as dims."
 
     ni, nj = dims
     N = ni * nj  # number of nodes

@@ -30,7 +30,7 @@ def build_grid(dims, e1u=1.0, e2v=1.0, e2u=1.0, e1v=1.0):
     The latter form has 1 cell of padding in the y dimension to handle the
     tripolar grid, and 1 cell of padding in the x dimension to handle the
     longitudinal periodicity. If given the latter form, this extra padding is
-    removed internally. When of shape `(nj, ni)`, 
+    removed internally. When of shape `(nj, ni)`,
 
     - `e1u[j,i]` is the x distance on the U grid at [j,i+1/2],
     - `e2v[j,i]` is the y distance on the V grid at [j+1/2,i],
@@ -122,7 +122,7 @@ def _build_edgedata(dims, data):
 
         With `dims == (nj, ni)`, each element of `data` should be a 2D array of
         shape `(nj, ni)` --- but if they are of shape `(nj+1, ni+2)` they will
-        be trimmed to remove the last row (duplication of the north fold) and 
+        be trimmed to remove the last row (duplication of the north fold) and
         the first and last columns (duplication for zonal periodicity).
 
         - `data[0][j, i]` lives between nodes [i, j] and [i, j+1], for `0 <= j <= nj-1`.
@@ -145,9 +145,9 @@ def _build_edgedata(dims, data):
 
     nj, ni = dims
     v, u = data
-    if hasattr(v, 'shape') and v.shape == (nj + 1, ni + 2):
+    if hasattr(v, "shape") and v.shape == (nj + 1, ni + 2):
         v = v[:-1, 1:-1]
-    if hasattr(u, 'shape') and  u.shape == (nj + 1, ni + 2):
+    if hasattr(u, "shape") and u.shape == (nj + 1, ni + 2):
         u = u[:-1, 1:-1]
     v = np.broadcast_to(v, dims)
     u = np.broadcast_to(u, dims)

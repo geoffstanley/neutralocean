@@ -25,8 +25,12 @@ def load_OCCA():
 
     # Use friendly pooch to download dataset, if it hasn't already done so
     # and cached it locally.
-    url_salt = "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/VREV1Z"
-    url_theta = "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/APHURG"
+    url_salt = (
+        "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/VREV1Z"
+    )
+    url_theta = (
+        "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/APHURG"
+    )
 
     hash_salt = "184ca879e0ed18a078f31160c16ec078701e0f1af4d6de44bd1e70cc200d111c"
     hash_theta = "7fcef4663439e34b13de4b08a373a0e17b83bee2c621ea8ac07a8175fe15368e"
@@ -121,9 +125,7 @@ interp_name = "linear"
 # Build grid adjacency and distance information for neutralocean functions.
 # Note OCCA uses a latitude by longitude grid, which is rectangular in memory, hence we
 # select the `rectilinear` submodule of the `grid` subpackage.
-grid = no.grid.rectilinear.build_grid(
-    (ni, nj), g["periodic"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
-)
+grid = no.grid.rectilinear.build_grid((ni, nj), g["periodic"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"])
 
 # Prepare some default options for potential_surf, anomaly_surf, and omega_surf
 opts = {}
@@ -389,19 +391,13 @@ if not same_valid_casts(z_omega, z_omega_pair):
     )
 
 b = calc_b(z_omega, z_omega_pair, (i0, j0))
-print(
-    "The integrating factor b for the omega surface varies between "
-    f"{np.nanmin(b)} and {np.nanmax(b)}."
-)
+print("The integrating factor b for the omega surface varies between " f"{np.nanmin(b)} and {np.nanmax(b)}.")
 
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
 rho_v = no.veronis(z0, S_ref_cast, T_ref_cast, Z, eos=eos, eos_s_t=eos_s_t)
-print(
-    f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
-    f" has Veronis density {rho_v} kg m-3"
-)
+print(f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m" f" has Veronis density {rho_v} kg m-3")
 
 # In[Neutral Trajectory]
 

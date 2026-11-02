@@ -3,7 +3,6 @@ Functions to evaluate piecewise polynomials, given their coefficients, in one
 dimension.
 """
 
-
 """
 Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB
 File Exchange at
@@ -196,7 +195,7 @@ def ppval(x, X, Yppc, d, y):
         The shape of `Yppc` less its final dimension must be broadcastable to
         the shape of `X` and/or `Y`. The size of the last dimension of `Yppc`
         is the order of the polynomials.
-        
+
     d : int
         Order of the derivative to evaluate. When `0`, just evaluate the
         polynomial.
