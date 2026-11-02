@@ -34,9 +34,6 @@ dependencies = [
 	"scipy",
 	"xarray",
 	"xgcm",
-	"flake8",
-	"pytest",
-	"gsw",
 ]
 
 [project.optional-dependencies]
@@ -44,13 +41,13 @@ examples = [
 	"pooch",
 	"netcdf4",
 ]
-gsw = [
-	"gsw",
-]
 
 [dependency-groups]
 test = [
 	"black",
+	"flake8",
+	"pytest",
+	"gsw",
 ]
 docs = [
 	"sphinx",

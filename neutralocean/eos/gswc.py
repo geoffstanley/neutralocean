@@ -35,7 +35,7 @@ import numba as nb
 try:
     import gsw
 except:
-    raise RuntimeError("gswc.py module requires the `gsw` package. Run `pip install neutralocean[gsw]`")
+    raise RuntimeError("gswc.py module requires the `gsw` package. Run `pip install gsw`")
 
 # The following shows how we can access the C library scalar functions that
 # are used by GSW-Python, since it is much faster for our jit functions to

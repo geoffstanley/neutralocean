@@ -9,7 +9,6 @@ _modules = ["gsw", "gswc", "jmd95", "jmdfwg06", "polyTEOS10bsq", "tools"]
 __all__ = (
     # Submodules
     "gsw",  # pyright: ignore[reportUnsupportedDunderAll]
-    "gswc",  # pyright: ignore[reportUnsupportedDunderAll]
     "jmd95",  # pyright: ignore[reportUnsupportedDunderAll]
     "jmdfwg06",  # pyright: ignore[reportUnsupportedDunderAll]
     "polyTEOS10bsq",  # pyright: ignore[reportUnsupportedDunderAll]
