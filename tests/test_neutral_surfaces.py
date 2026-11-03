@@ -121,5 +121,7 @@ def test_omega_surf():
     divg_e = no.grid.divergence(e, grid["edges"])
 
     # Check ratio of ∇⋅ϵ, between initial and converged surface, is small
-    rms = lambda x: np.sqrt(np.nanmean(np.square(x)))
+    def rms(x):
+        return np.sqrt(np.nanmean(np.square(x)))
+
     assert rms(divg_e) / rms(divg_e_init) < 1e-4

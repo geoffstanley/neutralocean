@@ -34,7 +34,7 @@ import numba as nb
 
 try:
     import gsw
-except:
+except Exception:
     raise RuntimeError("gswc.py module requires the `gsw` package. Run `pip install gsw`")
 
 # The following shows how we can access the C library scalar functions that

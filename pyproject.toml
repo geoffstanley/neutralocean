@@ -38,8 +38,11 @@ dependencies = [
 
 [project.optional-dependencies]
 examples = [
-	"pooch",
+	"ecco_v4_py",
+	"matplotlib",
 	"netcdf4",
+	"pooch",
+	"xmitgcm",
 ]
 
 [dependency-groups]

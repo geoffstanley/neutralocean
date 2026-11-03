@@ -195,7 +195,7 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
     # Get index of tile in dims
     try:
         t = dims.index(tile)
-    except:
+    except ValueError:
         raise ValueError(f"Expected to find '{tile}' (the key from `face_connections`) in `dims` == {dims}.")
 
     # Ensure dims also has 'i' and 'j':
@@ -207,6 +207,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
     # Shape of water columns (e.g. shape of ndarray storing sea surface temperature data)
     shape = [n, n, n]
     shape[t] = nf
+
+    print(f"n = {n}")
 
     # Build a simple xgcm grid
     coords = {"i": np.arange(n), "j": np.arange(n), tile: np.arange(nf)}

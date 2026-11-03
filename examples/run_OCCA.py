@@ -4,6 +4,7 @@ import numpy as np
 import xarray as xr
 import pooch
 import neutralocean as no
+from time import time
 
 
 # In[Load OCCA data]
@@ -106,7 +107,6 @@ eos_s_t = no.load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Perturb S, T to ensure static stability everywhere
 print("Begin stabilization of hydrographic casts ...")
-from time import time
 
 tic = time()
 no.stabilize_ST(S, T, Z, eos=eos, min_dLRPDdz=1e-6, verbose=False)  # about 90 sec
@@ -280,7 +280,6 @@ print(
 
 # In[Begin showing more advanced features]
 
-import numpy as np
 
 # from neutralocean.lib import _process_casts, xr_to_np
 

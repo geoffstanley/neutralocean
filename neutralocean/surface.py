@@ -440,7 +440,7 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     if not isinstance(pin_cast, (type(None), dict)):
         try:
             S[pin_cast]
-        except:
+        except Exception:
             raise ValueError('If provided, "pin_cast" must be able to index all but the vertical dimension of S')
 
     # Error checking on pin_p

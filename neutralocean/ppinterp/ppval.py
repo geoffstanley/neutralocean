@@ -3,11 +3,9 @@ Functions to evaluate piecewise polynomials, given their coefficients, in one
 dimension.
 """
 
-"""
-Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB
-File Exchange at
-https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calculus
-"""
+# Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB
+# File Exchange at
+# https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calculus
 
 import numpy as np
 import numba as nb

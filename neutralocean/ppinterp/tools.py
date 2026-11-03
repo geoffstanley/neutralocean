@@ -88,7 +88,7 @@ def make_pp(
     if out == "coeffs" and num_dep_vars != 1:
         raise ValueError("With `out='coeffs'`, currently only handles `num_dep_vars=1`")
 
-    if nans == False:
+    if not nans:
         if out == "interp" or kind == "u":
             raise ValueError("With `nans=False`, expected `out='coeffs'` and `kind='1'`.")
 
@@ -98,7 +98,7 @@ def make_pp(
     elif kind == "u":
         kind = ""
 
-    if nans == False and interpolant == "pchip":
+    if not nans and interpolant == "pchip":
         nans = "_nonan"
     else:
         # if interpolant == "linear", just use regular coeffs_1 function.

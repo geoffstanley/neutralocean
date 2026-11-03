@@ -6,7 +6,14 @@
 
 import numpy as np
 import xarray as xr
+import matplotlib.pyplot as plt
+import xgcm
+from time import time
 from os.path import expanduser
+import sys
+import importlib
+
+from xmitgcm import open_mdsdataset
 
 import neutralocean as no
 import neutralocean.grid.xgcm as nogrid
@@ -103,7 +110,6 @@ eos_s_t = no.load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Stabilize hydrographic casts
 print("Begin stabilization of hydrographic casts ...")
-from time import time
 
 tic = time()
 no.stabilize_ST(S, T, Z, eos=eos, verbose=False)  # about 140 sec
@@ -171,11 +177,8 @@ ei, ej = nogrid.edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)
 # I've installed ecco_v4_py by cloning their git repository to ~/work/python/ECCOv4-py
 # Follow https://ecco-v4-python-tutorial.readthedocs.io/Installing_Python_and_Python_Packages.html#option-1-clone-into-the-repository-using-git-recommended
 # and edit path below as needed.
-import sys
-import matplotlib.pyplot as plt
-
 sys.path.append("/home/stanley/work/python/ECCOv4-py/")
-import ecco_v4_py as ecco
+ecco = importlib.import_module("ecco_v4_py")
 
 ecco.plot_tiles(
     z_omega - z_sigma,
@@ -195,8 +198,6 @@ plt.suptitle("z_omega - z_sigma")
 # plt.savefig("depth omega - depth sigma.png", bbox_inches="tight")
 
 # In[Double check neutralocean's grid differencing]
-from xmitgcm import open_mdsdataset
-import xgcm
 
 # To check that the grid works, we'll calculate the backwards differences of the
 # sea-surface temperature in both horizontal directions. Begin by extracting SST.

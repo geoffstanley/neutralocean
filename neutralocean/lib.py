@@ -58,13 +58,13 @@ def find_first_nan(a, axis=-1):
 @nb.njit
 def _find_first_nan(a):
     """The index to the first NaN along the middle axis of a 3D array"""
-    I, J, K = a.shape
+    ni, nj, nk = a.shape
 
-    out = np.full((I, K), J, dtype=np.int64)
-    for i in range(I):
-        for k in range(K):
+    out = np.full((ni, nk), nj, dtype=np.int64)
+    for i in range(ni):
+        for k in range(nk):
             a1 = a[i, :, k]
-            for j in range(J):
+            for j in range(nj):
                 if np.isnan(a1[j]):
                     out[i][k] = j
                     break
@@ -231,7 +231,7 @@ def _xrs_in(S, T, P, vert_dim):
         try:
             pxr.attrs.update(P.attrs)
             pxr.name = P.name
-        except:
+        except Exception:
             pxr.attrs.clear()
             pxr.name = None
 
@@ -253,7 +253,7 @@ def _process_vert_dim(vert_dim, S):
     if isinstance(vert_dim, str) and hasattr(S, "dims"):
         try:
             vert_dim = S.dims.index(vert_dim)
-        except:
+        except ValueError:
             raise ValueError(f"vert_dim = {vert_dim} not found in S.dims")
 
     return np.mod(vert_dim, S.ndim)
@@ -326,7 +326,7 @@ def _process_periodic(periodic, s=None, diags=False):
         try:
             # Convert dim names to tuple of bool
             periodic = tuple(x in periodic for x in s.dims)
-        except:
+        except Exception:
             raise TypeError("With periodic provided as strings, s must have a .dims attribute")
 
     # type checking on final value

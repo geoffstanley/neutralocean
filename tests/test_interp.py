@@ -70,10 +70,10 @@ def test_interp(interp, num_deriv, x):
             for j in range(x.size):
                 try:
                     y[i, j] = fn(x[j])
-                except:
+                except Exception:
                     # extrapolation was needed (only for UnivariateSpline)
                     pass  # leave as nan
-        except:
+        except Exception:
             # Building the interpolant failed.
             # Not enough valid data points (e.g. X has 1 non-nan value)
             pass  # leave as nan

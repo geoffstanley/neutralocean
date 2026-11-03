@@ -12,13 +12,13 @@ from .grid import divergence
 from .ppinterp import make_pp  # don't import ppval*, valid_range*, ...
 
 # Import from modules
-from .bfs import *
-from .label import *
-from .mixed_layer import *
-from .ntp import *
-from .stability import *
-from .surface import *
-from .traj import *
+from .bfs import bfs_conncomp1, bfs_conncomp1_wet, bfs_conncomp1_wet_perim
+from .label import pot_dens_1, veronis
+from .mixed_layer import mld
+from .ntp import ntp_epsilon_errors, ntp_epsilon_errors_norms
+from .stability import calc_dLRPDdp_fd_1, count_unstable, stabilize_ST
+from .surface import anomaly_surf, omega_surf, potential_surf
+from .traj import neutral_trajectory, ntp_bottle_to_cast
 
 # List of modules not explicitly imported above
 _modules = ["data", "fzero", "lib", "_vertsolve"]
@@ -47,24 +47,24 @@ __all__ = (
     "bfs_conncomp1_wet",
     "bfs_conncomp1_wet_perim",
     # -- label
-    "veronis",
     "pot_dens_1",
+    "veronis",
     # -- mixed_layer
     "mld",
     # -- ntp
     "ntp_epsilon_errors",
     "ntp_epsilon_errors_norms",
     # -- stability
+    "calc_dLRPDdp_fd_1",
     "count_unstable",
     "stabilize_ST",
-    "calc_dLRPDdp_fd_1",
     # -- surface
-    "potential_surf",
     "anomaly_surf",
     "omega_surf",
+    "potential_surf",
     # -- traj
-    "ntp_bottle_to_cast",
     "neutral_trajectory",
+    "ntp_bottle_to_cast",
     # Classes
     # Exceptions
     # Constants

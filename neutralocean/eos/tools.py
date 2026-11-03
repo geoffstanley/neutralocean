@@ -84,7 +84,7 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
             f"Equation of state {eos} not (yet) implemented. Currently, eos must be one of " + modules.__str__()
         )
 
-    if grav != None and rho_c != None:
+    if grav is not None and rho_c is not None:
         fn = make_bsq(fn, grav, rho_c)
 
     return fn
