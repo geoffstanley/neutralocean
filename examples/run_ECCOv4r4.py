@@ -7,13 +7,11 @@
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
-import xgcm
 from time import time
 from os.path import expanduser
-import sys
-import importlib
-
-from xmitgcm import open_mdsdataset
+import ecco_v4_py as ecco
+# import xgcm
+# from xmitgcm import open_mdsdataset
 
 import neutralocean as no
 import neutralocean.grid.xgcm as nogrid
@@ -174,12 +172,6 @@ ei, ej = nogrid.edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)
 
 # In[Map depth difference between omega and potential]
 
-# I've installed ecco_v4_py by cloning their git repository to ~/work/python/ECCOv4-py
-# Follow https://ecco-v4-python-tutorial.readthedocs.io/Installing_Python_and_Python_Packages.html#option-1-clone-into-the-repository-using-git-recommended
-# and edit path below as needed.
-sys.path.append("/home/stanley/work/python/ECCOv4-py/")
-ecco = importlib.import_module("ecco_v4_py")
-
 ecco.plot_tiles(
     z_omega - z_sigma,
     cmin=-200,
@@ -212,14 +204,20 @@ a, b = grid["edges"]
 # Decompose ΔT (a 1D array) into two 2D arrays, one for differences in each horizontal dimension
 SSTx, SSTy = nogrid.edgedata_to_maps(ΔT, n, face_connections, dims, xsh, ysh)
 
-
 # Next, we'll repeat the above differencing using ECCO's methods.
 # See https://ecco-v4-python-tutorial.readthedocs.io/VectorCalculus_ECCO_barotropicVorticity.html
+# Currently, this only works on Python <= 3.12. See https://github.com/MITgcm/xmitgcm/issues/343
+# Hence, this check is currently skipped.
+"""
 print(
     "Download the grid's binary data files from "
     "< https://ndownloader.figshare.com/files/6494721 > "
-    f" then exctract it so that {folder_ecco4} contains a folder 'global_oce_llc90'"
+    f" then exctract it so that {folder_ecco4} contains a folder 'global_oce_llc90'."
 )
+print("For example:")
+print(f"`cd {folder_ecco4}")
+print("`wget -O global_oce_llc90.tar.gz https://ndownloader.figshare.com/files/6494721`")
+print("`tar -xvzf global_oce_llc90.tar.gz`")
 ds_llc = open_mdsdataset(
     folder_ecco4 + "global_oce_llc90/",
     iters=0,
@@ -232,7 +230,7 @@ ds_llc = ds_llc.rename({"face": "tile"})
 # Make the xgcm grid object to handle the differencing.
 grid_llc = xgcm.Grid(
     ds_llc,
-    periodic=False,
+    padding="fill",
     face_connections=face_connections,
     coords={
         "X": {"center": "i", "left": "i_g"},
@@ -272,3 +270,4 @@ assert SSTy[t, j, i] == Tnp[t, j, i, k] - Tnp[t_, j_, i_, k]
 print(f"SSTy[{t},{j},{i}] == T[{t},{j},{i},{k}] - T[{t_},{j_},{i_},{k}]")
 # # Output:
 # SSTy[4,0,40] == T[4,0,40,0] - T[3,89,40,0]
+"""

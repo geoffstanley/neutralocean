@@ -208,18 +208,17 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
     shape = [n, n, n]
     shape[t] = nf
 
-    print(f"n = {n}")
-
     # Build a simple xgcm grid
     coords = {"i": np.arange(n), "j": np.arange(n), tile: np.arange(nf)}
     grid = xgcm.Grid(
         xr.Dataset(None, coords),
-        periodic=False,
+        padding="fill",
         face_connections=face_connections,
         coords={
-            "X": {"center": "i", "left": "i", "right": "i"},
-            "Y": {"center": "j", "left": "j", "right": "j"},
+            "X": {"center": "i"},
+            "Y": {"center": "j"},
         },
+        autoparse_metadata=False,
     )
 
     # Make linear indices for the whole domain: a DataArray of 0, 1, ... N-1.
@@ -242,8 +241,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["X"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (1, 0)},
-            boundary="fill",
+            padding_width={"ax1": (1, 0)},
+            padding="fill",
             fill_value=-1,
         )
 
@@ -256,8 +255,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["X"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (0, 1)},
-            boundary="fill",
+            padding_width={"ax1": (0, 1)},
+            padding="fill",
             fill_value=-1,
         )
 
@@ -275,8 +274,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["Y"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (1, 0)},
-            boundary="fill",
+            padding_width={"ax1": (1, 0)},
+            padding="fill",
             fill_value=-1,
         )
 
@@ -294,8 +293,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["Y"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (0, 1)},
-            boundary="fill",
+            padding_width={"ax1": (0, 1)},
+            padding="fill",
             fill_value=-1,
         )
 
