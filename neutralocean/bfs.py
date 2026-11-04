@@ -3,7 +3,8 @@ import numba as nb
 
 from .traj import _ntp_bottle_to_cast, _ntp_bottle_to_cast_ppc
 from .ppinterp import valid_range_1_two, ppval_1_two
-from .lib import local_functions
+
+__all__ = ["bfs_conncomp1", "bfs_conncomp1_wet", "bfs_conncomp1_wet_perim"]
 
 
 @nb.njit
@@ -199,9 +200,7 @@ def bfs_conncomp1_wet(s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_f
 
                     # Try NTP link from bottle at m to cast at n.
                     # TODO: impose p[n] <= p_ml[n] here instead of below?
-                    s_, t_, p_ = _ntp_bottle_to_cast(
-                        s[m], t[m], p[m], Sn, Tn, Pn, k, K, tol_p, eos, ppc_fn
-                    )
+                    s_, t_, p_ = _ntp_bottle_to_cast(s[m], t[m], p[m], Sn, Tn, Pn, k, K, tol_p, eos, ppc_fn)
 
                     if np.isfinite(p_) and p_ > p_ml[n]:
                         # The NTP connection was successful, and its location
@@ -216,9 +215,7 @@ def bfs_conncomp1_wet(s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_f
 
 
 @nb.njit
-def bfs_conncomp1_wet_perim(
-    s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_fn, p_ml, n_rep
-):
+def bfs_conncomp1_wet_perim(s, t, p, indptr, indices, root, S, T, P, tol_p, eos, ppc_fn, p_ml, n_rep):
     """
     Find the Connected Component of a graph's good nodes containing a root node
     via Breadth-first Search.
@@ -331,9 +328,7 @@ def bfs_conncomp1_wet_perim(
                 for n in neigh:
                     if np.isfinite(p[n]):
                         # Try NTP link from bottle at n to cast at m
-                        p_ = _ntp_bottle_to_cast_ppc(
-                            tol_p, s[n], t[n], p[n], Pm, Sppc, Tppc, eos
-                        )
+                        p_ = _ntp_bottle_to_cast_ppc(tol_p, s[n], t[n], p[n], Pm, Sppc, Tppc, eos)
 
                         if np.isfinite(p_) and p_ > p_ml[n]:
                             # The NTP connection was successful, and its location
@@ -364,6 +359,3 @@ def bfs_conncomp1_wet_perim(
         qH = i - 1  # Reset for next pass over perimeter
 
     return newly_wet
-
-
-__all__ = local_functions(locals(), __name__)

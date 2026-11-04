@@ -113,6 +113,4 @@ Tools
 Data
 ====
 
-.. autofunction:: neutralocean.data.load_OCCA
-
 .. autofunction:: neutralocean.data.synthocean

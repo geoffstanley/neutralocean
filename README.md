@@ -28,10 +28,23 @@ There are also routines to calculate potential density surfaces, specific volume
 
 # Installation
 This package is on [PyPI](https://pypi.org/project/neutralocean/) and [conda-forge](https://anaconda.org/conda-forge/neutralocean). Simply execute one of the following commands:
-- `pip install neutralocean`
-- `pixi add neutralocean`
 - `uv add neutralocean`
+- `pixi add neutralocean`
+- `pip install neutralocean`
 - `conda install -c conda-forge neutralocean`
 
 # Documentation
 See <https://neutralocean.readthedocs.org>
+
+# Quickstart
+
+```python
+import neutralocean as no
+
+# Create synthetic hydrography (16 by 32 horizontally, 50 vertically)
+S, T, Z, _ = no.data.synthocean((16, 32, 50), periodic=(False, False))
+grid = no.grid.rectilinear.build_grid((16, 32), periodic=(False, False))
+
+# Compute omega-surface initialized from a pinned depth at a chosen cast.
+s, t, z, diags = no.omega_surf(S, T, Z, grid, pin_cast=(8, 16), p_init=2000.)
+```

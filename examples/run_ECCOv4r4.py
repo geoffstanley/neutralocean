@@ -6,15 +6,19 @@
 
 import numpy as np
 import xarray as xr
+import matplotlib.pyplot as plt
+from time import time
 from os.path import expanduser
+import ecco_v4_py as ecco
+# import xgcm
+# from xmitgcm import open_mdsdataset
 
 import neutralocean as no
 import neutralocean.grid.xgcm as nogrid
 
 # In[Load data]
 
-print(
-    """To get started, we need some ECCOv4r4 data. 
+print("""To get started, we need some ECCOv4r4 data. 
 Make an Earthdata Login at
     https://urs.earthdata.nasa.gov/
 and install "podaac data downloader" following the instructions at
@@ -25,8 +29,7 @@ one day of data:
     podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 2002-12-23T00:00:01Z --end-date 2002-12-23T23:59:59Z -e ""
 Finally, edit the variable `folder_ecco4` below to point to the directory where
 you saved these `*.nc` files.
-"""
-)
+""")
 # To get the first and last day of data, also run the following 2 lines:
 # podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 1992-01-01T00:00:01Z --end-date 1992-01-01T23:59:59Z -e ""
 # podaac-data-downloader -c ECCO_L4_TEMP_SALINITY_LLC0090GRID_DAILY_V4R4 -d ./data --start-date 2017-12-31T00:00:01Z --end-date 2017-12-31T23:59:59Z -e ""
@@ -34,18 +37,11 @@ you saved these `*.nc` files.
 folder_ecco4 = expanduser("~/work/data/ECCOv4r4/data/")  # << EDIT AS NEEDED >>
 file_grid = folder_ecco4 + "GRID_GEOMETRY_ECCO_V4r4_native_llc0090.nc"
 date = "2002-12-23"
-file_ST = (
-    folder_ecco4
-    + "OCEAN_TEMPERATURE_SALINITY_day_mean_"
-    + date
-    + "_ECCO_V4r4_native_llc0090.nc"
-)
+file_ST = folder_ecco4 + "OCEAN_TEMPERATURE_SALINITY_day_mean_" + date + "_ECCO_V4r4_native_llc0090.nc"
 
 # Load horizontal grid information
 with xr.open_dataset(file_grid) as ds:
-    XC, YC, dxC, dyC, dyG, dxG = (
-        ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dyG", "dxG")
-    )
+    XC, YC, dxC, dyC, dyG, dxG = (ds[x].load() for x in ("XC", "YC", "dxC", "dyC", "dyG", "dxG"))
 
 # Load hydrographic data
 with xr.open_dataset(file_ST) as ds:
@@ -112,7 +108,6 @@ eos_s_t = no.load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Stabilize hydrographic casts
 print("Begin stabilization of hydrographic casts ...")
-from time import time
 
 tic = time()
 no.stabilize_ST(S, T, Z, eos=eos, verbose=False)  # about 140 sec
@@ -120,9 +115,7 @@ print(f"... done in {time() - tic:.2f} sec")
 
 # Select pinning cast, picking the cast closest to (x0,y0)
 x0, y0 = (-172, -4)  # longitude, latitude -- Pacific equatorial ocean
-pin_cast = np.unravel_index(
-    ((XC.values - x0) ** 2 + (YC.values - y0) ** 2).argmin(), XC.shape
-)
+pin_cast = np.unravel_index(((XC.values - x0) ** 2 + (YC.values - y0) ** 2).argmin(), XC.shape)
 z0 = 1500.0  # pinning depth
 
 # In[Build approximately neutral surfaces]
@@ -131,9 +124,7 @@ z0 = 1500.0  # pinning depth
 # reference depth is z0 also.
 # No diagnostics requested, so info about the grid is not needed (no `edges`
 # and `geoemtry` provided), and also eos_s_t is not needed.
-s, t, z, _ = no.potential_surf(
-    S, T, Z, eos=eos, vert_dim="k", pin_p=z0, pin_cast=pin_cast, diags=False
-)
+s, t, z, _ = no.potential_surf(S, T, Z, eos=eos, vert_dim="k", pin_p=z0, pin_cast=pin_cast, diags=False)
 z_sigma = z
 
 # Build in-situ density anomaly surface with given reference salinity and
@@ -181,15 +172,6 @@ ei, ej = nogrid.edgedata_to_maps(e, n, face_connections, dims, xsh, ysh)
 
 # In[Map depth difference between omega and potential]
 
-# I've installed ecco_v4_py by cloning their git repository to ~/work/python/ECCOv4-py
-# Follow https://ecco-v4-python-tutorial.readthedocs.io/Installing_Python_and_Python_Packages.html#option-1-clone-into-the-repository-using-git-recommended
-# and edit path below as needed.
-import sys
-import matplotlib.pyplot as plt
-
-sys.path.append("/home/stanley/work/python/ECCOv4-py/")
-import ecco_v4_py as ecco
-
 ecco.plot_tiles(
     z_omega - z_sigma,
     cmin=-200,
@@ -208,8 +190,6 @@ plt.suptitle("z_omega - z_sigma")
 # plt.savefig("depth omega - depth sigma.png", bbox_inches="tight")
 
 # In[Double check neutralocean's grid differencing]
-from xmitgcm import open_mdsdataset
-import xgcm
 
 # To check that the grid works, we'll calculate the backwards differences of the
 # sea-surface temperature in both horizontal directions. Begin by extracting SST.
@@ -224,14 +204,20 @@ a, b = grid["edges"]
 # Decompose ΔT (a 1D array) into two 2D arrays, one for differences in each horizontal dimension
 SSTx, SSTy = nogrid.edgedata_to_maps(ΔT, n, face_connections, dims, xsh, ysh)
 
-
 # Next, we'll repeat the above differencing using ECCO's methods.
 # See https://ecco-v4-python-tutorial.readthedocs.io/VectorCalculus_ECCO_barotropicVorticity.html
+# Currently, this only works on Python <= 3.12. See https://github.com/MITgcm/xmitgcm/issues/343
+# Hence, this check is currently skipped.
+"""
 print(
     "Download the grid's binary data files from "
     "< https://ndownloader.figshare.com/files/6494721 > "
-    f" then exctract it so that {folder_ecco4} contains a folder 'global_oce_llc90'"
+    f" then exctract it so that {folder_ecco4} contains a folder 'global_oce_llc90'."
 )
+print("For example:")
+print(f"`cd {folder_ecco4}")
+print("`wget -O global_oce_llc90.tar.gz https://ndownloader.figshare.com/files/6494721`")
+print("`tar -xvzf global_oce_llc90.tar.gz`")
 ds_llc = open_mdsdataset(
     folder_ecco4 + "global_oce_llc90/",
     iters=0,
@@ -244,7 +230,7 @@ ds_llc = ds_llc.rename({"face": "tile"})
 # Make the xgcm grid object to handle the differencing.
 grid_llc = xgcm.Grid(
     ds_llc,
-    periodic=False,
+    padding="fill",
     face_connections=face_connections,
     coords={
         "X": {"center": "i", "left": "i_g"},
@@ -262,12 +248,10 @@ SSTy_ = grid_llc.diff(T[..., k], "Y").values
 # First, check the two differencing methods are equal, everywhere
 assert np.array_equal(SSTx, SSTx_, equal_nan=True)
 assert np.array_equal(SSTy, SSTy_, equal_nan=True)
-print(
-    "Test for equivalence between neutralocean grid differencing and xgcm grid differencing: passed."
-)
+print("Test for equivalence between neutralocean grid differencing and xgcm grid differencing: passed.")
 
 # Now, check that differencing makes sense at an interior point
-(t, j, i) = (9, 40, 40)
+t, j, i = (9, 40, 40)
 assert SSTx[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j, i - 1, k])
 assert SSTy[t, j, i] == (Tnp[t, j, i, k] - Tnp[t, j - 1, i, k])
 print(f"SSTx[{t}, {j}, {i}] == (T[{t}, {j}, {i}, {k}] - T[{t}, {j}, {i - 1}, {k}])")
@@ -286,3 +270,4 @@ assert SSTy[t, j, i] == Tnp[t, j, i, k] - Tnp[t_, j_, i_, k]
 print(f"SSTy[{t},{j},{i}] == T[{t},{j},{i},{k}] - T[{t_},{j_},{i_},{k}]")
 # # Output:
 # SSTy[4,0,40] == T[4,0,40,0] - T[3,89,40,0]
+"""

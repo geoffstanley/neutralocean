@@ -9,7 +9,7 @@ def divergence(vector, edges, distperp=1.0, area=1.0):
     node `b[i]`, where `(a,b) = edges`.
     `distperp[i]` is the distance of the interface between nodes `a[i]` and `b[i]`.
     `area[i]` is the area of node `i`.
-    
+
     Note: This function's API is likely to change, to just take in a `grid` dict.
     """
 

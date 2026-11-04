@@ -3,9 +3,7 @@ import xarray as xr
 import xgcm
 
 
-def build_grid(
-    n, face_connections, dims, xsh, ysh, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0
-):
+def build_grid(n, face_connections, dims, xsh, ysh, dxC=1.0, dyC=1.0, dyG=1.0, dxG=1.0):
     """
     Make a list of edges between adjacent nodes in a graph consisting of
     rectilinear tiles, with adjacency between tiles specified as for xgcm;
@@ -106,15 +104,9 @@ def build_grid(
 
     # If given DataArrays, check the dims are correct then convert to numpy arrays.
     if all(hasattr(x, "dims") for x in (dxC, dyC, dyG, dxG)):
-        assert (
-            dxC.dims == dyG.dims
-        ), "Expected dxC and dyG to have the same coordinates"
-        assert (
-            dyC.dims == dxG.dims
-        ), "Expected dyC and dxG to have the same coordinates"
-    dxC, dyC, dyG, dxG = (
-        x.values if hasattr(x, "values") else x for x in (dxC, dyC, dyG, dxG)
-    )
+        assert dxC.dims == dyG.dims, "Expected dxC and dyG to have the same coordinates"
+        assert dyC.dims == dxG.dims, "Expected dyC and dxG to have the same coordinates"
+    dxC, dyC, dyG, dxG = (x.values if hasattr(x, "values") else x for x in (dxC, dyC, dyG, dxG))
 
     im1, jm1 = _build_im1_jm1(n, face_connections, dims, xsh, ysh)
     N = im1.size
@@ -197,18 +189,14 @@ def edgedata_to_maps(edgedata, n, face_connections, dims, xsh, ysh):
 def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
 
     # Access first (and only) key / value of face_connections
-    tile = next(
-        iter(face_connections.keys())
-    )  # name of face_connections only key
+    tile = next(iter(face_connections.keys()))  # name of face_connections only key
     nf = len(next(iter(face_connections.values())))  #  number of faces
 
     # Get index of tile in dims
     try:
         t = dims.index(tile)
-    except:
-        raise ValueError(
-            f"Expected to find '{tile}' (the key from `face_connections`) in `dims` == {dims}."
-        )
+    except ValueError:
+        raise ValueError(f"Expected to find '{tile}' (the key from `face_connections`) in `dims` == {dims}.")
 
     # Ensure dims also has 'i' and 'j':
     if not (dims.__contains__("i") and dims.__contains__("j")):
@@ -224,12 +212,13 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
     coords = {"i": np.arange(n), "j": np.arange(n), tile: np.arange(nf)}
     grid = xgcm.Grid(
         xr.Dataset(None, coords),
-        periodic=False,
+        padding="fill",
         face_connections=face_connections,
         coords={
-            "X": {"center": "i", "left": "i", "right": "i"},
-            "Y": {"center": "j", "left": "j", "right": "j"},
+            "X": {"center": "i"},
+            "Y": {"center": "j"},
         },
+        autoparse_metadata=False,
     )
 
     # Make linear indices for the whole domain: a DataArray of 0, 1, ... N-1.
@@ -252,8 +241,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["X"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (1, 0)},
-            boundary="fill",
+            padding_width={"ax1": (1, 0)},
+            padding="fill",
             fill_value=-1,
         )
 
@@ -266,8 +255,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["X"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (0, 1)},
-            boundary="fill",
+            padding_width={"ax1": (0, 1)},
+            padding="fill",
             fill_value=-1,
         )
 
@@ -285,8 +274,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["Y"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (1, 0)},
-            boundary="fill",
+            padding_width={"ax1": (1, 0)},
+            padding="fill",
             fill_value=-1,
         )
 
@@ -304,8 +293,8 @@ def _build_im1_jm1(n, face_connections, dims, xsh, ysh):
             idx,
             axis=[["Y"]],
             signature="(ax1:center)->(ax1:center)",
-            boundary_width={"ax1": (0, 1)},
-            boundary="fill",
+            padding_width={"ax1": (0, 1)},
+            padding="fill",
             fill_value=-1,
         )
 

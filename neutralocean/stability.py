@@ -4,7 +4,9 @@ from scipy.optimize import minimize
 from .ppinterp import valid_range_1
 from .eos import load_eos
 from .eos.gsw import rho as rho_gsw
-from .lib import _process_casts, local_functions
+from .lib import _process_casts
+
+__all__ = ["count_unstable", "stabilize_ST", "calc_dLRPDdp_fd_1"]
 
 eos_ = load_eos("gsw", "")  # default
 eos_s_t_ = load_eos("gsw", "_s_t")  # default
@@ -251,6 +253,3 @@ def calc_dLRPDdp_fd_1(S, T, P, eos):
     σ2 = eos(S[1:], T[1:], p_avg)
     dσdp = (σ2 - σ1) / (P[1:] - P[0:-1])
     return dσdp
-
-
-__all__ = local_functions(locals(), __name__)

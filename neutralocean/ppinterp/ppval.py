@@ -3,12 +3,9 @@ Functions to evaluate piecewise polynomials, given their coefficients, in one
 dimension.
 """
 
-
-"""
-Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB
-File Exchange at
-https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calculus
-"""
+# Adapted from 'Piecewise Polynomial Calculus' available on the MATLAB
+# File Exchange at
+# https://mathworks.com/matlabcentral/fileexchange/73114-piecewise-polynomial-calculus
 
 import numpy as np
 import numba as nb
@@ -38,8 +35,8 @@ def pval(x, C, d=0):
     y : float
         The polynomial (or its `d`'th derivative) evaluated at `x`.
 
-    Example
-    -------
+    Examples
+    --------
     If `C == (C2, C1, C0)`, and `d == 0`, then
     `y == x * (x * C2 + C1) + C0`.
     """
@@ -196,7 +193,7 @@ def ppval(x, X, Yppc, d, y):
         The shape of `Yppc` less its final dimension must be broadcastable to
         the shape of `X` and/or `Y`. The size of the last dimension of `Yppc`
         is the order of the polynomials.
-        
+
     d : int
         Order of the derivative to evaluate. When `0`, just evaluate the
         polynomial.

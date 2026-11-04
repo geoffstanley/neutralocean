@@ -7,7 +7,9 @@ from .ppinterp import make_pp, ppval_1_nonan_two
 from .eos import load_eos
 from .fzero import guess_to_bounds, brent
 from .ppinterp import valid_range_1_two
-from .lib import _process_casts, local_functions
+from .lib import _process_casts
+
+__all__ = ["ntp_bottle_to_cast", "neutral_trajectory"]
 
 eos_ = load_eos("gsw", "")  # default
 eos_s_t_ = load_eos("gsw", "_s_t")  # default
@@ -190,9 +192,7 @@ def _ntp_bottle_to_cast_ppc(tol_p, sB, tB, pB, P, Sppc, Tppc, eos):
     # return s, t, p
 
 
-def neutral_trajectory(
-    S, T, P, p0, vert_dim=-1, tol_p=1e-4, interp="linear", eos=eos_, **kw
-):
+def neutral_trajectory(S, T, P, p0, vert_dim=-1, tol_p=1e-4, interp="linear", eos=eos_, **kw):
     """Calculate a neutral trajectory through a sequence of casts.
 
     Given a sequence of casts with hydrographic properties `(S, T, P)`, calculate
@@ -295,6 +295,3 @@ def neutral_trajectory(
             break
 
     return s, t, p
-
-
-__all__ = local_functions(locals(), __name__)

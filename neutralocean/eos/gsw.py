@@ -14,7 +14,7 @@ specvol_second_derivs :: compute second order partial derivatives of specvol
 
 specvol_third_derivs :: compute third order partial derivatives of specvol
 
-specvol_s_t :: compute the partial derivatives of specvol with respect to 
+specvol_s_t :: compute the partial derivatives of specvol with respect to
     Absolute Salinity and Conservative Temperature
 
 specvol_p :: compute the partial derivative of specvol with respect to pressure
@@ -22,13 +22,13 @@ specvol_p :: compute the partial derivative of specvol with respect to pressure
 specvol_s_t_ss_st_tt_sp_tp :: compute various partial derivatives of specvol,
     namely with respect to s, t, ss, st, tt, sp, tp.
 
-specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp :: compute various 
-    partial derivatives of specvol, namely with respect to 
+specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp :: compute various
+    partial derivatives of specvol, namely with respect to
     s, t, ss, st, tt, sp, tp, sss, sst, stt, ttt, ssp, stp, ttp, spp, tpp.
 
 
 Notes:
-To make Boussinesq versions of these functions, see 
+To make Boussinesq versions of these functions, see
 `neutralocean.eos.tools.make_bsq`.
 
 To make vectorized versions of these functions which return scalar outputs, see
@@ -41,20 +41,20 @@ All functions here are derived from `gsw_specvol`, documented below.
 
     # gsw_specvol                            specific volume (75-term equation)
     #==========================================================================
-    # 
-    # USAGE:  
+    #
+    # USAGE:
     #  specvol = gsw_specvol(SA,CT,p)
-    # 
+    #
     # DESCRIPTION:
-    #  Calculates specific volume from Absolute Salinity, Conservative 
-    #  Temperature and pressure, using the computationally-efficient 75-term 
+    #  Calculates specific volume from Absolute Salinity, Conservative
+    #  Temperature and pressure, using the computationally-efficient 75-term
     #  polynomial expression for specific volume (Roquet et al., 2015).
     #
-    #  Note that the 75-term equation has been fitted in a restricted range of 
-    #  parameter space, and is most accurate inside the "oceanographic funnel" 
-    #  described in McDougall et al. (2003).  The GSW library function 
-    #  "gsw_infunnel(SA,CT,p)" is available to be used if one wants to test if 
-    #  some of one's data lies outside this "funnel".  
+    #  Note that the 75-term equation has been fitted in a restricted range of
+    #  parameter space, and is most accurate inside the "oceanographic funnel"
+    #  described in McDougall et al. (2003).  The GSW library function
+    #  "gsw_infunnel(SA,CT,p)" is available to be used if one wants to test if
+    #  some of one's data lies outside this "funnel".
     #
     # INPUT:
     #  SA  =  Absolute Salinity                                        [ g/kg ]
@@ -65,21 +65,21 @@ All functions here are derived from `gsw_specvol`, documented below.
     # OUTPUT:
     #  specvol  =  specific volume                                   [ m^3/kg ]
     #
-    # AUTHOR: 
+    # AUTHOR:
     #  Fabien Roquet, Gurvan Madec, Trevor McDougall & Paul Barker
     #                                                      [ help@teos-10.org ]
     #
     # VERSION NUMBER: 3.06 (30th August, 2018)
-    # 
+    #
     # REFERENCES:
-    #  IOC, SCOR and IAPSO, 2010: The international thermodynamic equation of 
-    #   seawater - 2010: Calculation and use of thermodynamic properties.  
+    #  IOC, SCOR and IAPSO, 2010: The international thermodynamic equation of
+    #   seawater - 2010: Calculation and use of thermodynamic properties.
     #   Intergovernmental Oceanographic Commission, Manuals and Guides No. 56,
-    #   UNESCO (English), 196 pp.  Available from http://www.TEOS-10.org.  
-    # 
-    #  McDougall, T.J., D.R. Jackett, D.G. Wright and R. Feistel, 2003: 
-    #   Accurate and computationally efficient algorithms for potential 
-    #   temperature and density of seawater.  J. Atmos. Ocean. Tech., 20, 
+    #   UNESCO (English), 196 pp.  Available from http://www.TEOS-10.org.
+    #
+    #  McDougall, T.J., D.R. Jackett, D.G. Wright and R. Feistel, 2003:
+    #   Accurate and computationally efficient algorithms for potential
+    #   temperature and density of seawater.  J. Atmos. Ocean. Tech., 20,
     #   730-741.
     #
     #  Roquet, F., G. Madec, T.J. McDougall, P.M. Barker, 2015: Accurate
@@ -87,16 +87,16 @@ All functions here are derived from `gsw_specvol`, documented below.
     #   using the TEOS-10 standard. Ocean Modelling., 90, pp. 29-43.
     #
     #  This software is available from http://www.TEOS-10.org
-    # 
+    #
     #==========================================================================
 
 .. [1] Roquet, F., G. Madec, T.J. McDougall, P.M. Barker, 2015: Accurate
        polynomial expressions for the density and specifc volume of seawater
        using the TEOS-10 standard. Ocean Modelling., 90, pp. 29-43.
 
-.. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
-       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
-       ISBN 978-0-646-55621-5. 
+.. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
+       the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
+       ISBN 978-0-646-55621-5.
 """
 
 # Check values computed on 15/05/2023:
@@ -126,7 +126,6 @@ All functions here are derived from `gsw_specvol`, documented below.
 #  -5.163347063050122e-16,
 #  -4.907754242711458e-16,
 #  -5.163491628438305e-18)
-
 
 import numpy as np
 import numba as nb
@@ -258,7 +257,7 @@ def specvol(SA, CT, p, pfac=1e-4):
     To create a Boussinesq version of this function that accepts 3 arguments
     (salinity, temperature, depth), use `neutralocean.eos.tools.make_bsq`.
     """
-    (x, y, z, _) = _process(SA, CT, p, pfac)
+    x, y, z, _ = _process(SA, CT, p, pfac)
     return _specvol(x, y, z)
 
 
@@ -287,7 +286,7 @@ def specvol_first_derivs(SA, CT, p, pfac=1e-4):
         Partial derivative of specific volume w.r.t. `p` [m3 kg-1 / [p]]
     """
 
-    (x, y, z, _) = _process(SA, CT, p, pfac)
+    x, y, z, _ = _process(SA, CT, p, pfac)
     vs = _s(x, y, z)
     vt = _t(x, y, z)
     vp = _p(x, y, z, pfac)
@@ -312,7 +311,7 @@ def specvol_second_derivs(SA, CT, p, pfac=1e-4):
         `SA * CT`, `CT * CT`, `SA * p`, `CT * p`, respectively.
     """
 
-    (x, y, z, x2) = _process(SA, CT, p, pfac)
+    x, y, z, x2 = _process(SA, CT, p, pfac)
 
     vss = _ss(x, y, z, x2)
     vst = _st(x, y, z)
@@ -340,7 +339,7 @@ def specvol_third_derivs(SA, CT, p, pfac=1e-4):
         Third order partial derivatives of specific volume.
     """
 
-    (x, y, z, x2) = _process(SA, CT, p, pfac)
+    x, y, z, x2 = _process(SA, CT, p, pfac)
 
     vsss = _sss(x, y, z, x2)
     vsst = _sst(x, y, z, x2)
@@ -374,7 +373,7 @@ def specvol_s_t(SA, CT, p, pfac=1e-4):
     vt : float
         Partial derivative of specific volume w.r.t. `CT` [m3 kg-1 / (deg C)]
     """
-    (x, y, z, _) = _process(SA, CT, p, pfac)
+    x, y, z, _ = _process(SA, CT, p, pfac)
     vs = _s(x, y, z)
     vt = _t(x, y, z)
 
@@ -396,7 +395,7 @@ def specvol_p(SA, CT, p, pfac=1e-4):
     vp : float
         Partial derivative of specific volume w.r.t. `p` [m3 kg-1 / [p]]
     """
-    (x, y, z, _) = _process(SA, CT, p, pfac)
+    x, y, z, _ = _process(SA, CT, p, pfac)
     return _p(x, y, z, pfac)
 
 
@@ -416,7 +415,7 @@ def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p, pfac=1e-4):
         Partial derivatives of specific volume w.r.t. `SA`, `CT`, `SA*SA`, `SA*CT`, `CT*CT`,
         `SA*p`, `CT*p`.
     """
-    (x, y, z, x2) = _process(SA, CT, p, pfac)
+    x, y, z, x2 = _process(SA, CT, p, pfac)
     s = _s(x, y, z)
     t = _t(x, y, z)
     ss = _ss(x, y, z, x2)
@@ -429,9 +428,7 @@ def specvol_s_t_ss_st_tt_sp_tp(SA, CT, p, pfac=1e-4):
 
 
 @nb.njit
-def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(
-    SA, CT, p, pfac=1e-4
-):
+def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(SA, CT, p, pfac=1e-4):
     """
     Select partial derivatives of specific volume up to third order
 
@@ -445,7 +442,7 @@ def specvol_s_t_ss_st_tt_sp_tp_sss_sst_stt_ttt_ssp_stp_ttp_spp_tpp(
     vs, vt, vss, vst, vtt, vsp, vtp, vsss, vsst, vstt, vttt, vssp, vstp, vttp, vspp, vtpp : float
         Partial derivatives of specific volume.
     """
-    (x, y, z, x2) = _process(SA, CT, p, pfac)
+    x, y, z, x2 = _process(SA, CT, p, pfac)
 
     vs = _s(x, y, z)
     vt = _t(x, y, z)
@@ -492,6 +489,7 @@ def _process(SA, CT, p, pfac):
 
 
 """ Begin individual partial derivatives """
+
 
 # fmt: off
 @nb.njit

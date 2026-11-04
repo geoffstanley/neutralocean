@@ -10,6 +10,8 @@ import pooch
 import neutralocean as no
 import neutralocean.grid.tripolar as nogrid
 
+time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+
 # In[Load data]
 
 # Get salt and potential temperature from CMIP6 archives (734 MB and 963 MB)
@@ -33,19 +35,18 @@ file_mesh = pooch.retrieve(url=url_mesh, known_hash=hash_mesh)
 
 # Extract data
 timestep = 0
-ds = xr.open_dataset(file_salt)
-nj = ds.sizes["j"]  # number of grid points in the meridional y direction
-ni = ds.sizes["i"]  # number of grid points in the zonal x direction
-S = ds["so"].isel({"time": timestep})  # 3D salinity
-Z = ds["lev"]  # 1D depth at center of tracer cells
+with xr.open_dataset(file_salt, decode_times=time_coder) as ds:
+    nj = ds.sizes["j"]  # number of grid points in the meridional y direction
+    ni = ds.sizes["i"]  # number of grid points in the zonal x direction
+    S = ds["so"].isel({"time": timestep})  # 3D salinity
+    Z = ds["lev"]  # 1D depth at center of tracer cells
 
-ds = xr.open_dataset(file_theta)
-T = ds["thetao"].isel({"time": timestep})  # potential temperature
+with xr.open_dataset(file_theta, decode_times=time_coder) as ds:
+    T = ds["thetao"].isel({"time": timestep})  # potential temperature
 
-mesh = xr.open_dataset(file_mesh)  # contains horizontal grid information
-
-# Squeeze out singleton dimension in horizontal grid distances and convert to numpy array
-e1u, e2v, e2u, e1v = (mesh[x].data.squeeze() for x in ("e1u", "e2v", "e2u", "e1v"))
+with xr.open_dataset(file_mesh) as ds:  # contains horizontal grid information
+    # Squeeze out singleton dimension in horizontal grid distances and convert to numpy array
+    e1u, e2v, e2u, e1v = (ds[x].data.squeeze() for x in ("e1u", "e2v", "e2u", "e1v"))
 
 # Note: The ORCA1 tripolar horizontal grid is of size (nj, ni) == (291, 360).
 # The second dimension is periodic, handling longitude's periodic nature.
@@ -53,7 +54,7 @@ e1u, e2v, e2u, e1v = (mesh[x].data.squeeze() for x in ("e1u", "e2v", "e2u", "e1v
 # (the first row) is non-periodic since Antarctica covers the South Pole and
 # the ocean grid only goes to -78.3935°S. The north (the last row) is periodic
 # with a flipped version of itself, due to ORCA's tripolar grid. Specifically,
-# the cell at [nj - 1, i] is adjacent to the cell at [nj - 1, ni - i - 1].
+# the tracer cell at [nj - 1, i] is adjacent to the tracer cell at [nj - 1, ni - i - 1].
 # The grid metrics e1u, e2v, e2u, e1v all have size (nj+1, ni+2) == (292, 362):
 # they employ padding to ease applying boundary conditions.
 # See documentation in `neutralocean.grid.tripolar` for more information.
@@ -96,14 +97,12 @@ z0 = 1500.0
 # the root-mean-square change in the locally referenced potential density from
 # one iteration to the next to drop below 10^-7 kg m-3, or a maximum of 10
 # iterations.
-s, t, z, d = no.omega_surf(
-    S, T, Z, grid, pin_cast=(j0, i0), p_init=z0, vert_dim="lev", eos=eos, eos_s_t=eos_s_t
-)
+s, t, z, d = no.omega_surf(S, T, Z, grid, pin_cast=(j0, i0), p_init=z0, vert_dim="lev", eos=eos, eos_s_t=eos_s_t)
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
     f" ** The omega-surface"
     f" initialized from a potential density surface (referenced to {z0}m)"
-    f" intersecting the cast indexed by {(j0,i0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(j0, i0)} at depth {z0}m"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 

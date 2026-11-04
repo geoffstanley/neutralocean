@@ -216,9 +216,7 @@ def build_grid(G):
     grid = dict()
     if isinstance(G, dict):
         if not ("dist" in G and "distperp" in G):
-            raise ValueError(
-                "If a dict, G must have 'dist' and 'distperp' entries"
-            )
+            raise ValueError("If a dict, G must have 'dist' and 'distperp' entries")
 
         D = triu_if_sym(G["dist"])
         P = triu_if_sym(G["distperp"])
@@ -226,9 +224,7 @@ def build_grid(G):
         a, b, dist = find(D)
         A, B, perp = find(P)
         if not np.array_equal(a, A) or not np.array_equal(b, B):
-            raise ValueError(
-                "Given matrices have different sparsity structure."
-            )
+            raise ValueError("Given matrices have different sparsity structure.")
         grid["edges"] = (a, b)
         grid["dist"] = dist
         grid["distperp"] = perp

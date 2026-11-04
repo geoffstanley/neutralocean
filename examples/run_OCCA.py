@@ -1,11 +1,101 @@
 # In[Imports]
 
+import numpy as np
+import xarray as xr
+import pooch
 import neutralocean as no
+from time import time
 
 
 # In[Load OCCA data]
+def load_OCCA():
+    """
+    Load grid, salinity, and potential temperature for OCCA 2004-2006 average
 
-g, S, T = no.data.load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
+    Returns
+    -------
+    g : dict
+        Grid information
+
+    S : xarray.DataArray
+        Salinity
+
+    T : xarray.DataArray
+        Potential temperature
+    """
+
+    # Use friendly pooch to download dataset, if it hasn't already done so
+    # and cached it locally.
+    url_salt = (
+        "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/VREV1Z"
+    )
+    url_theta = (
+        "https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/RNXA2A/APHURG"
+    )
+
+    hash_salt = "184ca879e0ed18a078f31160c16ec078701e0f1af4d6de44bd1e70cc200d111c"
+    hash_theta = "7fcef4663439e34b13de4b08a373a0e17b83bee2c621ea8ac07a8175fe15368e"
+
+    file_salt = pooch.retrieve(url=url_salt, known_hash=hash_salt)
+    file_theta = pooch.retrieve(url=url_theta, known_hash=hash_theta)
+
+    ts = 0  # Select the first time step (January)
+
+    # Build our own grid, as the MITgcm does it
+    # Pa2db = 1e-4
+    d2r = np.pi / 180
+
+    g = dict()  # model grid and parameters
+    g["rho_c"] = 1027.5  # A guess. Same as ECCO2
+    g["grav"] = 9.81  # A guess. Same as ECCO2
+    g["rSphere"] = 6.37e6  # A guess. Same as ECCO2
+    g["resx"] = 1  # 1 grid cell per zonal degree
+    g["resy"] = 1  # 1 grid cell per meridional degree
+    g["periodic"] = (True, False)  # periodic in longitude, not in latitude
+
+    # Read grid info from the theta nc file
+    with xr.open_dataset(file_theta) as ds:
+        # Lateral coordinates
+        g["XCvec"], g["XGvec"], g["YCvec"], g["YGvec"] = (
+            np.require(ds[x].values, dtype=np.double, requirements="C")
+            for x in ("Longitude_t", "Longitude_u", "Latitude_t", "Latitude_v")
+        )
+
+        # Vertical coordinate
+        g["RC"] = np.require(-ds.Depth_c, dtype=np.double, requirements="C")
+
+        T = ds.theta.isel(Time=ts).load()
+
+    # Lateral distances
+    g["DXGvec"] = g["rSphere"] * np.cos(g["YGvec"] * d2r) / g["resx"] * d2r
+    g["DYGsc"] = g["rSphere"] * d2r / g["resy"]
+    g["DXCvec"] = g["rSphere"] * np.cos(g["YCvec"] * d2r) / g["resx"] * d2r
+    g["DYCsc"] = g["DYGsc"]
+
+    # Vertical distances
+    g["DRC"] = np.diff(-g["RC"])
+
+    # Vertical area of the tracer cells [m^2]
+    g["RACvec"] = (g["rSphere"] ** 2 / g["resx"] * d2r) * abs(
+        np.sin((g["YGvec"] + 1 / g["resy"]) * d2r) - np.sin(g["YGvec"] * d2r)
+    )
+
+    # Grid dimensions
+    g["nx"] = g["XCvec"].size
+    g["ny"] = g["YCvec"].size
+    g["nz"] = g["RC"].size
+
+    with xr.open_dataset(file_salt) as ds:
+        S = ds.salt.isel(Time=ts).load()
+
+    # Reorder dimensions to ensure individual water columns are float64 and contiguous in memory
+    dims = ("Longitude_t", "Latitude_t", "Depth_c")
+    S, T = (x.transpose(*dims).astype(np.double, order="C") for x in (S, T))
+
+    return g, S, T
+
+
+g, S, T = load_OCCA()  # S, T arranged as (Longitude, Latitude, Depth)
 ni, nj, nk = S.shape
 grav, rho_c = g["grav"], g["rho_c"]
 Z = -g["RC"]  # Depth vector (note positive and increasing down)
@@ -17,7 +107,6 @@ eos_s_t = no.load_eos("jmd95", "_s_t", grav, rho_c)
 
 # Perturb S, T to ensure static stability everywhere
 print("Begin stabilization of hydrographic casts ...")
-from time import time
 
 tic = time()
 no.stabilize_ST(S, T, Z, eos=eos, min_dLRPDdz=1e-6, verbose=False)  # about 90 sec
@@ -35,9 +124,7 @@ interp_name = "linear"
 # Build grid adjacency and distance information for neutralocean functions.
 # Note OCCA uses a latitude by longitude grid, which is rectangular in memory, hence we
 # select the `rectilinear` submodule of the `grid` subpackage.
-grid = no.grid.rectilinear.build_grid(
-    (ni, nj), g["wrap"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"]
-)
+grid = no.grid.rectilinear.build_grid((ni, nj), g["periodic"], g["DXCvec"], g["DYCsc"], g["DYGsc"], g["DXGvec"])
 
 # Prepare some default options for potential_surf, anomaly_surf, and omega_surf
 opts = {}
@@ -68,7 +155,7 @@ args["pin_p"] = z0
 s, t, z, d = no.potential_surf(S, T, Z, **args)
 print(
     f" ** The potential density surface (referenced to {d['ref']}m)"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
@@ -112,7 +199,7 @@ args["pin_p"] = z0
 s, t, z, d = no.anomaly_surf(S, T, Z, **args)
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
@@ -126,7 +213,7 @@ s, t, z, d = no.anomaly_surf(S, T, Z, **args)
 z_delta = z  # save for later
 print(
     f" ** The in-situ density anomaly surface (referenced to {d['ref']})"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" (isovalue = {d['isoval']}kg m-3)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS']} kg m-4"
 )
@@ -146,7 +233,7 @@ s, t, z, d = no.omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
     f" initialized from the given in-situ density anomaly surface"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 
@@ -169,7 +256,7 @@ s, t, z, d = no.omega_surf(S, T, Z, **args)
 s_omega, t_omega, z_omega = s, t, z  # save for later
 print(
     f" ** The omega-surface"
-    f" intersecting the cast indexed by {(i0,j0)} at depth {z0}m"
+    f" intersecting the cast indexed by {(i0, j0)} at depth {z0}m"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 args_omega = args.copy()  # save for later
@@ -186,14 +273,13 @@ args["p_init"] = z_omega  # set init surface from above
 s, t, z, d = no.omega_surf(S, T, Z, **args)
 print(
     f" ** The omega-surface"
-    f" initialized from an omega surface and pinned to the cast {(i1,j1)} at {z0}m)"
+    f" initialized from an omega surface and pinned to the cast {(i1, j1)} at {z0}m)"
     f" has root-mean-square ϵ neutrality error {d['e_RMS'][-1]} kg m-4"
 )
 
 
 # In[Begin showing more advanced features]
 
-import numpy as np
 
 # from neutralocean.lib import _process_casts, xr_to_np
 
@@ -303,19 +389,13 @@ if not same_valid_casts(z_omega, z_omega_pair):
     )
 
 b = calc_b(z_omega, z_omega_pair, (i0, j0))
-print(
-    "The integrating factor b for the omega surface varies between "
-    f"{np.nanmin(b)} and {np.nanmax(b)}."
-)
+print(f"The integrating factor b for the omega surface varies between {np.nanmin(b)} and {np.nanmax(b)}.")
 
 # In[Veronis Density, used to label an approx neutral surface]
 S_ref_cast = S.values[i0, j0]
 T_ref_cast = T.values[i0, j0]
 rho_v = no.veronis(z0, S_ref_cast, T_ref_cast, Z, eos=eos, eos_s_t=eos_s_t)
-print(
-    f"A surface through the cast indexed by {(i0,j0)} at depth {z0}m"
-    f" has Veronis density {rho_v} kg m-3"
-)
+print(f"A surface through the cast indexed by {(i0, j0)} at depth {z0}m has Veronis density {rho_v} kg m-3")
 
 # In[Neutral Trajectory]
 
@@ -348,7 +428,7 @@ j_south = np.argmax(
     )
 )
 print(
-    f"From (i,j)={(i0,j0)} at {z0}m moving south to j={j_south}, ...\n"
+    f"From (i,j)={(i0, j0)} at {z0}m moving south to j={j_south}, ...\n"
     f"Neutral Trajectory              ends at {znt[j_south]:8.4f}m depth,\n"
     f"Omega Surface                   ends at {zom[j_south]:8.4f}m depth,\n"
     f"Potential Density Surface       ends at {zpd[j_south]:8.4f}m depth,\n"
@@ -419,13 +499,13 @@ s, t, z, d = no.omega_surf(S, T, Z, **args)
 
 # In[Neutrality errors on a surface]
 e_RMS, e_MAV = no.ntp_epsilon_errors_norms(s, t, z_omega, grid, eos_s_t)
-print(f"RMS of ϵ is {e_RMS : 4e} [kg m-4])")
+print(f"RMS of ϵ is {e_RMS: 4e} [kg m-4])")
 
 # Calculate ϵ neutrality errors on all pairs of adjacent water columns
 e = no.ntp_epsilon_errors(s, t, z, grid, eos_s_t)
 
 # Convert ϵ above into two 2D maps, one for zonal ϵ errors and one for meridional ϵ errors
-ex, ey = no.grid.rectilinear.edgedata_to_maps(e, (ni, nj), g["wrap"])
+ex, ey = no.grid.rectilinear.edgedata_to_maps(e, (ni, nj), g["periodic"])
 # These can then be mapped...
 
 # In[Neutral Tangent Plane bottle to cast]

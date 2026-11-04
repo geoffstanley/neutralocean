@@ -6,19 +6,14 @@ Getting Started
 Installation
 ============
 
-Simply execute either
+Simply execute one of the following commands:
 
 .. code-block:: console
 
-	(.venv) $ pip install neutralocean
-
-if you use pip, or
-
-.. code-block:: console
-
-	(.venv) $ conda install -c conda-forge neutralocean
-
-if you use conda.
+	$ uv add neutralocean
+	$ pixi add neutralocean
+	$ pip install neutralocean
+	$ conda install -c conda-forge neutralocean
 
 .. _testexample:
 

@@ -120,7 +120,6 @@ def _pchip_coeffs_1(X, Y, k, K):
     C = np.full((nk, 4), np.nan)
 
     if K - k > 2:
-
         # Calculate PCHIP slopes
         #  Slopes at end points:
         #   Set d[k] and d[K-1] via non-centered, shape-preserving three-point formulae.
@@ -128,14 +127,10 @@ def _pchip_coeffs_1(X, Y, k, K):
         #   d[i] = weighted average of δ[i-1] and δ[i] when they have the same sign.
         #   d[i] = 0 when δ[i-1] and δ[i] have opposites signs or either is zero.
 
-        d[k] = ((2 * h[k] + h[k + 1]) * δ[k] - h[k] * δ[k + 1]) / (
-            h[k] + h[k + 1]
-        )
+        d[k] = ((2 * h[k] + h[k + 1]) * δ[k] - h[k] * δ[k + 1]) / (h[k] + h[k + 1])
         if np.sign(d[k]) != np.sign(δ[k]):
             d[k] = 0
-        elif (np.sign(δ[k]) != np.sign(δ[k + 1])) and (
-            abs(d[k]) > abs(3 * δ[k])
-        ):
+        elif (np.sign(δ[k]) != np.sign(δ[k + 1])) and (abs(d[k]) > abs(3 * δ[k])):
             d[k] = 3 * δ[k]
 
         for i in range(k + 1, K - 1):
@@ -146,14 +141,10 @@ def _pchip_coeffs_1(X, Y, k, K):
             else:
                 d[i] = 0
 
-        d[K - 1] = (
-            (2 * h[K - 2] + h[K - 3]) * δ[K - 2] - h[K - 2] * δ[K - 3]
-        ) / (h[K - 2] + h[K - 3])
+        d[K - 1] = ((2 * h[K - 2] + h[K - 3]) * δ[K - 2] - h[K - 2] * δ[K - 3]) / (h[K - 2] + h[K - 3])
         if np.sign(d[K - 1]) != np.sign(δ[K - 2]):
             d[K - 1] = 0
-        elif (np.sign(δ[K - 2]) != np.sign(δ[K - 3])) and (
-            abs(d[K - 1]) > abs(3 * δ[K - 2])
-        ):
+        elif (np.sign(δ[K - 2]) != np.sign(δ[K - 3])) and (abs(d[K - 1]) > abs(3 * δ[K - 2])):
             d[K - 1] = 3 * δ[K - 2]
 
         # Build piecewise cubic Hermite polynomial
@@ -231,7 +222,6 @@ def _pchip_coeffs_i(X, Y, i):
     at_end = (i == len(X) - 2) or np.isnan(X[i + 2] + Y[i + 2])
 
     if at_start and at_end:
-
         # if np.isnan(X[i + 1]) or np.isnan(Y[i + 1]):
         #     # Only one valid data point.  Leave the interpolant as NaN.
         #     d[0], c, b = np.nan, np.nan, np.nan
@@ -256,9 +246,7 @@ def _pchip_coeffs_i(X, Y, i):
             d[0] = ((2.0 * h[1] + h[2]) * δ[1] - h[1] * δ[2]) / (h[1] + h[2])
             if np.sign(d[0]) != np.sign(δ[1]):
                 d[0] = 0.0
-            elif (np.sign(δ[1]) != np.sign(δ[2])) and (
-                np.abs(d[0]) > np.abs(3.0 * δ[1])
-            ):
+            elif (np.sign(δ[1]) != np.sign(δ[2])) and (np.abs(d[0]) > np.abs(3.0 * δ[1])):
                 d[0] = 3.0 * δ[1]
 
             # Standard PCHIP formula
@@ -288,10 +276,7 @@ def _pchip_coeffs_i(X, Y, i):
             d[1] = ((h[0] + 2.0 * h[1]) * δ[1] - h[1] * δ[0]) / (h[0] + h[1])
             if np.sign(d[1]) != np.sign(δ[1]):
                 d[1] = 0.0
-            elif (np.sign(δ[1]) != np.sign(δ[0])) and (
-                np.abs(d[1]) > np.abs(3 * δ[1])
-            ):
-
+            elif (np.sign(δ[1]) != np.sign(δ[0])) and (np.abs(d[1]) > np.abs(3 * δ[1])):
                 d[1] = 3.0 * δ[1]
 
         else:
@@ -337,9 +322,7 @@ def _pchip_coeffs_i(X, Y, i):
     return C3, C2, d[0], Y[i]
 
 
-@nb.guvectorize(
-    [(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)"
-)
+@nb.guvectorize([(nb.f8[:], nb.f8[:], nb.f8[:], nb.f8[:, :])], "(n),(n),(m)->(n,m)")
 def _pchip_coeffs(X, Y, len4array, Yppc):
     Yppc[:, :] = pchip_coeffs_1(X, Y)
 

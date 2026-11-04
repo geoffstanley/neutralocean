@@ -7,7 +7,7 @@ Functions:
 rho :: compute in-situ density from Absolute Salinity, Conservative Temperature and
     depth
 
-rho_s_t :: compute the partial derivatives of rho with respect to 
+rho_s_t :: compute the partial derivatives of rho with respect to
     Absolute Salinity and Conservative Temperature
 
 rho_z :: compute the partial derivative of rho with respect to depth
@@ -15,7 +15,7 @@ rho_z :: compute the partial derivative of rho with respect to depth
 
 Notes:
 These functions take depth as the third argument, and convert that to pressure
-using a constant conversion factor of 1 m / dbar. 
+using a constant conversion factor of 1 m / dbar.
 
 To make vectorized versions of these functions, see
 `neutralocean.eos.tools.vectorize_eos`.
@@ -25,9 +25,9 @@ To make vectorized versions of these functions, see
        polynomial expressions for the density and specifc volume of seawater
        using the TEOS-10 standard. Ocean Modelling., 90, pp. 29-43.
 
-.. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and 
-    the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127, 
-    ISBN 978-0-646-55621-5. 
+.. [2] McDougall, T.J. and P.M. Barker, 2011: Getting started with TEOS-10 and
+    the Gibbs Seawater (GSW) Oceanographic Toolbox, 28pp., SCOR/IAPSO WG127,
+    ISBN 978-0-646-55621-5.
 """
 
 import numpy as np
@@ -251,7 +251,7 @@ def rho_horiz(s, t, z):
         + ((((EOS510*x + EOS410)*x + EOS310)*x + EOS210)*x + EOS110)*x + EOS010)*y   
         + (((((EOS600*x + EOS500)*x + EOS400)*x + EOS300)*x + EOS200)*x + EOS100)*x + EOS000
     )
-    
+
     return ((n3 * z + n2) * z + n1) * z + n0
     # fmt: on
 
@@ -361,6 +361,7 @@ def _process(s, t, z):
 
 
 """ Begin individual partial derivatives """
+
 
 # fmt: off
 @nb.njit

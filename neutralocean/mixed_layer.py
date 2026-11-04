@@ -1,8 +1,10 @@
-""" Mixed Layer """
+"""Mixed Layer"""
 
 from .ppinterp import make_pp
 from .eos import load_eos, vectorize_eos
-from .lib import _process_casts, _process_vert_dim, local_functions
+from .lib import _process_casts, _process_vert_dim
+
+__all__ = ["mld"]
 
 eos_ = load_eos("gsw")  # default
 
@@ -127,6 +129,3 @@ def mld(
     # Find the pressure or depth at which the potential density difference
     # exceeds the threshold pot_dens_diff
     return interp_fn(pot_dens_diff, DD, P, 0)
-
-
-__all__ = local_functions(locals(), __name__)

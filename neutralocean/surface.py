@@ -1,6 +1,6 @@
 """
 Calculate approximately neutral surfaces in the ocean.
-Three such surfaces are currently supported: 
+Three such surfaces are currently supported:
     potential density (or specific volume) surfaces,
     in-situ density (or specific volume) anomaly surfaces, and
     omega surfaces.
@@ -22,11 +22,12 @@ from .lib import (
     _process_pin_cast,
     _process_casts,
     aggsum,
-    local_functions,
 )
 from .bfs import bfs_conncomp1, bfs_conncomp1_wet_perim
 from .grid.graph import edges_to_csr
 from .mixed_layer import mld
+
+__all__ = ["potential_surf", "anomaly_surf", "omega_surf"]
 
 
 def potential_surf(S, T, P, **kw):
@@ -341,7 +342,7 @@ def _isopycnal(ans_type, S, T, P, **kw):
     output = kw.get("output", True)
     grid = kw.get("grid")
     interp = kw.get("interp", "linear")
-    
+
     rho_c = kw.get("rho_c")
     grav = kw.get("grav")
     if grav is not None or rho_c is not None or isinstance(eos, str):
@@ -371,9 +372,7 @@ def _isopycnal(ans_type, S, T, P, **kw):
     # Error checking on (ref, isoval, pin_cast, pin_p), then convert this
     # selection to (ref, isoval) pair
     _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S)
-    ref, isoval = _choose_ref_isoval(
-        ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn
-    )
+    ref, isoval = _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc_fn)
 
     # Solve non-linear root finding problem in each cast
     vertsolve = _make_vertsolve(eos, ppc_fn, ans_type)
@@ -403,7 +402,7 @@ def _isopycnal(ans_type, S, T, P, **kw):
         d["n_wet"] = n_wet
         if output:
             print(
-                f"{ans_type} done" f" | {n_wet:11d} wet casts" f" | RMS(ϵ) = {e_RMS:.8e}",
+                f"{ans_type} done | {n_wet:11d} wet casts | RMS(ϵ) = {e_RMS:.8e}",
                 f" | {d['timer']:.3f} sec",
             )
 
@@ -421,38 +420,28 @@ def _check_ref(ans_type, ref, isoval, pin_cast, pin_p, S):
     # >>> _isopycnal(ans_type, S, T, P, pin_cast, pin_p)
     if ref is None:
         if pin_cast is None or pin_p is None:
-            raise TypeError(
-                'If "ref" is not provided, "pin_cast" and "pin_p" must be provided'
-            )
+            raise TypeError('If "ref" is not provided, "pin_cast" and "pin_p" must be provided')
     else:  # ref is not None
         if isoval is None and (pin_cast is None or pin_p is None):
             raise TypeError(
-                'If "ref" is provided, either "isoval" must be provided or'
-                ' "pin_cast" and "pin_p" must be provided'
+                'If "ref" is provided, either "isoval" must be provided or "pin_cast" and "pin_p" must be provided'
             )
 
     # Error checking on ref
     if ref is not None:
         if ans_type == "potential":
             if not isinstance(ref, float):
-                raise TypeError(
-                    'For "potential" surfaces, if provided "ref" must be a float'
-                )
+                raise TypeError('For "potential" surfaces, if provided "ref" must be a float')
         else:  # ans_type == "anomaly"
             if not (isinstance(ref, (tuple, list)) and len(ref) == 2):
-                raise TypeError(
-                    'For "anomaly" surfaces, if provided "ref" must be 2 element tuple/list of float'
-                )
+                raise TypeError('For "anomaly" surfaces, if provided "ref" must be 2 element tuple/list of float')
 
     # Error checking on pin_cast.  Let dict inputs (for xarray) pass through fine...
     if not isinstance(pin_cast, (type(None), dict)):
         try:
             S[pin_cast]
-        except:
-            raise ValueError(
-                'If provided, "pin_cast" must be able to index all but the'
-                " vertical dimension of S"
-            )
+        except Exception:
+            raise ValueError('If provided, "pin_cast" must be able to index all but the vertical dimension of S')
 
     # Error checking on pin_p
     if not isinstance(pin_p, (type(None), float)):
@@ -481,9 +470,8 @@ def _choose_ref_isoval(ans_type, ref, isoval, pin_cast, pin_p, eos, S, T, P, ppc
         else:  # ans_type == "anomaly"
             if ref is None or any(x is None for x in ref):
                 ref = (s0, t0)
-            isoval = eos(s0, t0, pin_p) - eos(
-                ref[0], ref[1], pin_p
-            )  #  == 0 when ref = (s0, t0)
+            # isoval == 0 when ref = (s0, t0)
+            isoval = eos(s0, t0, pin_p) - eos(ref[0], ref[1], pin_p)
 
     return ref, isoval
 
@@ -790,10 +778,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
         if not isinstance(p_init, np.ndarray):
             raise TypeError('If provided, "p_init" or "p_init.values" must be an ndarray')
         if p_init.shape != surf_shape:
-            raise ValueError(
-                f'"p_init" should contain a 2D array of size {surf_shape};'
-                f" found size {p_init.shape}"
-            )
+            raise ValueError(f'"p_init" should contain a 2D array of size {surf_shape}; found size {p_init.shape}')
         p_init = np.reshape(p_init, -1)  # now reshape to 1D
         pin_p = p_init[pin_c]
         p = p_init.copy()
@@ -818,14 +803,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
         d["n_wet"][0] = n_wet
 
         if output:
-            print(
-                "iter |"
-                "    MAV(ϕ)     |"
-                "    RMS(Δp)      |"
-                " # wet casts (# new) |"
-                "     RMS(ϵ)     |"
-                " time (s)"
-            )
+            print("iter |    MAV(ϕ)     |    RMS(Δp)      | # wet casts (# new) |     RMS(ϵ)     | time (s)")
             print(
                 f"{0:4d} |"
                 f"                                 |"
@@ -929,10 +907,7 @@ def omega_surf(S, T, P, grid, pin_cast, p_init, **kw):
             d[k] = v[0 : iter_ + (k in ("e_MAV", "e_RMS"))]
 
     # Reshape (from 1D arrays) and put into DataArrays if appropriate
-    s, t, p = (
-        _xr_out(np.reshape(x, surf_shape), xxr)
-        for (x, xxr) in ((s, sxr), (t, txr), (p, pxr))
-    )
+    s, t, p = (_xr_out(np.reshape(x, surf_shape), xxr) for (x, xxr) in ((s, sxr), (t, txr), (p, pxr)))
 
     return s, t, p, d
 
@@ -969,9 +944,7 @@ def _omega_matsolve_gradient(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t):
         ϕ[m[0]] = 0.0  # Leave this isolated pixel at current pressure
         return ϕ.reshape(p.shape)
 
-    a, b, e, fac, ref = _omega_matsolve_helper(
-        s, t, p, edges, sqrtdistratio, m, mref, eos_s_t
-    )
+    a, b, e, fac, ref = _omega_matsolve_helper(s, t, p, edges, sqrtdistratio, m, mref, eos_s_t)
 
     rhs = np.concatenate((-e, [0.0]))  # add 0 for pinning equation
 
@@ -1061,9 +1034,7 @@ def _omega_matsolve_poisson(s, t, p, edges, distratio, m, mref, eos_s_t):
     # Get list of edges (a,b), ϵ neutrality errors, and geometric factors
     # for the current connected component containing the reference cast, and
     # map everything onto a set of N
-    a, b, e, fac, ref = _omega_matsolve_helper(
-        s, t, p, edges, distratio, m, mref, eos_s_t
-    )
+    a, b, e, fac, ref = _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t)
 
     # Divergence of ϵ,
     # D = ∑_{n ∈ N(m)} ϵₘₙ
@@ -1154,6 +1125,3 @@ def _omega_matsolve_helper(s, t, p, edges, distratio, m, mref, eos_s_t):
     ref = remap[mref]
 
     return a, b, e, fac, ref
-
-
-__all__ = local_functions(locals(), __name__)
