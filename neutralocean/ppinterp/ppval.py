@@ -35,8 +35,8 @@ def pval(x, C, d=0):
     y : float
         The polynomial (or its `d`'th derivative) evaluated at `x`.
 
-    Example
-    -------
+    Examples
+    --------
     If `C == (C2, C1, C0)`, and `d == 0`, then
     `y == x * (x * C2 + C1) + C0`.
     """

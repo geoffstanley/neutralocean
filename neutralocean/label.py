@@ -38,7 +38,9 @@ def veronis(
 
     In common oceanographic mathematical notation, the above is written
     as (see Equation (A2) in [2]_)
-        ρᵥ(p₁) = ρ(S(p₀), Θ(p₀), p_ref) + b ∫ [f dS/dp + g dΘ/dp] dp
+
+    ρᵥ(p₁) = ρ(S(p₀), Θ(p₀), p_ref) + b ∫ [f dS/dp + g dΘ/dp] dp
+
     where the integral goes from p₀ to p₁, and where
     f(p) = (∂ρ/∂S)(S(p),Θ(p),p) and g(p) = (∂ρ/∂Θ)(S(p),Θ(p),p) are
     the partial derivatives of the equation of state ρ.

@@ -21,6 +21,7 @@ def load_eos(eos, derivs="", grav=None, rho_c=None):
     eos : str
 
         If a str, can be
+
         - `'gsw'` to generate the 75 term approximation [1]_ of the TEOS-10 [2]_ specific volume,
         - `'polyTEOS10bsq'` to generate the Boussinesq polynomial approximation [1]_
           of the TEOS-10 in-situ density [2]_

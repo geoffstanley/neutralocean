@@ -52,6 +52,7 @@ test = [
 	"gsw",
 ]
 docs = [
+	"numpydoc",
 	"sphinx",
 	"sphinx-rtd-theme",
 ]

@@ -68,8 +68,8 @@ def make_pp(
         The outputs of `f` are
 
         - `Yppc` the piecewise polynomial coefficients (if `out = "coeffs"`) OR
-        - `y` the interpolant evaluated at `x` (if `out = "interp"), OR
-        - `(y, z)` the interpolants evaluated at `x` (if `out = "interp" and `num_dep_vars=2`).
+        - `y` the interpolant evaluated at `x` (if `out = "interp"`), OR
+        - `(y, z)` the interpolants evaluated at `x` (if `out = "interp"` and `num_dep_vars=2`).
 
     """
 
